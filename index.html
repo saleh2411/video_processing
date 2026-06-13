@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Processing — Interactive HTML Book</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Video Processing</b> &nbsp;0512-4263 · Interactive HTML Book</span>
+  <span class="spacer"></span>
+  <span class="crumb">Lectures by Shai Avidan · collected by Yaniv Korobkin</span>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Tel Aviv University · School of Electrical Engineering</div>
+    <h1>Video Processing — full PDF, every word kept</h1>
+    <p class="lede">Eleven chapters from the course notes. Every page shows the original PDF text verbatim,
+    followed by a plain-English explanation written from zero background, followed by an interactive demo so
+    the math actually moves. Built for self-study — no math degree assumed.</p>
+  </header>
+
+  <section class="block">
+    <p class="muted">Three colours run through the book — once you learn them, every page reads the same way:</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      <div class="pdf-block" style="margin:0">
+        <span class="pdf-label">Original text</span>
+        <p>Teal-bordered block = quoted from the PDF, exactly as written. <strong>Zero info loss.</strong></p>
+      </div>
+      <div class="explain" style="margin:0">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Blue-bordered block = rewritten for a beginner. The same idea, but with no jargon.</p>
+      </div>
+      <div class="demo" style="margin:0">
+        <div class="demo-head"><span class="dot"></span><h4>Interactive demo</h4><span class="tag">drag · click</span></div>
+        <div class="demo-body" style="padding:14px">
+          <p style="margin:0;color:var(--ink-dim);font-size:14px">Amber-headed block = live canvas you can play with.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <h2>Contents</h2>
+  <div class="grid">
+    <a class="scard" href="ch01_motion_representation.html">
+      <div class="num">1</div><h3>Motion Representation</h3>
+      <p>Linear, affine &amp; homography transforms, homogeneous coordinates, the projection matrix.</p>
+    </a>
+    <a class="scard" href="ch02_optical_flow.html">
+      <div class="num">2</div><h3>Optical Flow</h3>
+      <p>Lucas–Kanade, the aperture problem, Harris corners, Horn–Schunck smoothness.</p>
+    </a>
+    <a class="scard" href="ch03_motion_applications.html">
+      <div class="num">3</div><h3>Applications of Motion Estimation</h3>
+      <p>Super-resolution, hyperlapse via dynamic programming, RANSAC, BRIEF descriptors.</p>
+    </a>
+    <a class="scard" href="ch04_kalman_particle.html">
+      <div class="num">4</div><h3>Kalman &amp; Particle Filters</h3>
+      <p>Online tracking, predict/update, Kalman gain, condensation &amp; resampling.</p>
+    </a>
+    <a class="scard" href="ch05_texture_synthesis.html">
+      <div class="num">5</div><h3>Texture Synthesis</h3>
+      <p>Dynamic textures as a linear state space, ARMA models, SVD identification.</p>
+    </a>
+    <a class="scard" href="ch06_layer_representation.html">
+      <div class="num">6</div><h3>Layer Image Representation</h3>
+      <p>Decomposing video into motion layers with Lucas–Kanade + K-means.</p>
+    </a>
+    <a class="scard" href="ch07_video_magnification.html">
+      <div class="num">7</div><h3>Video Magnification</h3>
+      <p>Eulerian vs Lagrangian, amplifying invisible motion with a Taylor trick.</p>
+    </a>
+    <a class="scard" href="ch08_background_subtraction.html">
+      <div class="num">8</div><h3>Background Subtraction</h3>
+      <p>Per-pixel Gaussian Mixture Models, online updates, background/foreground decision.</p>
+    </a>
+    <a class="scard" href="ch09_video_colorization.html">
+      <div class="num">9</div><h3>Video Colorization</h3>
+      <p>Geodesic distance, scribble propagation, Dijkstra &amp; fast sweeping.</p>
+    </a>
+    <a class="scard" href="ch10_video_matting.html">
+      <div class="num">10</div><h3>Video Matting</h3>
+      <p>Trimaps, opacity maps, Kernel Density Estimation, pulling the foreground.</p>
+    </a>
+    <a class="scard" href="ch11_retargeting_patchmatch.html">
+      <div class="num">11</div><h3>Re-targeting &amp; PatchMatch</h3>
+      <p>Completeness/coherence, PatchMatch, inpainting, reshuffling, constraints.</p>
+    </a>
+  </div>
+
+  <hr class="sep">
+  <p class="muted">Generated from the full 88-page lecture PDF (Spring 2025).
+  Every paragraph from the source is reproduced inside the teal "Original text" blocks — nothing is skipped.
+  Below each one is a written explanation, and where useful an interactive demo. Open any chapter to begin.</p>
+</div>
+
+</body>
+</html>

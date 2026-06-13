@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2 · Optical Flow</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>2</b> · Optical Flow</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch01_motion_representation.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch03_motion_applications.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 2</div>
+    <h1>Optical Flow</h1>
+    <p class="lede">Optical flow asks: for every pixel, where did it move in the next frame? We derive Lucas–Kanade
+    from a single Taylor expansion, see the <em>aperture problem</em> that makes it impossible at edges, watch how
+    Harris turns the same math into a corner detector, and finish with Horn–Schunck's global smoothness.</p>
+  </header>
+
+  <h2>2.1 Introduction</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 8)</span>
+    <p>Optical flow is the basis for motion estimation. By definition, it is the projection of the motion in 3D
+    onto a 2D image.</p>
+    <p><strong>Input:</strong> The inputs are 2 images. The first image $I_1$ taken at some time t, and the 2nd
+    image $I_2$ taken later (at some time $t+ \Delta$).</p>
+    <p><strong>Output:</strong> For every pixel (x, y) we will find a motion vector (u, v) s.t. it's new location
+    will be:</p>
+    <div class="eq">$$ I_1(x + u, y + v) = I_2(x', y') $$</div>
+    <p>or:</p>
+    <div class="eq">$$ x' = x + u, \qquad y' = y + u $$</div>
+    <p>Optical Flow asks for every pixel in the first image where it was transferred in the 2nd image. There are
+    several problems with how we define the problem:</p>
+    <p>1. Not all points are visible in both images - some points entered the 2nd image for the first time, or some
+    points from the first image are not inside the frame at the second image.</p>
+    <p>2. Some points are hidden behind other objects.</p>
+    <p>3. The values of (u, v) may be fractional.</p>
+    <p>4. We assume that the intensity and color of corresponding pixels in both images remain the same. This
+    assumption is known as the <strong>constant brightness constraint</strong>. However, this assumption does not
+    always hold. For example, the observed brightness may change due to light reflections when viewed from different
+    angles. Another example is a change in the intensity of the light source between frames. In addition, if the
+    object is reflective, different viewing angles may produce different reflections of the environment on its
+    surface.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Optical flow's answer for every pixel is an arrow $(u, v)$ — how far it moved horizontally and vertically.
+    That sounds simple, but four things make it hard:</p>
+    <ul>
+      <li><strong>New / disappeared pixels.</strong> As the camera moves, things enter or leave the frame.</li>
+      <li><strong>Occlusion.</strong> A hand passes in front of a face: those face pixels are temporarily hidden.</li>
+      <li><strong>Sub-pixel motion.</strong> Things rarely move a whole number of pixels.</li>
+      <li><strong>Constant brightness</strong> is the big assumption: a red dot stays red after it moves. Shadows,
+      reflections, and changing lights break it.</li>
+    </ul>
+
+    <h4 class="mini">Why optical flow is "the bedrock"</h4>
+    <p>Almost every video-processing algorithm that needs to understand <em>change</em> between frames builds on
+    optical flow: tracking, video stabilization, super-resolution, magnification, action recognition, autonomous
+    driving — they all rely on knowing how pixels moved.</p>
+
+    <h4 class="mini">"Flow" vs "motion field" — a subtle distinction</h4>
+    <p>The true motion of points in the world produces a 3D motion field. Optical flow is what your CAMERA sees of
+    it — only the part perpendicular to the line of sight. A car driving straight toward you has nearly zero
+    optical flow even though it's moving 60 mph. The lesson: optical flow can be zero when motion isn't, and can
+    be non-zero when nothing moves (lighting changes).</p>
+
+    <h4 class="mini">When "constant brightness" breaks</h4>
+    <ul>
+      <li><strong>Specular highlights:</strong> a glossy car bumper has a bright spot that moves AS YOU walk
+      around it — the pixel changes colour without the object moving.</li>
+      <li><strong>Shadows:</strong> a cloud passing in front of the sun darkens half the image — every pixel
+      changes, but nothing moved.</li>
+      <li><strong>Auto-exposure / auto-white-balance:</strong> the camera adjusts brightness between frames.</li>
+    </ul>
+  </div>
+
+  <h2>2.2 Lucas Kanade</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 8–10)</span>
+    <p>Let us assume for now that these assumptions hold, and that we want to solve the correspondence problem.
+    One simple approach is to search, for every pixel in the first image, for a pixel in the second image with the
+    same intensity. However, this solution is computationally very expensive.</p>
+    <p>The solution we'll offer uses the following assumption:</p>
+    <div class="eq">$$ I_2(x,y) \approx I_1(x,y) + u I_x(x,y) + v I_y(x,y) $$</div>
+    <p>This is the first-order Taylor approximation. We assume that the two images were taken at a very short time
+    interval. Thus, we can approximate the second image using the first image and its derivatives with respect to
+    the x-axis and y-axis.</p>
+    <p>Instead of working with $I_1(x+u, y+v)$, we now have a direct relation between $I_1(x,y)$ and $I_2(x,y)$ and
+    our only unknowns are u and v. We can now add constraints on u and v with the intensity measurements of the two
+    images.</p>
+    <p>The problem is that we have 2 unknowns and only one equation. The solution will be by observing a local
+    environment and get a set of equations:</p>
+    <div class="eq">$$ \begin{pmatrix} I_x & I_y \\ \vdots & \vdots \\ I_x & I_y \end{pmatrix} \begin{pmatrix} u \\ v \end{pmatrix} = \begin{pmatrix} I_t \\ \vdots \\ I_t \end{pmatrix}$$</div>
+    <p>Every row is related to a pixel in the environment (a window) and $I_t = I_2 - I_1$. We got an equation of
+    the form:</p>
+    <div class="eq">$$ Ax = b $$</div>
+    <p>Where our unknowns here are u and v. This is solved by Least Squares. We want to minimize:</p>
+    <div class="eq">$$ E = \|Ax - b\|^2, \quad E = (Ax - b)^T (Ax - b), \quad \frac{\partial E}{\partial x} = 2A^T(Ax - b) = 0, \quad x = (A^T A)^{-1} A^T b $$</div>
+    <p>If we take a window of size nxn, A will have the dimensions of $n^2 \times 2$. This means that $A^T A$ will
+    have dimensions of 2x2. We got that to solve the problem, we need to invert a matrix of 2x2 and do simple
+    multiplications of matrices and vectors.</p>
+    <p>This approach will not work if we want to use a very large window (or even the entire image). Some
+    applications that require this include tracking and video stabilization.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Brute-force searching for matching pixels is astronomical. <strong>Lucas–Kanade</strong> instead uses calculus:
+    by Taylor expansion, the change in intensity at a pixel ≈ (motion in x)·(gradient in x) + (motion in y)·(gradient in y).</p>
+    <p>One pixel = one equation, but we need two numbers $(u,v)$. So we assume <em>all pixels in a small window
+    move together</em>. That gives $n^2$ equations for 2 unknowns — way over-determined. Least Squares finds the
+    best fit. The matrix to invert is just 2×2 — extremely fast. Limitation: LK fails for large windows when one
+    motion can't describe the whole patch.</p>
+
+    <h4 class="mini">What the Taylor approximation actually does</h4>
+    <p>It says: if I shift a smooth signal by a tiny amount $(u,v)$, the change in its value at a point is roughly
+    the slope times the shift. That's literally the definition of a derivative — it works whenever the shift is
+    small enough that the linear approximation hasn't drifted too far from the true curve.</p>
+
+    <h4 class="mini">When LK works and when it doesn't</h4>
+    <ul>
+      <li><strong>Works:</strong> small motions (a few pixels), well-textured patches, smooth lighting, high frame
+      rate.</li>
+      <li><strong>Fails:</strong> huge jumps between frames, blank/uniform regions, edges with motion along the
+      edge (aperture problem), specular reflections.</li>
+    </ul>
+
+    <h4 class="mini">Pyramid trick (worth knowing)</h4>
+    <p>To handle larger motion, build an image pyramid: downsample the image to 1/2, 1/4, 1/8 size. A 32-pixel
+    motion at full resolution is only a 1-pixel motion at 1/32 scale — well within LK's reach. Estimate at the
+    coarse level, upscale, refine. This is "pyramid LK" — what every real implementation actually does.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Lucas–Kanade in 1-D — gradient gives motion</h4><span class="tag">slide u</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Blue is $I_1(x)$. Red is $I_2(x) = I_1(x-u)$ — the same signal shifted
+      by $u$. The black tangent at the centre is $I_x$. LK says $u \approx -I_t / I_x$.</p>
+      <canvas id="lkCanvas" width="900" height="240"></canvas>
+      <div class="controls">
+        <div class="control"><label>shift u <span class="val" id="vlku">10</span></label><input id="lku" type="range" min="-40" max="40" value="10"></div>
+      </div>
+      <div class="readout" id="lkRead"></div>
+    </div>
+  </div>
+
+  <h2>2.3 Transformations for optical flow</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 10)</span>
+    <p>We are given two images $I_1, I_2$ and define a point by $X = \begin{pmatrix} x \\ y \end{pmatrix}$. We will
+    work with the following two transformations:</p>
+    <p><strong>Translation transformation:</strong></p>
+    <div class="eq">$$ W(X; P) = \begin{pmatrix} x + p_1 \\ y + p_2 \end{pmatrix}$$</div>
+    <p><strong>Affine transformation:</strong></p>
+    <div class="eq">$$ W(X; P) = \begin{pmatrix} p_1 x + p_2 y + p_3 \\ p_4 x + p_5 y + p_6 \end{pmatrix} = \begin{pmatrix} p_1 & p_2 & p_3 \\ p_4 & p_5 & p_6 \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>Where $p_i$ are the parameters of the transformation.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Instead of giving every pixel its own $(u,v)$, we assume all pixels in the window share <em>one</em>
+    transformation $W(X; P)$. Translation has 2 parameters; affine has 6. The math from §2.2 generalizes by replacing
+    "translation" with "any warp."</p>
+  </div>
+
+  <h2>2.4 Lucas Kanade — private case</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 10)</span>
+    <p>The goal of LK is to minimize:</p>
+    <div class="eq">$$ P^* = \arg\min_P \sum_X [I_2(W(X; P)) - I_1(X)]^2 $$</div>
+    <p>This method uses the constant brightness constraint. In this case, we aim to estimate the global motion of
+    the camera, which is useful for applications such as video stabilization. The difficulty is that the parameters
+    appear inside the warp function. As a result, we must search for a solution in a six-dimensional parameter
+    space, which is computationally expensive. However, if we take the parameters out from $W(X; P)$ it will be a
+    lot easier to calculate them (for example with LS). We will solve this using the incremental algorithm.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Restated goal: find the warp $W(X;P)$ that makes image-2-warped match image-1 as closely as possible
+    (smallest sum of squared brightness differences). The hard part is that $P$ lives <em>inside</em> $W$, making
+    the optimization non-linear and expensive. The next sub-section converts that hard problem into a sequence of
+    easy linear ones.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — Incremental Algorithm (PDF page 11)</span>
+    <p><strong>Incremental Algorithm</strong> — We will iteratively try to solve the following:</p>
+    <div class="eq">$$ \Delta P^* = \arg\min_{\Delta P} \sum_X [I_2(W(X; \Delta P)) - I_1(X)]^2, \qquad P = P + \Delta P^* $$</div>
+    <p>We don't solve right away for all the parameters. We start with some initial parameters (for example the
+    identity matrix), and each time we estimate $\Delta P$. After every iteration, we get closer and closer to the
+    solution. An example on an initial P could be:</p>
+    <div class="eq">$$ \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>Now we will use taylor series approximation:</p>
+    <div class="eq">$$ I_2(W(X; P + \Delta P)) \approx I_2(W(X; P)) + \nabla I_2 \frac{\partial W}{\partial P} \Delta P $$</div>
+    <p>Where $\frac{\partial W}{\partial P}$ is the Jacobian of the wrap:</p>
+    <div class="eq">$$ \frac{\partial W}{\partial P} = \begin{pmatrix} \frac{\partial W_x}{\partial p_1} & \cdots & \frac{\partial W_x}{\partial p_n} \\ \frac{\partial W_y}{\partial p_1} & \cdots & \frac{\partial W_y}{\partial p_n} \end{pmatrix} $$</div>
+    <div class="eq">$$ \nabla I_2 = (I_x~~I_y), \qquad \nabla I_2 \frac{\partial W}{\partial P} = (I_x x~~I_x y~~I_x~~I_y x~~I_y y~~I_y) $$</div>
+    <p>For a 2D affine transformation:</p>
+    <div class="eq">$$ W(X; P) = \begin{pmatrix} p_1 & p_2 & p_3 \\ p_4 & p_5 & p_6 \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}, \qquad \frac{\partial W}{\partial P} = \begin{pmatrix} x & y & 1 & 0 & 0 & 0 \\ 0 & 0 & 0 & x & y & 1 \end{pmatrix}$$</div>
+    <p>For translation:</p>
+    <div class="eq">$$ W(X; P) = \begin{pmatrix} x + p_1 \\ y + p_2 \end{pmatrix}, \qquad \frac{\partial W}{\partial P} = \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix}$$</div>
+    <p>Now we will organize all the points in the region of interest and get:</p>
+    <div class="eq">$$ B = (I_x * X~~I_x * Y~~I_x~~I_y * X~~I_y * Y~~I_y)$$</div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 12)</span>
+    <p>Where the dimensions are Nx6 and N is the number points in the region of interest. In summary:</p>
+    <div class="eq">$$ \Delta p^* = \arg\min_{\Delta P} \sum_X [I_2(W(X; P)) + \nabla I_2 \frac{\partial W}{\partial P} \Delta P - I_1(X)]^2 $$</div>
+    <div class="eq">$$ \Delta p^* = \arg\min_{\Delta P}(I_t + B\Delta P)^T(I_t + B\Delta P), \qquad I_t = I_2(W(X; P)) - I_1(X) $$</div>
+    <p>The only unknowns here are $\Delta P$, and we will solve this with LS to get:</p>
+    <div class="eq">$$ \Delta P^* = -(B^T B)^{-1} B^T I_t $$</div>
+    <p>For 2D translation:</p>
+    <div class="eq">$$ \frac{\partial W}{\partial P} = \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix}, \qquad \nabla I_2 \frac{\partial W}{\partial P} = (I_x~~I_y), \qquad B = (I_x~~I_y)_{Nx2}$$</div>
+    <div class="eq">$$ \Delta P^* = -(B^T B)^{-1} B^T I_t = -\begin{pmatrix} I_X^T I_X & I_X^T I_y \\ I_y^T I_X & I_y^T I_y \end{pmatrix}^{-1} \begin{pmatrix} I_x^T I_t \\ I_y^T I_t \end{pmatrix}$$</div>
+    <p>Lastly, our basic equsion is of the form: $u I_x + v I_y + I_t = 0$.</p>
+    <p>In the parameter space, every equation is a line and the solution common to all the lines will be the
+    crossing point.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Iterative LK in 4 steps:</strong></p>
+    <ol>
+      <li>Start with a guess for $P$ (often: identity).</li>
+      <li>Linearize the warped image around it (Taylor). Now the equation is linear in $\Delta P$.</li>
+      <li>Solve a tiny least-squares system → $\Delta P^*$.</li>
+      <li>Update $P \leftarrow P + \Delta P^*$. Repeat.</li>
+    </ol>
+    <p><strong>Geometric picture.</strong> Each pixel says $uI_x + vI_y + I_t = 0$ — that's a line in the $(u,v)$
+    plane. All pixels with the same true motion give lines through the same point. With noise, LS finds the point
+    closest to all the lines.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Constraint lines in $(u,v)$ space</h4><span class="tag">drag the green dot</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag the green dot to set the true motion. Each blue line is one pixel's
+      brightness-constancy equation. For a <em>corner</em> patch many lines cross at one point. For an <em>edge</em>
+      patch they're nearly parallel — the aperture problem.</p>
+      <div class="seg" id="lkSeg" style="margin-bottom:12px">
+        <button data-w="corner" class="on">Corner / Texture</button>
+        <button data-w="edge">Edge</button>
+        <button data-w="flat">Flat</button>
+      </div>
+      <canvas id="cvLK" width="900" height="360"></canvas>
+      <div class="readout" id="roLK"></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — aperture problem (PDF page 13)</span>
+    <p>Let's assume we have a static camera. At some time t we will see the blue line and at t+1 we will see the
+    red line:</p>
+    <p>The object is clearly moving to the right, but we cannot determine whether it is also moving diagonally. In
+    other words, we do not know which point along the constraint line corresponds to the true motion. This phenomenon
+    is known as the <strong>aperture problem</strong>.</p>
+    <p>If the window is small, we can only estimate the motion component perpendicular to the image gradient. The
+    trade-off is that when the window is small, the aperture problem becomes more severe. When the window is larger,
+    however, the simple 2D translation model may no longer be sufficiently expressive, and a more complex model,
+    such as a 2D affine transformation, may be required. The difficulty is that a large window may also include
+    parts of the background, making it harder for the model to handle multiple motions properly.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — aperture problem</span>
+    <p>Imagine looking at a moving line through a tiny circular hole. The line passes left→right, but you can't tell
+    if it ALSO slid along its own length — that motion is invisible because the line looks identical before and
+    after. Only motion <em>perpendicular</em> to the local gradient is observable through a small window.</p>
+    <p>The dilemma: small window = aperture problem; large window = the "all pixels share one motion" assumption
+    breaks down.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>The Aperture Problem — what the window sees</h4><span class="tag">play</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Striped pattern slides. Outside the circular window you can see the
+      true motion (green). Inside, only the component perpendicular to the stripes (amber) is recoverable.</p>
+      <canvas id="cvAp" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>stripe orientation <span class="val" id="vsa">30°</span></label><input type="range" id="sa" min="0" max="180" step="1" value="30"></div>
+        <div class="control"><label>true motion direction <span class="val" id="vma">0°</span></label><input type="range" id="ma" min="0" max="360" step="1" value="0"></div>
+        <div class="control"><label>speed <span class="val" id="vsp">1.0</span></label><input type="range" id="sp" min="0" max="2.5" step="0.1" value="1"></div>
+      </div>
+      <div class="legend"><span><i style="background:#7ee787"></i> true motion</span><span><i style="background:#ffb454"></i> perceived (normal) motion</span></div>
+    </div>
+  </div>
+
+  <h2>2.5 Harris Corner Detector</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 13–14)</span>
+    <p>The task back then was finding points of interest and then tracking the object in the next time step.</p>
+    <p>The question is how to find interest points in an image. Typically, we look for points that are distinct from
+    their neighbors. For example, a white dot on a white background is not a point of interest. Points of interest
+    are usually corners of objects, where there are strong intensity changes in both the x and y directions.</p>
+    <p>Mathematically, in the case of 2D translation, the matrix $B^T B$ can either be a degree of 0, 1 and 2. If
+    its rank is 0, the point is not distinct from its neighbors. If the rank is 1, the point lies on an edge. If
+    the rank is 2, the point corresponds to a corner.</p>
+    <p>Harris used this idea in his work. After detecting interest points, he applied the Lucas–Kanade method on a
+    small window around each point to track it in the next frame. We will start by defining an error function:</p>
+    <div class="eq">$$ E(u,v) = \sum_{(x,y) \in W} [I(x+u, y+v) - I(x,y)]^2 $$</div>
+    <p>By using Taylor series approximation:</p>
+    <div class="eq">$$ I(x+u, y+v) = I(x,y) + uI_x(x,y) + vI_y(x,y) $$</div>
+    <p>We can insert that to E and get:</p>
+    <div class="eq">$$ E(u,v) = \sum_{(x,y) \in W} [(I_x(x,y)~~I_y(x,y))\begin{pmatrix} u \\ v \end{pmatrix}]^2 $$</div>
+    <div class="eq">$$ E(u,v) = (u~~v) \underbrace{\sum_{(x,y) \in W} \begin{pmatrix} I_x^2 & I_x I_y \\ I_y I_x & I_y^2 \end{pmatrix}}_{H} \begin{pmatrix} u \\ v \end{pmatrix} $$</div>
+    <p>What brings this expression to minimum is the eigenvector $(u,v)$ of H corresponding to the smallest
+    eigenvalue.</p>
+    <p>The entire algorithm can be summarized with the following steps:</p>
+    <p>1. $(I_x~~I_y) = \text{grad}(I)$<br>
+    2. $I_{xx} = I_x * I_x, I_{xy} = I_x * I_y, I_{yy} = I_y * I_y$<br>
+    3. $S_{xx} = \text{conv}(I_{xx}, g), S_{xy} = \text{conv}(I_{xy}, g), S_{yy} = \text{conv}(I_{yy}, g), g = \text{ones}(5,5)$<br>
+    4. We can calcutate the image response R in a couple of methods:<br>
+    a. smallest eigenvector: $R = \frac{1}{2}(S_{xx} - S_{yy}) - \sqrt{4 S_{xy} S_{xy} + (S_{xx} - S_{yy})^2} = \lambda_{min}$<br>
+    b. $R = \frac{\lambda_{min} \lambda_{max}}{\lambda_{min} + \lambda_{max}} = \frac{\text{determinant}(H)}{\text{trace}(H)}$<br>
+    c. $R = S_{xx} * S_{yy} - S_{xy} * S_{xy} - \alpha(S_{xx} + S_{yy})^2 = \lambda_{min}\lambda_{max} - \alpha(\lambda_{min} + \lambda_{max})^2$<br>
+    Where $\alpha = 0.04 \sim 0.06$<br>
+    5. $R(R < \theta) = 0$<br>
+    6. Return maximum R in each tile.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Not every pixel is trackable. A pixel inside a wall of uniform colour has no distinguishing features. We want
+    <strong>corners</strong> — points with strong intensity change in BOTH x and y.</p>
+    <p>The rank of $B^TB$ tells us exactly which kind of point we have:</p>
+    <ul>
+      <li><strong>Rank 0:</strong> flat patch — useless.</li>
+      <li><strong>Rank 1:</strong> edge — aperture problem kills you.</li>
+      <li><strong>Rank 2:</strong> corner — perfect for tracking.</li>
+    </ul>
+    <p>Harris produces a single "cornerness" score $R$ that is large when both eigenvalues of $H$ are large.
+    Pipeline: gradients → squared → blur → compute R → threshold → keep one max per tile.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Harris response — live</h4><span class="tag">hover the canvas</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Hover anywhere on the synthetic image. We compute the structure tensor
+      H in the window, show its eigenvalues, and the corner response R. Toggle the heatmap to see Harris light up
+      the actual corners.</p>
+      <canvas id="cvHar" width="900" height="380"></canvas>
+      <div class="btnrow">
+        <button class="act" id="heatBtn">Toggle response heatmap</button>
+        <span class="control" style="min-width:240px"><label>window size <span class="val" id="vws">11 px</span></label><input type="range" id="ws" min="5" max="21" step="2" value="11"></span>
+      </div>
+      <div class="readout" id="roHar"></div>
+    </div>
+  </div>
+
+  <h2>2.6 Applications</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 15)</span>
+    <p>The question now is: when should we use Lucas–Kanade (LK) and when should we use Harris Point Detection
+    (HPD)? There are applications where LK alone is sufficient, such as video stabilization or tracking large
+    objects. However, when we need to detect and track points of interest, the process typically begins with HPD in
+    the first frame to identify interest points. A small window is placed around each point, and LK is then used to
+    track them in subsequent frames.</p>
+    <p>Instead of obtaining a set of images, we obtain a set of points and their positions in each frame. This
+    approach is useful for applications such as motion reconstruction and 3D reconstruction (e.g., SLAM —
+    Simultaneous Localization and Mapping). In such cases, we initialize points with HPD and track them with LK.
+    If a point of interest fails to satisfy the conditions for inverting the relevant matrix, that point is
+    discarded and a new point is selected from its surrounding neighborhood, typically using the Harris detector.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>LK + Harris teamwork:</strong> Harris on frame 1 picks ~200 strong corners. LK in subsequent frames
+    tracks each corner in a tiny window. When a corner becomes untrackable, throw it out and pick a fresh nearby
+    Harris point. This pipeline is what SLAM, AR, and 3D reconstruction systems use.</p>
+  </div>
+
+  <h2>2.7 Horn–Shunck</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 15–18)</span>
+    <p>This algorithm tries to solve the problem of LK but in a more general manner. HS asks where every pixel in
+    the first image was transferred to the 2nd image. The following figure describes (u,v) of every pixel:</p>
+    <p>The image in the first row is more meaningful. This is because there is an underlying assumption that
+    neighboring points behave similarly. In the Lucas–Kanade (LK) method, this was handled by averaging over a
+    small window around each point. In Horn–Schunck (HS), this idea is taken one step further by incorporating the
+    assumption as a prior in the solution. The HS equation is then given by:</p>
+    <div class="eq">$$ (u,v) - \arg\min_{u,v} \iint [(I_x u + I_y v + I_t)^2 + \alpha (|\nabla u|^2 + |\nabla v|^2)] dx dy $$</div>
+    <div class="eq">$$ |\nabla u| = (\frac{\partial u}{\partial x})^2 + (\frac{\partial u}{\partial y})^2 = u_x^2 + u_y^2 $$</div>
+    <p>The first term is the Taylor series term we saw earlier and is called the <strong>data term</strong>. Here,
+    we are solving for u and v, which describe the motion in the image. The innovation in Horn–Schunck lies in the
+    second term, which introduces a smoothness constraint, ensuring that the solution varies as smoothly as
+    possible across the image.</p>
+    <p>The difference between Lucas–Kanade (LK) and Horn–Schunck (HS) is analogous to the difference between
+    Maximum Likelihood (ML) and Maximum A-Posteriori (MAP) estimation. In LK, the ML approach assumes that the data
+    alone dictates the solution, without any prior knowledge. In HS, on the other hand, prior knowledge is
+    incorporated. The second term in the HS formulation is therefore called the <strong>prior/regularizer</strong>
+    or <strong>smoothness term</strong>. The parameter $\alpha$ controls the relative influence of the data term
+    versus the smoothness term in the solution. Additionally, HS still relies on the same assumptions as LK.</p>
+    <p>We will use Euiler-Lagrange equation:</p>
+    <div class="eq">$$ S = \iint L(x, y, f, f_x, f_y) dx dy $$</div>
+    <p>Where L is a functional. S gets to minimum if f accomplishes the partiel differential equation:</p>
+    <div class="eq">$$ \frac{\partial L}{\partial f} = \frac{\partial}{\partial x} \frac{\partial L}{\partial f_x} - \frac{\partial}{\partial y} \frac{\partial L}{\partial f_y} = 0 $$</div>
+    <p>We will now insert the equations to get:</p>
+    <div class="eq">$$ L(u, v, u_x, u_y, v_x, v_y) = (I_x u + I_y v + I_t)^2 + \alpha(u_x^2 + u_y^2 + v_v^2 + v_y^2) $$</div>
+    <div class="eq">$$ \frac{\partial L}{\partial u} = 2(I_x u + I_y v + I_t)I_x, \qquad \frac{\partial L}{\partial u_x} = 2\alpha u_x, \qquad \frac{\partial}{\partial x}\frac{\partial L}{\partial u} = 2\alpha u_{xx}$$</div>
+    <p>The same will be with y, and we will do the same for v. The final equations will be:</p>
+    <div class="eq">$$ (I_x u + I_y v + I_t)I_x - \alpha(u_{xx} + u_{yy}) = 0 $$</div>
+    <div class="eq">$$ (I_x u + I_y v + I_t)I_y - \alpha(v_{xx} + v_{yy}) = 0 $$</div>
+    <p>We can write those equation in a vector form. We will use a trick where we can calculate $u_{xx} + u_{yy}$
+    with the laplacian: $\begin{pmatrix} 0 & -1 & 0 \\ -1 & 4 & -1 \\ 0 & -1 & 0 \end{pmatrix}$</p>
+    <p>Now we can insert and get:</p>
+    <div class="eq">$$ \begin{pmatrix} I_x^2 + \alpha L & I_x I_y \\ I_x I_y & I_y^2 + \alpha L \end{pmatrix} \begin{pmatrix} u \\ v \end{pmatrix} = \begin{pmatrix} I_x I_t \\ I_y I_t \end{pmatrix}$$</div>
+    <p>The dimensions of u and v are 2Nx1. The same will be with the right term of the equation. The matrix here is
+    the same as in LK and HPD, but the dimensions here are a bit trickier. The matrices $I_x^2, I_y^2, I_x I_y$ are
+    diagonal matrices of nxn. The whole matrix will have dimensions of 2nx2n (a very large matrix).</p>
+    <p>The interesting term is the regulirizer $\alpha L$ where L is the Laplacian operator in matrix form and in
+    size nxn. TIt will take the form of: [-1 entries at neighbours, 4 on diagonal]</p>
+    <p>At every row we will have -1 in different locations which match to the neighbors up, down, left and write.
+    This is a very wasteful way of writing the filter of 3x3 earlier.</p>
+    <p>In matrix form: [U * laplacian = sparse matrix * U]</p>
+    <p>We want the Laplacian to be as little as possible so the solution won't be that far of from the solution
+    without the regular term. That way, the solution will overall fulfill both constraints: the data term and the
+    regularization. The set of equations here can be written as $Ax = b$ and is very sparse. We have at every row
+    1+5+1=7 elements in a row instead of n and it makes it a very fast solution.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — Horn–Schunck</span>
+    <p>LK works on a window; HS solves for the whole image at once. To handle the under-determined system, it adds
+    a <strong>smoothness prior</strong>: neighbouring pixels should have similar flow. The parameter $\alpha$
+    controls smoothness:</p>
+    <ul>
+      <li>$\alpha$ small → trust the data, accept choppy flow.</li>
+      <li>$\alpha$ large → assume smooth world, ignore noisy data.</li>
+    </ul>
+    <p>This is the classic <strong>ML vs MAP</strong> distinction. The resulting $2N \times 2N$ system is huge but
+    very sparse (only 7 nonzeros per row), so it solves fast iteratively.</p>
+
+    <h4 class="mini">Two ways to compare LK and HS</h4>
+    <ul>
+      <li><strong>Locality:</strong> LK is per-window — independent decisions everywhere. HS is global — every
+      pixel influences every other through the smoothness term (after enough iterations).</li>
+      <li><strong>Output density:</strong> LK gives a flow vector per <em>window centre</em> (sparse). HS gives a
+      flow vector per <em>pixel</em> (dense).</li>
+    </ul>
+
+    <h4 class="mini">Why "smoothness" is a reasonable prior</h4>
+    <p>In the real world, neighbouring pixels almost always belong to the same object, and objects move as one. So
+    neighbouring flow vectors should be similar — except at object boundaries, where they should jump. Basic HS
+    smooths everywhere, blurring boundaries. Modern variants use "robust" smoothness (e.g. total variation) that
+    allows sharp jumps.</p>
+
+    <h4 class="mini">The Laplacian filter as a smoothness penalty</h4>
+    <p>The 3×3 Laplacian kernel computes "centre value − average of 4 neighbours." If the flow is locally smooth,
+    this is near zero; if there's a sudden jump, it's big. Squaring and summing gives a penalty that is small
+    when the field varies gently.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Data vs smoothness — slide α</h4><span class="tag">drag slider</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Each arrow is the estimated flow at one pixel. With $\alpha=0$ the
+      arrows are noisy and inconsistent. With large $\alpha$ they coalesce into a smooth global field.</p>
+      <canvas id="hs" width="900" height="240"></canvas>
+      <div class="controls">
+        <div class="control"><label>α (smoothness) <span class="val" id="vhsa">0.00</span></label><input id="hsa" type="range" min="0" max="100" value="0"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Takeaways</span>
+    <ul style="margin:6px 0 0">
+      <li>One Taylor expansion + a window assumption = Lucas–Kanade.</li>
+      <li>$\operatorname{rank}(A^TA)$ governs solvability: 0 flat, 1 edge (aperture), 2 corner.</li>
+      <li>Harris is the same structure tensor, repurposed to <em>find</em> trackable corners.</li>
+      <li>Horn–Schunck adds a global smoothness prior — denser flow, sparse linear system.</li>
+    </ul></div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Use LK when you only need flow at corners</strong> (tracking, stabilization, SLAM). Fast and
+      local.</li>
+      <li><strong>Use HS when you need a dense flow field</strong> (warping, optical-flow visualisations, video
+      interpolation). Slower but per-pixel.</li>
+      <li><strong>Run Harris first</strong> on every tracked frame's first picture, then LK for the rest. Discard
+      points whose $A^TA$ goes singular and re-detect.</li>
+      <li><strong>Choose window size carefully</strong>: too small → aperture problem and noise; too large →
+      multiple motions inside one window.</li>
+      <li><strong>If LK can't converge</strong>, build an image pyramid and run it coarse-to-fine — this is the
+      standard fix for large motion.</li>
+      <li><strong>HS smoothness weight α</strong>: start at α ≈ 1, increase if flow is noisy, decrease if real
+      motion is being washed away.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — methods at a glance</span>
+    <table>
+      <tr><th>Method</th><th>Output</th><th>Cost</th><th>Strength</th><th>Weakness</th></tr>
+      <tr><td>Lucas–Kanade</td><td>flow per window</td><td>2×2 LS per window</td><td>fast, local</td><td>aperture problem, large motions</td></tr>
+      <tr><td>Harris</td><td>"cornerness" map → keypoints</td><td>one eigen-test per pixel</td><td>picks trackable spots</td><td>scale-sensitive (use pyramid)</td></tr>
+      <tr><td>Horn–Schunck</td><td>dense flow per pixel</td><td>iterative sparse 2N×2N solve</td><td>smooth, complete field</td><td>blurs object boundaries</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Mental model:</strong> "brightness constraint" gives one line in $(u,v)$
+    space per pixel. LK collects 25-or-so lines per window and finds their intersection. HS collects ALL lines for
+    the whole image and intersects them subject to "neighbours should agree." Harris asks the meta-question
+    "would LK even work here?" before tracking.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch01_motion_representation.html"><span class="dir">‹ Prev</span><span class="ttl">1 · Motion Representation</span></a>
+    <a class="next" href="ch03_motion_applications.html"><span class="dir">Next ›</span><span class="ttl">3 · Applications of Motion Estimation</span></a>
+  </div>
+</div>
+
+<script>
+/* LK 1D */
+(function(){
+  function I(x){return 100 + 60*Math.sin(0.04*x) + 30*Math.exp(-Math.pow((x-450)/120,2));}
+  function draw(){
+    const c=document.getElementById('lkCanvas');const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    const u=+document.getElementById('lku').value;document.getElementById('vlku').textContent=u;
+    ctx.strokeStyle='#6ea8ff';ctx.lineWidth=2;ctx.beginPath();
+    for(let x=0;x<900;x++){const y=200-I(x);if(x)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.stroke();
+    ctx.strokeStyle='#ff6b81';ctx.beginPath();
+    for(let x=0;x<900;x++){const y=200-I(x-u);if(x)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.stroke();
+    const x0=450;const Ix=(I(x0+1)-I(x0-1))/2;
+    ctx.strokeStyle='rgba(255,180,84,0.85)';ctx.lineWidth=2;ctx.beginPath();
+    ctx.moveTo(x0-90,200-(I(x0)-90*Ix));ctx.lineTo(x0+90,200-(I(x0)+90*Ix));ctx.stroke();
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('Blue = I₁(x). Red = I₂(x) = I₁(x − u). Amber = tangent slope I_x at centre.',20,24);
+    const It=I(x0)-I(x0-u);
+    document.getElementById('lkRead').innerHTML=`At x=450:  I_x ≈ <b>${Ix.toFixed(2)}</b>   I_t = I₂−I₁ ≈ <b>${It.toFixed(2)}</b>   ⇒  u ≈ −I_t / I_x ≈ <b>${(-It/Ix||0).toFixed(2)}</b>  (true u=${u})`;
+  }
+  document.getElementById('lku').addEventListener('input',draw);draw();
+})();
+
+/* LK constraint lines + structure tensor rank */
+(function(){
+  const cv=document.getElementById('cvLK'),ctx=cv.getContext('2d');
+  let kind='corner', truth={u:30,v:-15}, drag=false;
+  const winX=40, winY=40, winW=320, winH=280;
+  const motX=420, motY=40, motW=440, motH=280;
+  function patch(kind){
+    const px=[];
+    if(kind==='flat'){ for(let i=0;i<14;i++)px.push({Ix:(Math.random()-.5)*0.3,Iy:(Math.random()-.5)*0.3,x:winX+30+Math.random()*(winW-60),y:winY+30+Math.random()*(winH-60)}); }
+    else if(kind==='edge'){ for(let i=0;i<14;i++){const a=Math.random()*0.3+0.3;px.push({Ix:Math.cos(a),Iy:Math.sin(a),x:winX+30+Math.random()*(winW-60),y:winY+30+Math.random()*(winH-60)});}}
+    else { for(let i=0;i<14;i++){const a=Math.random()*Math.PI*2;px.push({Ix:Math.cos(a),Iy:Math.sin(a),x:winX+30+Math.random()*(winW-60),y:winY+30+Math.random()*(winH-60)});}}
+    return px;
+  }
+  let pts=patch('corner');
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,cv.width,cv.height);
+    // window panel
+    ctx.strokeStyle='#2c3650';ctx.strokeRect(winX,winY,winW,winH);
+    ctx.fillStyle='#6b7a99';ctx.font='12px "Segoe UI"';ctx.fillText('image window — pixels & their gradients',winX+10,winY+18);
+    pts.forEach(p=>{
+      ctx.fillStyle='#41d8c9';ctx.beginPath();ctx.arc(p.x,p.y,3,0,7);ctx.fill();
+      ctx.strokeStyle='rgba(65,216,201,0.85)';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+p.Ix*22,p.y+p.Iy*22);ctx.stroke();
+    });
+    // motion panel
+    ctx.strokeStyle='#2c3650';ctx.strokeRect(motX,motY,motW,motH);
+    const cx=motX+motW/2,cy=motY+motH/2;
+    ctx.strokeStyle='#243049';ctx.beginPath();ctx.moveTo(motX,cy);ctx.lineTo(motX+motW,cy);ctx.moveTo(cx,motY);ctx.lineTo(cx,motY+motH);ctx.stroke();
+    ctx.fillStyle='#6b7a99';ctx.font='12px "Segoe UI"';ctx.fillText('motion (u,v) space — each pixel = one line',motX+10,motY+18);
+    // lines: I_x u + I_y v + I_t = 0 ; I_t = -(I_x*tu + I_y*tv) + noise
+    let Sxx=0,Sxy=0,Syy=0;
+    pts.forEach(p=>{
+      const It=-(p.Ix*truth.u+p.Iy*truth.v)+(Math.random()-0.5)*2;
+      ctx.strokeStyle='rgba(110,168,255,0.55)';ctx.lineWidth=1.5;ctx.beginPath();
+      for(let u=-motW/2;u<motW/2;u+=3){const v=-(p.Ix*u+It)/(p.Iy||1e-6); const X=cx+u, Y=cy-v;
+        u===-motW/2?ctx.moveTo(X,Y):ctx.lineTo(X,Y);}
+      ctx.stroke();
+      Sxx+=p.Ix*p.Ix;Sxy+=p.Ix*p.Iy;Syy+=p.Iy*p.Iy;
+    });
+    // truth dot
+    ctx.fillStyle='#7ee787';ctx.beginPath();ctx.arc(cx+truth.u,cy-truth.v,7,0,7);ctx.fill();
+    ctx.strokeStyle='#0a0f1c';ctx.lineWidth=2;ctx.stroke();
+    // eigenvalues
+    const tr=Sxx+Syy, det=Sxx*Syy-Sxy*Sxy;
+    const disc=Math.max(0,tr*tr/4-det);
+    const lmax=tr/2+Math.sqrt(disc), lmin=tr/2-Math.sqrt(disc);
+    document.getElementById('roLK').innerHTML=
+      `patch type = <b>${kind}</b>   structure tensor eigenvalues: λ_max=<b>${lmax.toFixed(2)}</b>, λ_min=<b>${lmin.toFixed(2)}</b>\n`+
+      `→ rank ≈ ${lmin>0.6?'2 (corner — unique motion)':lmax>0.6?'1 (edge — aperture problem)':'0 (flat — no info)'}`;
+  }
+  cv.addEventListener('mousedown',e=>{const r=cv.getBoundingClientRect();const mx=(e.clientX-r.left)*cv.width/r.width,my=(e.clientY-r.top)*cv.height/r.height;
+    const cx=motX+motW/2,cy=motY+motH/2;if(Math.hypot(cx+truth.u-mx,cy-truth.v-my)<14)drag=true;});
+  cv.addEventListener('mousemove',e=>{if(!drag)return;const r=cv.getBoundingClientRect();const mx=(e.clientX-r.left)*cv.width/r.width,my=(e.clientY-r.top)*cv.height/r.height;
+    const cx=motX+motW/2,cy=motY+motH/2;truth.u=mx-cx;truth.v=cy-my;draw();});
+  window.addEventListener('mouseup',()=>{drag=false;});
+  document.querySelectorAll('#lkSeg button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#lkSeg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');kind=b.dataset.w;pts=patch(kind);draw();}));
+  draw();
+})();
+
+/* Aperture problem */
+(function(){
+  const cv=document.getElementById('cvAp'),ctx=cv.getContext('2d');
+  let sa=30, ma=0, sp=1, t=0, raf=null;
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height;
+    const orient=sa*Math.PI/180;
+    const md=ma*Math.PI/180, vx=Math.cos(md)*sp*1.2, vy=Math.sin(md)*sp*1.2;
+    // shifted offset
+    const ox=t*vx, oy=t*vy;
+    // draw stripes everywhere
+    ctx.save();ctx.translate(W*0.4,H/2);ctx.rotate(orient);
+    for(let i=-30;i<30;i++){const xL=i*22+((ox*Math.cos(orient)+oy*Math.sin(orient))%22);
+      ctx.fillStyle=i%2?'#1e2a44':'#41d8c9';ctx.globalAlpha=0.85;ctx.fillRect(xL-11,-H,22,H*2);}
+    ctx.restore();
+    // big rectangle showing whole view (faded box)
+    ctx.strokeStyle='#2c3650';ctx.strokeRect(20,20,W*0.65,H-40);
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';ctx.fillText('full view (you see true motion)',32,40);
+    // aperture
+    const ax=W*0.85, ay=H/2;
+    ctx.save();ctx.beginPath();ctx.arc(ax,ay,80,0,7);ctx.clip();
+    ctx.save();ctx.translate(ax-W*0.4,0);
+    ctx.translate(W*0.4,H/2);ctx.rotate(orient);
+    for(let i=-30;i<30;i++){const xL=i*22+((ox*Math.cos(orient)+oy*Math.sin(orient))%22);
+      ctx.fillStyle=i%2?'#1e2a44':'#41d8c9';ctx.fillRect(xL-11,-H,22,H*2);}
+    ctx.restore();ctx.restore();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ax,ay,80,0,7);ctx.stroke();
+    // arrows
+    function arr(x0,y0,dx,dy,col){const len=Math.hypot(dx,dy);if(len<0.5)return;
+      ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x0+dx,y0+dy);ctx.stroke();
+      const a=Math.atan2(dy,dx);ctx.beginPath();ctx.moveTo(x0+dx,y0+dy);
+      ctx.lineTo(x0+dx-10*Math.cos(a-0.4),y0+dy-10*Math.sin(a-0.4));
+      ctx.lineTo(x0+dx-10*Math.cos(a+0.4),y0+dy-10*Math.sin(a+0.4));ctx.closePath();ctx.fill();}
+    // true motion (green) — center of full view
+    arr(W*0.35,H/2,vx*40,vy*40,'#7ee787');
+    // normal motion through aperture (amber) — projection of (vx,vy) onto gradient direction (perpendicular to stripes)
+    const nx=Math.cos(orient+Math.PI/2),ny=Math.sin(orient+Math.PI/2);
+    const dotp=vx*nx+vy*ny;
+    arr(ax,ay,dotp*nx*40,dotp*ny*40,'#ffb454');
+  }
+  function loop(){t+=1;draw();raf=requestAnimationFrame(loop);}
+  ['sa','ma','sp'].forEach(id=>{document.getElementById(id).addEventListener('input',e=>{
+    if(id==='sa'){sa=+e.target.value;document.getElementById('vsa').textContent=sa+'°';}
+    if(id==='ma'){ma=+e.target.value;document.getElementById('vma').textContent=ma+'°';}
+    if(id==='sp'){sp=+e.target.value;document.getElementById('vsp').textContent=sp.toFixed(1);}
+    draw();});});
+  loop();
+})();
+
+/* Harris response */
+(function(){
+  const cv=document.getElementById('cvHar'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  // make a synthetic image with rectangles
+  const off=document.createElement('canvas');off.width=W;off.height=H;
+  const oc=off.getContext('2d');oc.fillStyle='#222';oc.fillRect(0,0,W,H);
+  const rects=[[80,80,140,140,'#bbb'],[260,60,200,100,'#888'],[300,180,80,160,'#999'],[520,90,220,180,'#777'],[60,260,150,90,'#aaa'],[470,300,210,60,'#999']];
+  rects.forEach(r=>{oc.fillStyle=r[4];oc.fillRect(r[0],r[1],r[2],r[3]);});
+  // text
+  oc.fillStyle='#666';oc.font='bold 36px monospace';oc.fillText('CORNERS',520,210);
+  // compute gradients
+  const data=oc.getImageData(0,0,W,H).data;
+  function px(x,y){return data[(y*W+x)*4];}
+  const Ix=new Float32Array(W*H),Iy=new Float32Array(W*H);
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+    Ix[y*W+x]=(px(x+1,y)-px(x-1,y))/2;Iy[y*W+x]=(px(x,y+1)-px(x,y-1))/2;
+  }
+  let ws=11, showHeat=false, hover={x:300,y:200};
+  let heat=null;
+  function computeHeat(){
+    const h=new Float32Array(W*H);const half=Math.floor(ws/2);
+    for(let y=half;y<H-half;y+=2)for(let x=half;x<W-half;x+=2){
+      let sxx=0,sxy=0,syy=0;
+      for(let j=-half;j<=half;j++)for(let i=-half;i<=half;i++){
+        const ix=Ix[(y+j)*W+(x+i)],iy=Iy[(y+j)*W+(x+i)];
+        sxx+=ix*ix;sxy+=ix*iy;syy+=iy*iy;
+      }
+      const det=sxx*syy-sxy*sxy, tr=sxx+syy;
+      const R=det-0.05*tr*tr;
+      h[y*W+x]=Math.max(0,R);
+    }
+    heat=h;
+  }
+  function structure(x,y){
+    const half=Math.floor(ws/2);let sxx=0,sxy=0,syy=0;
+    for(let j=-half;j<=half;j++)for(let i=-half;i<=half;i++){
+      const xi=Math.max(1,Math.min(W-2,x+i)),yj=Math.max(1,Math.min(H-2,y+j));
+      const ix=Ix[yj*W+xi],iy=Iy[yj*W+xi];
+      sxx+=ix*ix;sxy+=ix*iy;syy+=iy*iy;}
+    const tr=sxx+syy,det=sxx*syy-sxy*sxy;
+    const disc=Math.max(0,tr*tr/4-det);
+    return {sxx,sxy,syy,lmax:tr/2+Math.sqrt(disc),lmin:tr/2-Math.sqrt(disc),R:det-0.05*tr*tr};
+  }
+  function draw(){
+    ctx.drawImage(off,0,0);
+    if(showHeat){
+      if(!heat)computeHeat();
+      let max=1;for(let i=0;i<heat.length;i++)if(heat[i]>max)max=heat[i];
+      const img=ctx.getImageData(0,0,W,H);const d=img.data;
+      for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2){
+        const v=heat[y*W+x]/max;if(v>0.05){
+          for(let j=0;j<2;j++)for(let i=0;i<2;i++){
+            const idx=((y+j)*W+(x+i))*4;
+            d[idx]=Math.min(255,d[idx]*0.4+255*v);d[idx+1]=Math.min(255,d[idx+1]*0.4+120*v);d[idx+2]=Math.min(255,d[idx+2]*0.4);
+          }}
+      }
+      ctx.putImageData(img,0,0);
+    }
+    // window box
+    const half=Math.floor(ws/2);
+    ctx.strokeStyle='#41d8c9';ctx.lineWidth=2;
+    ctx.strokeRect(hover.x-half,hover.y-half,ws,ws);
+    const s=structure(hover.x,hover.y);
+    document.getElementById('roHar').innerHTML=
+      `cursor (${hover.x},${hover.y})   λ_max=<b>${s.lmax.toFixed(0)}</b>  λ_min=<b>${s.lmin.toFixed(0)}</b>  R=<b>${s.R.toFixed(0)}</b>   `+
+      (s.lmin>800?'CORNER':(s.lmax>800?'edge':'flat'));
+  }
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();
+    hover.x=Math.round((e.clientX-r.left)*cv.width/r.width);hover.y=Math.round((e.clientY-r.top)*cv.height/r.height);draw();});
+  document.getElementById('heatBtn').addEventListener('click',()=>{showHeat=!showHeat;heat=null;draw();});
+  document.getElementById('ws').addEventListener('input',e=>{ws=+e.target.value;document.getElementById('vws').textContent=ws+' px';heat=null;draw();});
+  draw();
+})();
+
+/* HS slider */
+(function(){
+  const hsRand=Array.from({length:300},()=>[Math.random()*2-1,Math.random()*2-1]);
+  function draw(){
+    const c=document.getElementById('hs');const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    const a=+document.getElementById('hsa').value/100;document.getElementById('vhsa').textContent=a.toFixed(2);
+    let k=0;
+    for(let y=20;y<220;y+=20){
+      for(let x=20;x<880;x+=20){
+        const v=hsRand[k++%hsRand.length];
+        const dx=(1-a)*v[0]*9+a*9, dy=(1-a)*v[1]*9-a*2;
+        ctx.strokeStyle='#41d8c9';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+        const ang=Math.atan2(dy,dx);ctx.fillStyle='#41d8c9';ctx.beginPath();ctx.moveTo(x+dx,y+dy);
+        ctx.lineTo(x+dx-5*Math.cos(ang-0.5),y+dy-5*Math.sin(ang-0.5));
+        ctx.lineTo(x+dx-5*Math.cos(ang+0.5),y+dy-5*Math.sin(ang+0.5));ctx.closePath();ctx.fill();
+      }
+    }
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('α = '+a.toFixed(2)+'  (0 = pure data / LK,  1 = pure smoothness)',300,235);
+  }
+  document.getElementById('hsa').addEventListener('input',draw);draw();
+})();
+</script>
+</body>
+</html>

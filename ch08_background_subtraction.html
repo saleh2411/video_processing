@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8 · Background Subtraction</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>8</b> · Background Subtraction</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch07_video_magnification.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch09_video_colorization.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 8</div>
+    <h1>Background Subtraction</h1>
+    <p class="lede">Surveillance camera: detect moving objects, ignore the wall. Naive frame differencing fails
+    when leaves rustle in wind. The standard fix is a per-pixel Gaussian Mixture Model — each pixel learns 3–5
+    typical colours it normally shows; anything else is "moving."</p>
+  </header>
+
+  <h2>8 &nbsp; Background Substruction</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 52–53)</span>
+    <p>Background subtraction is a fundamental task in video processing. Consider the example of a surveillance
+    camera, where the goal is to detect moving objects. The simplest solution is to compute the difference between
+    the current frame and the previous frame, and mark pixels as moving if the difference exceeds a threshold.
+    Another approach is to compute a weighted average over time and compare the current frame to this background
+    model instead of the immediate previous frame. However, these simple methods have limitations. In this section,
+    we will present the most standard algorithm for detecting sudden moving objects.</p>
+    <p>Given a video, we will work on each pixel separately. We will observe its intensity profile over time:</p>
+    <p>We would expect that initially, a pixel reflects the color of the background. When a moving object enters
+    the frame, the pixel's color changes accordingly. Finally, when the object leaves the frame, the pixel returns
+    to the background color. In practice, however, several phenomena can occur that deviate from this ideal
+    behavior:</p>
+    <p>A pixel often observes multiple background elements. For example, it may capture moving leaves in the wind.
+    To summarize:</p>
+    <p>Therefore, the solution propose to do clustering. We would take all the pixel values at the intensity
+    profile and observe their histogram:</p>
+    <p>In this case, clustering will divide the pixel values into three groups: the two clusters with the highest
+    frequency correspond to the leaves and the sky (the background), while the smaller cluster represents the
+    moving object. Note that the clusters are typically Gaussian-shaped rather than rectangular due to sensor
+    noise.</p>
+    <p>However, this approach has three main disadvantages. First, the algorithm introduces a delay: it requires
+    collecting many frames for clustering, and by the time the data is stored and the computation is performed,
+    the environment may have already changed. In addition, the per-pixel clustering algorithm is computationally
+    expensive, which further contributes to this delay. Second, the method requires substantial memory to store
+    the frames.</p>
+    <p>As a result, another approach overcomes these disadvantages by using a dynamic Gaussian Mixture Model
+    (GMM). We consider the intensity of each pixel as a random variable $x$. Let us start with the distribution of
+    $x$ given the $k$-th Gaussian component:</p>
+    <div class="eq">$$ f_{x|k}(x|k, \theta_k) = \frac{1}{2\pi^d |\Sigma_k|^{d/2}} e^{-\frac{1}{2}(x - \mu_k)^T \Sigma_k^{-1}(x - \mu_k)} $$</div>
+    <p>Where d is the dimension, x could be in grayscale or in RGB, k is the index of gaussian and
+    $\theta_k = (\mu_k, \Sigma_k)$ are the parameters of gaussian 'k'.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Each pixel's colour over time is not constant, but it's not random either. It oscillates between a few
+    typical values (sky blue, leaf green, occasional moving thing). Model the per-pixel value distribution as a
+    sum of a few Gaussians — one per typical mode. Anything that doesn't match any mode is "unusual" = a moving
+    object.</p>
+
+    <h4 class="mini">Why frame differencing alone fails</h4>
+    <p>"Subtract previous frame, threshold" sounds great until a tree branch rustles in wind. The branch moves
+    every frame, so EVERY frame has differences. You'd flag the entire tree as a moving object. A useful
+    surveillance system has to learn what's "normal flicker" and ignore it.</p>
+
+    <h4 class="mini">Why Gaussians?</h4>
+    <p>Sensor noise + lighting noise tend to produce bell-shaped distributions around the true value. Two
+    Gaussians can model "sometimes I see the sky, sometimes a leaf in front of it." Three or four can handle
+    more complex scenes. More than five and you're probably over-fitting noise.</p>
+
+    <h4 class="mini">Per-pixel — not per-region</h4>
+    <p>Each pixel has its OWN GMM. The pixel above the tree learns "mostly sky, sometimes branch"; the pixel
+    below learns "mostly sidewalk." This per-pixel independence is what makes GMM scale to megapixel images:
+    every pixel runs a tiny independent algorithm with O(K) state.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 54–56)</span>
+    <p>We will use the assumption that the covariance matrix $\Sigma_k$ is diagonal or is equal to $\sigma I$ for
+    simplicity. The full distribution function (given the set of all the gaussians) would be:</p>
+    <div class="eq">$$ f_x(x|\Phi) = \sum_{k=1}^K p(k) f_{x|k}(x|k, \theta_k) $$</div>
+    <p>Where we denote: $\omega_k = p(k), \sum_{k=1}^K \omega_k = 1$, $\Phi = (\omega_1, ..., \omega_k, \theta_1, ..., \theta_K)$,
+    $\theta_k = (\mu_k, \sigma_k)$.</p>
+    <p>This is similar to the k-means algorithm, where we have the intensity values and we need to answer which
+    pixels belong to which cluster and it is solved iteratively.</p>
+    <p>When we get a new frame, for every pixel we want to make the decision in that frame whether it is a
+    background or a moving object. This is done by doing clustering with GMM and the decision will be taken by the
+    gaussian with highest probability. For that, we will use Bayes:</p>
+    <div class="eq">$$ p(k|x, \Phi) = \frac{p(k) p_{x|k}(x|k, \theta_k)}{f_x(x|\Phi)} $$</div>
+    <div class="eq">$$ \implies MAP: \hat{k} = \arg\max_k P(k|x, \Phi) = \arg\max_k \omega_k f_{x|k}(x|k, \theta_k) $$</div>
+    <p>As in previous lectures, p(k) is the prior and $p_{x|k}(x|k, \theta_k)$ is the likelihood. The prior in
+    this case tells how much the pixel have seen background objects (for example blue values of the sky or green
+    values of the leaves). The likelihood tells how good the gaussian 'k' (for example the gaussian of the sky or
+    the gaussian of the leaves) describes the pixel.</p>
+    <p>We will use the following diagram as an example:</p>
+    <p>We will start the explaination from the upper plot. We have 3 gaussians (marked in blue). The GMM is the
+    sum of all those gaussians (marked in back). For example, the middle gaussian tells pixel's value is 150 with
+    a probability of 0.3.</p>
+    <p>The bottom plot describes the posteriors of each gaussian. Given the pixel value, we will make the decision
+    by taking the gaussian with the highest posterior. Foe example. if the pixel's value is 0 we will take
+    gaussian 1, for 255 we will take gaussian 3, etc.</p>
+    <p>What we are left now to do is to determine which of the gaussians belong to the background and which to the
+    moving object(s). More formally: given GMM, how do we classify the gaussians to bacground/object?</p>
+    <p>This is done by first sorting the Gaussians in descending order of $\frac{\omega_k}{\sigma_k}$. Here,
+    $\omega_k$ represents how frequently the $k$-th Gaussian has been observed in the past — the higher its value,
+    the more likely it belongs to the background. $\sigma_k$ represents the width of the Gaussian; smaller values
+    indicate less variation in intensity, suggesting a static object.</p>
+    <p>After the sort, we define all the gaussians satisfying the following constraint to be the background:</p>
+    <div class="eq">$$ B = \arg\min_b (\sum_{k=1}^b \frac{\omega_k}{\sigma_k} > T) $$</div>
+    <p>Where T is user specific threshold.</p>
+    <p><strong>The full algorithm</strong></p>
+    <p>The full equation we wish to solve if we have enough resources is:</p>
+    <div class="eq">$$ P(x_1, ..., x_N, k|\Phi) = \prod_{t=1}^N w_k f_{x|k}(x_t|k, \theta_k) $$</div>
+    <p>If we solve using EM algorithm (won't be discussed in the course) we will get:</p>
+    <div class="eq">$$ \hat{\omega}_k = \frac{1}{N} \sum_{i=1}^N p(k|x_t, \Phi) $$</div>
+    <div class="eq">$$ \hat{\mu}_k = \frac{\sum_{i=1}^N x_t p(k|x_t, \Phi)}{\sum_{i=1}^N p(k|x_t, \Phi)} $$</div>
+    <div class="eq">$$ \hat{\sigma}_k^2 = \frac{\sum_{i=1}^N((x_t - \mu_k)(x_t - \mu_k)^T) p(k|x_t, \Phi)}{\sum_{i=1}^N p(k|x_t, \Phi)} $$</div>
+    <p>We can't run the full EM algorithm in real time because we can't stop at time t and make the decision.
+    Thus, given GMM and a new measurement, do:</p>
+    <div class="eq">$$ \text{match}: M_{k,t} = \begin{cases} 1 & \frac{x_t - \mu_{k,t-1}}{\sigma_{k,t-1}} < 2.5 \\ 0 & \text{O.W.} \end{cases} $$</div>
+    <div class="eq">$$ \omega_{k,t} = (1 - \alpha) \omega_{k,t-1} + \alpha M_{k,t} $$</div>
+    <div class="eq">$$ \text{Renormilize}: (\omega_{k,t})_{k=1}^K, \quad \mu_t = (1 - \rho) M_{t-1} + \rho x_t $$</div>
+    <div class="eq">$$ \sigma_t^2 = (1 - \rho) \sigma_{t-1}^2 + \rho(x_t - M_t)(x_t - M_t)^T, \quad \rho = \frac{\alpha \cdot p(k|x_t, \Phi)}{\hat{w}_{k,t}} $$</div>
+    <p>Instead of calculating $f_{x|k}(x|k, \theta_k)$ the calculate the match. They assumed only one gaussian
+    matches pixel. The first gaussian to match is the first to describe the pixel. Then, we update the weights
+    according to the match.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — GMM background subtraction</span>
+    <p>Each pixel stores its own little mixture of 3–5 Gaussians. Each one has: a mean colour $\mu_k$, a width
+    $\sigma_k$, and a popularity $\omega_k$.</p>
+    <p><strong>Per frame, per pixel:</strong></p>
+    <ol>
+      <li>Does the new value match an existing Gaussian (within 2.5σ)?</li>
+      <li>If yes: nudge its $\mu, \sigma$ toward the new value; bump weight.</li>
+      <li>If no: replace the weakest Gaussian with a new one centred here. This is probably a moving object.</li>
+      <li>Normalize the weights.</li>
+    </ol>
+    <p><strong>Decision.</strong> Sort the Gaussians by $\omega/\sigma$ (popular + tight = strong background
+    candidate). Take the top ones whose weights sum past threshold T — those are background. Everything else is
+    foreground.</p>
+
+    <h4 class="mini">Why "ω/σ" specifically?</h4>
+    <p>Background candidates have two properties: they appear OFTEN (high ω) AND they're STABLE (low σ — small
+    variation around their mean). The ratio rewards both. A new moving object has high σ (it's just one
+    snapshot, very tentative) and low ω (you've barely seen it) — so very low ratio, definitely foreground.</p>
+
+    <h4 class="mini">Online updates — the practical recipe</h4>
+    <p>Each frame, for each pixel:</p>
+    <ol>
+      <li>Find the Gaussian whose mean is within 2.5σ of the new value.</li>
+      <li>If found: nudge its mean toward the new value (learning rate ρ), increase its weight; decrease others'
+      weights.</li>
+      <li>If not found: replace the lowest-weight Gaussian with one centred on the new value (low weight, high
+      variance).</li>
+      <li>Renormalize weights to sum to 1.</li>
+    </ol>
+    <p>The learning rate α (for weights) controls how fast new patterns become "background." Too fast = a parked
+    car becomes background in 10 seconds. Too slow = the algorithm doesn't adapt to lighting changes.</p>
+
+    <h4 class="mini">Failure modes</h4>
+    <ul>
+      <li><strong>Sudden lighting change:</strong> all Gaussians become "stale" briefly; lots of false positives.</li>
+      <li><strong>Camera shake:</strong> pixels see new content; everything becomes foreground until GMM adapts.</li>
+      <li><strong>Slow-moving objects:</strong> get absorbed into background slowly (a parked-then-driving car
+      may "lose" its tail).</li>
+    </ul>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Use K = 3–5 Gaussians per pixel.</strong> Fewer = miss multimodal backgrounds; more = fit noise.</li>
+      <li><strong>α (weight learning rate) ≈ 0.01.</strong> About 100 frames to incorporate a new mode.</li>
+      <li><strong>T ≈ 0.7–0.9.</strong> Higher T → more Gaussians count as background → fewer false alarms
+      (and more missed foreground).</li>
+      <li><strong>Match threshold = 2.5σ.</strong> Tight enough to detect new things, loose enough to absorb
+      sensor noise.</li>
+      <li><strong>Diagonal covariance only.</strong> Full 3×3 covariance is rarely worth the cost; assume colour
+      channels are independent.</li>
+      <li><strong>Post-process the FG mask</strong> with morphological open/close to remove single-pixel noise
+      and fill small holes.</li>
+      <li><strong>Always combine with shadow removal</strong> (e.g., chromaticity-based) — GMM will flag shadows
+      as foreground because the colour changes.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — background subtraction recipes</span>
+    <table>
+      <tr><th>Method</th><th>Per-pixel state</th><th>Adapts?</th><th>Handles multimodal BG?</th></tr>
+      <tr><td>Frame differencing</td><td>previous frame</td><td>instant</td><td>no</td></tr>
+      <tr><td>Running average</td><td>one mean</td><td>slow</td><td>no</td></tr>
+      <tr><td>Single Gaussian</td><td>one (μ, σ)</td><td>yes</td><td>no</td></tr>
+      <tr><td>GMM (this chapter)</td><td>K Gaussians + weights</td><td>yes</td><td>YES</td></tr>
+      <tr><td>Modern (CNN-based)</td><td>learned features</td><td>via re-training</td><td>yes + semantic awareness</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>One-line takeaway:</strong> each pixel learns its own little distribution
+    of "normal" colours; anything outside that is moving. The GMM math is the recipe for "tracking a few normal
+    modes online while staying memory-efficient."</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Per-pixel GMM — threshold the background</h4><span class="tag">slide T</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Three Gaussians: sky (popular, tight), leaves (popular, slightly wider),
+      occasional moving object (rare, wide). Slide T to see which Gaussians get classified as background (teal)
+      vs foreground (red).</p>
+      <canvas id="cvGMM" width="900" height="280"></canvas>
+      <div class="controls">
+        <div class="control"><label>background threshold T <span class="val" id="vT">75</span></label><input type="range" id="gmmT" min="20" max="98" value="75"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pager">
+    <a href="ch07_video_magnification.html"><span class="dir">‹ Prev</span><span class="ttl">7 · Video Magnification</span></a>
+    <a class="next" href="ch09_video_colorization.html"><span class="dir">Next ›</span><span class="ttl">9 · Video Colorization</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  function draw(){
+    const c=document.getElementById('cvGMM'),ctx=c.getContext('2d');
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle='#243049';ctx.beginPath();ctx.moveTo(20,240);ctx.lineTo(880,240);ctx.stroke();
+    const gs=[{mu:160,sig:25,w:0.5,n:'sky'},{mu:380,sig:20,w:0.4,n:'leaves'},{mu:650,sig:55,w:0.1,n:'moving'}];
+    const T=+document.getElementById('gmmT').value;document.getElementById('vT').textContent=T;
+    let totalW=0;gs.forEach(g=>totalW+=g.w/g.sig);
+    const sorted=[...gs].sort((a,b)=>(b.w/b.sig)-(a.w/a.sig));
+    let cumul=0;const bgSet=new Set();
+    for(const g of sorted){cumul+=g.w/g.sig;bgSet.add(g.n);if(cumul/totalW*100>=T)break;}
+    function gauss(x,mu,sig){return Math.exp(-0.5*Math.pow((x-mu)/sig,2));}
+    gs.forEach(g=>{
+      const isBG=bgSet.has(g.n);const col=isBG?'#41d8c9':'#ff6b81';
+      ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=2;
+      ctx.beginPath();
+      for(let x=20;x<880;x++){const y=240-gauss(x,g.mu,g.sig)*g.w*600;if(x===20)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+      ctx.lineTo(880,240);ctx.lineTo(20,240);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle=col;ctx.font='13px "Segoe UI"';
+      ctx.fillText(g.n+'  (ω='+g.w+', σ='+g.sig+', ω/σ='+(g.w/g.sig).toFixed(3)+')',g.mu-70,240-gauss(g.mu,g.mu,g.sig)*g.w*600-12);
+    });
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('pixel intensity →',780,260);
+    ctx.fillText('teal = background  ·  red = foreground (sorted by ω/σ, top until cumulative > T)',20,22);
+  }
+  document.getElementById('gmmT').addEventListener('input',draw);draw();
+})();
+</script>
+</body>
+</html>

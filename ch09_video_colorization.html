@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>9 · Video Colorization</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>9</b> · Video Colorization</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch08_background_subtraction.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch10_video_matting.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 9</div>
+    <h1>Video Colorization</h1>
+    <p class="lede">A user draws a few colour scribbles on a B&amp;W movie. We propagate the colour to every other
+    pixel — fast inside regions of similar luminance, slow across edges. The vehicle is <em>geodesic distance</em>,
+    computed efficiently with Dijkstra or fast-sweeping algorithms.</p>
+  </header>
+
+  <h2>9 &nbsp; Video colorization</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — inputs &amp; assumptions (PDF page 57)</span>
+    <p><strong>Inputs:</strong></p>
+    <ul>
+      <li><u>luminance channe:</u> $Y: \Omega \times [0, T] \to R$, where $\Omega = [0, W] \times [0, H] \in R^2$
+      is the parametrization plane of the image or the image domain, and $[0, T]$ is a temporal time interval. If
+      T=0, then we have a still image, and a video otherwise. Even though the function maps to R, in practice it
+      will map to $[0, 255]$. This would be the monochrome (luma) video.</li>
+      <li><u>A set of 'scribbles':</u> $\Omega_k \in \Omega \times [0, T]$ and their corresponding color $c_k$ -
+      color in some colorspace</li>
+    </ul>
+    <p><strong>Outputs:</strong> We want to create two chromatic channels - $C: \Omega \times [0, T] \to R^2$ s.t.
+    $\overline{C}|_{\Omega_k} = c_k$ (we need to be consistent with the input).</p>
+    <p><u>Assumption:</u></p>
+    <ul>
+      <li>The structural information of chromatic channels can often be inferred from the luminance channel.
+      However, this assumption does not always hold. For example, in the case of fire, the luminance channel may
+      saturate at the maximum value (255) across all pixels, while the chromatic channels still exhibit variation,
+      particularly along object boundaries.</li>
+      <li>We will assume region-wise smoothness, modeling the image as a collection of color regions. Within each
+      region, the color is approximately constant, while transitions between regions are sharp—similar to a
+      cartoon image.</li>
+    </ul>
+    <p><u>Particular case:</u> T=0 (image). We will do color propagation from $(\Omega_k)$ to entire $\Omega$.
+    This scenario considers, for example, a fire that originates at the center of a bush and propagates outward
+    toward the edges of the image. We aim to ensure that the propagation process preserves the underlying image
+    structure. In other words, propagation should occur rapidly within homogeneous regions, but slow down
+    significantly when crossing object boundaries.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>You have an old B&amp;W movie and want it in colour. You'd never paint every pixel by hand. Instead, paint
+    a few <strong>scribbles</strong> ("here's blue sky", "here's red shirt") and let the algorithm propagate the
+    colour. The output is the two chrominance channels (the original luminance Y is reused as-is).</p>
+    <p>Why it can work: colour edges almost always coincide with luminance edges. Two neighbouring pixels with
+    similar grey value probably share a colour; pixels separated by a strong luminance edge probably don't.</p>
+
+    <h4 class="mini">YUV / Y'CbCr — separating brightness from colour</h4>
+    <p>Computer vision and TV use colour spaces that put "brightness" in one channel (Y) and "colour" in two
+    others (UV or CbCr). RGB intermixes them — change one channel and both brightness and tint shift. With YUV,
+    a B&amp;W frame is just Y. To colourize, you only need to invent U and V; the Y stays exactly as filmed.
+    Result: original detail preserved, no risk of "graying out" by accident.</p>
+
+    <h4 class="mini">Why scribbles instead of fully painting</h4>
+    <p>Painting every pixel manually = days of artist work. A scribble per region (≈ 10 strokes for a frame) =
+    seconds. The algorithm fills the rest, fast, by following luminance edges. Video gets the same scribble
+    propagated through frames via the time dimension — so even fewer scribbles needed.</p>
+
+    <h4 class="mini">When the assumptions break</h4>
+    <ul>
+      <li><strong>Fire / candle flame:</strong> Y saturates at 255 across all pixels even though colour varies
+      (yellow core, orange edge, red wisps). The algorithm would paint it all one colour.</li>
+      <li><strong>Smooth gradients:</strong> A sunset has gradual luminance change but rapid colour change
+      (orange → pink → purple). The "constant colour per region" assumption breaks.</li>
+      <li><strong>Specular reflections:</strong> a white highlight on a red car has high Y but no chromatic info.
+      Easy to over-saturate it.</li>
+    </ul>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — path, distance, blending (PDF pages 58–60)</span>
+    <p>We will define a <strong>path</strong> (curvature): $(p: [0, 1] \to \Omega)$, where $p(0) = x \in \Omega$
+    and $p(1) = y \in \Omega$.</p>
+    <p>Now we want to define the <strong>length of the path</strong>:</p>
+    <div class="eq">$$ L(p) = \int_p |\langle \dot{p}(s), \nabla y \rangle| dl(s) $$</div>
+    <p>Note that this definition does not correspond to a true geometric length, but rather to a weighting, where
+    the cost increases the more the path follows image contours. The direction that crosses the contours
+    corresponds to the gradient, while the perpendicular direction is the tangent. The cost is higher when the
+    path aligns with the gradient direction. In the particular case where the path remains entirely within a
+    homogeneous region, the cost is zero.</p>
+    <p>Now that we have defined a length, we can now define a distance, or a geometric distance. In our case, the
+    <strong>distance</strong> would be the minimum length of all the possible paths between any two points:</p>
+    <div class="eq">$$ d_L(x, y) = \min_{p: [0, 1] \to \Omega} L(p) $$</div>
+    <p>Now we want to define the <strong>point-to-set distance</strong> (or the distance between a point and a
+    region):</p>
+    <div class="eq">$$ d_L(x, \Omega_k) = \min_{y \in \Omega_k} d_L(x, y) $$</div>
+    <p>We have defined them to build a <strong>distance map</strong>:</p>
+    <div class="eq">$$ D_k(x) = d_L(x, \Omega_k) $$</div>
+    <p>For example, if we have the following image (an apple), and we consider the apple region and denote it by
+    k, then in the corresponding distance map, the value is zero inside the apple and increases as points move
+    farther away from it. This distance map can be used as an indicator of region membership for each point, or
+    as a weighting function.</p>
+    <p>Now will define the <strong>blending</strong>:</p>
+    <div class="eq">$$ c(x) = \frac{\sum_k W(D_k(x)) c_k}{\sum_k W(D_k(x))} $$</div>
+    <p>This represents a convex combination of the color values, where the weights depend on the distance. For
+    example, the weighting function can be an exponentially decaying function. The choice of this function
+    controls the smoothness of the transition: a sharper decay results in less smooth transitions.</p>
+    <p>Consider the following example: we wish to have $\frac{W(D_2)}{W(D_1)} \to 0$.</p>
+    <p>In another example, if the point is very far from two scribbles: the dashed line is considered
+    equi-distance (each point is at the same distance from the two scribbles). In a point closer to one of the
+    scribbles, we wish in the case to have:</p>
+    <div class="eq">$$ \frac{W(D + \epsilon)}{W(D)} \to 0 $$</div>
+    <p>For $D \to \infty$. In the paper they have proposed the following function:</p>
+    <div class="eq">$$ W(D) = \frac{1}{D^b}, \qquad b \in [1, 6] $$</div>
+    <p>Here, b controls the smoothness of the result, with smaller values producing smoother transitions. The key
+    components we need to compute are $D_k(x)$, and it is important that this calculation is efficient. The
+    remaining question is: how do we compute $D_k(x)$ effectively? We will do that by using Dynamic Programming.</p>
+    <p>let's observe a path from x to y: we will assume we have an optimal optimal path $P^*$ with the shortest
+    distance. By observing a middle point z, we can say that $P_1^*$ and $P_2^*$ are the optimal paths of xz and
+    zy respectively. If that wasn't the case, then we would had another path $P_1'$ shorter than $P_1^*$,
+    resulting in:</p>
+    <div class="eq">$$ L(P_1') < L(P_1^*) \implies L(P_1', P_2^*) < L(P^*) $$</div>
+    <p>Which is a contradiction. This is called <strong>Bellman principle</strong>.</p>
+    <p>Suppose we want to find a path between x and y. We can do that by observing the neighbors of x and expect
+    that:</p>
+    <div class="eq">$$ \exists z \in N_1(x): d_L(x, y) = d_L(x, z) + d_L(z, y) = L(x, z) + d_L(z, y) $$</div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — geodesic distance</span>
+    <p><strong>The trick:</strong> redefine "distance" to follow image content. Cost of a path = how often it
+    crosses image edges. A path staying inside one object pays nothing; a path hopping across a boundary pays a
+    big penalty.</p>
+    <p><strong>Distance map $D_k$:</strong> for each scribble, the geodesic distance from every pixel to that
+    scribble. Pixels in the scribble's connected region get small distances; pixels in other regions get big
+    ones.</p>
+    <p><strong>Blending:</strong> each pixel's colour = weighted average of all scribbles, weights $\propto
+    1/D_k^b$. Exponent $b$ controls how sharp the boundary is.</p>
+    <p><strong>Dynamic programming via Bellman:</strong> the shortest path from x to y via z uses the shortest
+    paths x→z and z→y. This lets us build distance maps in a single sweep.</p>
+
+    <h4 class="mini">"Geodesic" vs "Euclidean" — by example</h4>
+    <p>Euclidean distance asks "how far if I walk in a straight line through the air?" Geodesic asks "how far if I
+    must stay on the ground?" Through a building, Euclidean is short (cuts through walls); geodesic is long
+    (forced to walk around). For colour propagation, image edges play the role of walls.</p>
+
+    <h4 class="mini">The blending formula in plain terms</h4>
+    <p>$c(x) = \sum_k W(D_k) c_k / \sum_k W(D_k)$ is a weighted average. Each scribble votes for its colour;
+    closer scribbles vote louder. $W(D) = 1/D^b$ makes the vote drop off with distance. Larger $b$ = sharper
+    cutoff (votes from far scribbles count for almost nothing); smaller $b$ = smoother blend.</p>
+
+    <h4 class="mini">Bellman principle in one sentence</h4>
+    <p>"Any sub-path of an optimal path is itself optimal." This little fact is what makes Dijkstra, fast
+    sweeping, and a hundred other dynamic-programming algorithms work. If it weren't true, you'd have to consider
+    exponentially many paths.</p>
+  </div>
+
+  <h2>9.1 Dijkstra</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 61–62)</span>
+    <p>We will define a cartesian grid on the image. Suppose we define the following path: the change in the path
+    can be one of the following options.</p>
+    <p>On this grid we will also have the gradient of the image, which will be:</p>
+    <div class="eq">$$ \nabla Y(x, y) = \begin{pmatrix} Y(x+1, y) - Y(x, y) \\ Y(x, y+1) - Y(x, y) \end{pmatrix} $$</div>
+    <p>For each edge, we can define a weight. For example, we can take an inspiration from the gradient and
+    assign:</p>
+    <div class="eq">$$ W = |Y(x+1, y) - Y(x, y)| $$</div>
+    <p>When we move horizontally, and $W = |Y(x, y+1) - Y(x, y)|$ when we move vertically. Or more generally:</p>
+    <div class="eq">$$ e = ((x, y), (x', y')), \qquad W_e = |Y(x, y) - Y(x', y')| $$</div>
+    <p>And the length of the path will be: $L_p = \sum_{e \in P} W_e$, $d_L(x, y) = \min L(p)$.</p>
+    <p>Where p starts from x and ends at y. Now we will define the algorithm itself.<br>
+    <strong>Input:</strong> Weighted undirected graph $(\Omega, E), W: E \to R_+$; $\Omega_s \in \Omega$ Source
+    set.<br>
+    <strong>Output:</strong> $D: \Omega \to R_+$, $D(x) = d_L(x, \Omega_s)$, $D|_{\Omega_s} = 0$.</p>
+    <p><strong>Dijkstra's algorithm</strong></p>
+    <p>Initialize: $D|_{\Omega_s} = 0$, $D|_{\Omega \setminus \Omega_s} = \infty$, $Q = \Omega$. Where Q is a
+    queue.<br>
+    Iterations: While $Q \neq \phi$ do:<br>
+    1. $x = \arg\min_{x \in Q} D(x)$<br>
+    2. Update: $\forall y \in N_1(x) \cap Q$, $D(y) \leftarrow \min\{D(y), D(x) + W(x, y)\}$<br>
+    3. $Q \leftarrow Q \setminus \{x\}$</p>
+    <p>Now we will determine the complexity of the algorithm. We start by first observing the number of iterations.
+    Since this algorithm does a single pass over all the pixels, the complexity of the loop will be
+    $O(|\Omega|) = N$. Steps 2 and 3 are O(1), while step 1 will be $O(N^2)$ if we do this naively. However,
+    there's a data structure that manages to make the complexity of step 1 to become $O(\log(N))$. In summery, the
+    complexity is O(Nlog(N)), which is great.</p>
+    <p>However, in modern days arithmetics are considered very fast. The main bottleneck is the memory itself.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — Dijkstra</span>
+    <p>Dijkstra finds shortest paths in a weighted graph from a source set to every node. For us, nodes = pixels,
+    edge weights = absolute gradient between neighbours.</p>
+    <p><strong>Intuition:</strong> water spreads from scribble pixels — but flows slowly through high-gradient
+    regions. The pixel that's "wet first" gets that distance. Algorithm: scribble pixels = 0, others = ∞; pop the
+    smallest, relax neighbours, repeat. $O(N \log N)$ with a priority queue.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Geodesic distance heatmap — click to place a scribble</h4><span class="tag">click anywhere</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A synthetic image with a sharp luminance edge in the middle. Click to
+      place a scribble; the heatmap shows the geodesic distance from it. Notice how distance is stuck at the edge.</p>
+      <canvas id="cvGeo" width="900" height="320"></canvas>
+    </div>
+  </div>
+
+  <h2>9.2 Danielsson (Fast Sweeping)</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 63–64)</span>
+    <p>He proposed to do a ruster sweep. However, this does not give the full distance map, since the seeep is
+    casual and we only observe pixels from the right and them bottom. We thus need to do 4 sweeps.</p>
+    <p>In our case where the distances are not euclidean, we may have paths that form spirals for example. As a
+    result, we may need more than 4 sweeps. If the spiral turns N times, we will need at least 4N sweeps. In
+    practice, since we don't know the amount of turns, we'll do sweeps until the distance map doesn't change
+    much. Despite all this, it is a very fast process, faster than using Dijkstra.</p>
+    <p>Now we will add parallel computation to this. In the following example, we will have 5 steps, where each
+    nodes encircled we can compute in parallel.</p>
+    <p>However, this is not a good approach since in step 1 and 5 we don't really compute in parallel. A better
+    approach would be changing the neighborhood in the following way: here we can compute each column in
+    parallel.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — Fast Sweeping</span>
+    <p>Dijkstra has a priority queue — hard to parallelise on GPUs. Fast sweeping uses simple raster scans (left-
+    to-right, top-to-bottom) updating each pixel from already-visited neighbours. One sweep covers paths going
+    one direction; do 4 sweeps for all four directions. Spirals may need more — repeat until the distance map
+    stops changing. Cache-friendly, GPU-friendly, faster than Dijkstra in practice.</p>
+  </div>
+
+  <h2>9.3 Colorization in video</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 64–66)</span>
+    <p>Now the gradient will be:</p>
+    <div class="eq">$$ \nabla Y = \begin{pmatrix} \partial_x Y \\ \partial_y Y \\ \partial_t Y \end{pmatrix} $$</div>
+    <p>In addition, the neighborhood will have a size of 6 (instead of size of 4).</p>
+    <p>Colorization in video can sometimes simplify the algorithm. Suppose we have two objects coming towards each
+    other, merge and then separate again. If we work only with images, we will need to create 3 scribbles the
+    following way: we cannot do 2 scribbles. For example, in the following figure, then the right object will be
+    colored with as the 2nd scribble. In video, since we have the dimension of time, the diagram will become 3
+    dimensional. As a result, we can color both objects using only 2 scribbles the following way.</p>
+    <p>In case we want to avoid this phenomena, we can simply make the t-axis one-directional instead of
+    bi-directional. This can be implemented by making edges in the backward direction have large weights
+    (infinity), where edges in direction of time we keep as previously. However, this won't give the correct
+    result in the future frames.</p>
+    <p>To fix this, we will need to create two different distance maps (each with different direction on the
+    t-axis), and then apply maximum. Notice that we don't need to create scribble at at every frame, making the
+    work much easier. If we want to color both objects, we will have the following result. However, this is not a
+    major problem, since in the frames at the middle we will come back and make scribbles exclusively for them.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — colorization in video</span>
+    <p>In video, the gradient has 3 components (x, y, AND time), and each pixel has 6 neighbours instead of 4.
+    Big payoff: <strong>way fewer scribbles needed</strong>. If two objects ever touch in the video, colour can
+    flow between them through the time dimension. Two scribbles can colour three objects that briefly merge.</p>
+    <p><strong>One-direction trick:</strong> ban backward-in-time edges (weight = ∞). Sometimes you want
+    bidirectional behaviour back — compute one forward pass + one backward pass and take the max.</p>
+
+    <h4 class="mini">A practical workflow</h4>
+    <ol>
+      <li>Pick a frame where the most objects are visible. Scribble each one.</li>
+      <li>Run the colorization on that single frame to verify edges.</li>
+      <li>Adjust scribbles (more strokes near tricky boundaries).</li>
+      <li>Extend to video by re-using the same scribbles propagated through time.</li>
+      <li>Add scribbles only at frames where the algorithm clearly fails (e.g., a new object enters).</li>
+    </ol>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Place scribbles INSIDE each region</strong>, not on edges. Edges are where two distance maps
+      are equal — you want each scribble strongly inside one.</li>
+      <li><strong>Use b = 2 in $W(D) = 1/D^b$</strong> as a default. Smaller b → softer blends; larger b → sharper
+      boundaries.</li>
+      <li><strong>If a region is large, scribble multiple spots</strong>. Geodesic distance grows slowly inside a
+      region but you still get cleaner results with redundant evidence.</li>
+      <li><strong>Choose fast sweeping over Dijkstra</strong> on a GPU; Dijkstra over fast sweeping on a single
+      CPU with priority-queue support.</li>
+      <li><strong>For video, scribble on key frames only</strong> (one every 10–30 frames). Time-axis flow does
+      the rest.</li>
+      <li><strong>If colour bleeds across an edge</strong>, your luminance edge wasn't strong enough — try using
+      gradient magnitude squared as edge weight, or pre-process with edge enhancement.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — video colorization at a glance</span>
+    <table>
+      <tr><th>Component</th><th>What</th><th>How</th></tr>
+      <tr><td>Input</td><td>luminance Y + scribbles $\Omega_k, c_k$</td><td>—</td></tr>
+      <tr><td>Edge weights</td><td>$W_e = |Y(p)-Y(q)|$</td><td>per-edge gradient magnitude</td></tr>
+      <tr><td>Distance map $D_k$</td><td>geodesic distance from each pixel to scribble $k$</td><td>Dijkstra OR fast sweeping</td></tr>
+      <tr><td>Blending</td><td>$c(x) = \sum_k c_k / D_k^b ÷ \sum_k 1/D_k^b$</td><td>weighted vote</td></tr>
+      <tr><td>Video extension</td><td>add temporal edge to each pixel</td><td>6-neighbour grid instead of 4</td></tr>
+      <tr><td>One-way time</td><td>set backward edges to ∞</td><td>two distance maps + max</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Pattern alert:</strong> the same "geodesic distance + soft blend" trick
+    will reappear in Chapter 10 (video matting), where the distance is computed not from luminance but from
+    foreground/background probability.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch08_background_subtraction.html"><span class="dir">‹ Prev</span><span class="ttl">8 · Background Subtraction</span></a>
+    <a class="next" href="ch10_video_matting.html"><span class="dir">Next ›</span><span class="ttl">10 · Video Matting</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('cvGeo'),ctx=c.getContext('2d');
+  const W=90,H=32;
+  function lum(x,y){
+    if(x<25)return 60;
+    if(x<45 && y>10 && y<22)return 80;
+    if(x<48)return 200;
+    if(x<70)return 80;
+    return 220;
+  }
+  let scribble=[20,16];
+  function compute(){
+    const d=new Float32Array(W*H);d.fill(1e9);
+    d[scribble[1]*W+scribble[0]]=0;
+    const q=[[scribble[0],scribble[1]]];
+    while(q.length){
+      let bi=0;for(let i=1;i<q.length;i++)if(d[q[i][1]*W+q[i][0]]<d[q[bi][1]*W+q[bi][0]])bi=i;
+      const[x,y]=q.splice(bi,1)[0];
+      for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=W||ny>=H)continue;
+        const w=Math.abs(lum(x,y)-lum(nx,ny))+0.5;
+        const nd=d[y*W+x]+w;
+        if(nd<d[ny*W+nx]){d[ny*W+nx]=nd;q.push([nx,ny]);}
+      }
+    }
+    return d;
+  }
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    const d=compute();
+    let mx=0;for(let i=0;i<d.length;i++)if(d[i]<1e9&&d[i]>mx)mx=d[i];
+    const px=10;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const dv=d[y*W+x];
+      if(dv>=1e9){ctx.fillStyle='#222';}else{
+        const norm=dv/mx;const h=240-240*norm;ctx.fillStyle='hsl('+h+',75%,50%)';
+      }
+      ctx.fillRect(x*px,y*px,px,px);
+    }
+    // luminance edges overlay
+    for(let y=0;y<H-1;y++)for(let x=0;x<W-1;x++){
+      const dh=Math.abs(lum(x,y)-lum(x+1,y));
+      if(dh>40){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect((x+1)*px-1,y*px,2,px);}
+      const dv=Math.abs(lum(x,y)-lum(x,y+1));
+      if(dv>40){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(x*px,(y+1)*px-1,px,2);}
+    }
+    ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(scribble[0]*px+px/2,scribble[1]*px+px/2,8,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,c.height-22,c.width,22);
+    ctx.fillStyle='#9fb0cc';ctx.font='12px "Segoe UI"';
+    ctx.fillText('blue = near scribble, red = far. Dark vertical bands = luminance edges that block flow.',20,c.height-6);
+  }
+  c.addEventListener('click',e=>{const r=c.getBoundingClientRect();
+    scribble=[Math.floor((e.clientX-r.left)*c.width/r.width/10),Math.floor((e.clientY-r.top)*c.height/r.height/10)];draw();});
+  draw();
+})();
+</script>
+</body>
+</html>

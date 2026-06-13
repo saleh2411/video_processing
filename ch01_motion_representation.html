@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1 · Motion Representation</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>1</b> · Motion Representation</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="index.html">☰ All chapters</a>
+  <a class="navbtn" href="ch02_optical_flow.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 1</div>
+    <h1>Motion Representation</h1>
+    <p class="lede">Before we can <em>estimate</em> motion, we need a language to <em>describe</em> it. That language
+    is linear algebra: every motion a camera can perceive is captured by a matrix acting on coordinates. We climb a
+    ladder of models — linear → affine → homography → full 3D projection — each one more expressive (and harder
+    to estimate) than the last.</p>
+  </header>
+
+  <h2>1.1 Motivation</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 3)</span>
+    <p>One of the main goals in video processing is estimating motion within an image. This requires a suitable
+    mathematical representation, which can be obtained using linear algebra—either through motion vectors or
+    transformation matrices. In today's lecture, we will examine 2D and 3D transformations. Transformations in 3D
+    describe the motion of points in the world, while transformations in 2D describe how that motion is perceived
+    by the camera.</p>
+    <p><em>Figure 1: Examples of 2D and 3D transformations</em> (Original, Translation, Scale, rotation, Shear, Projection)</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Imagine you film a tennis ball flying through the air. Your video is a sequence of flat (2D) photos, but the
+    ball itself moves in real 3D space. <strong>Motion estimation</strong> is the job of figuring out: between this
+    frame and the next, where did each thing move?</p>
+    <p>To do this we need a <em>language</em>. The language is linear algebra — specifically, <strong>matrices</strong>
+    that act like recipes for moving points around. Six classic flavours you can apply to a square: translation,
+    scale, rotation, shear, and projection (3D plane → camera). The whole chapter builds up to one big formula:
+    <em>given a 3D point in the real world, where does it end up on the camera's pixel grid?</em></p>
+
+    <h4 class="mini">Why matrices?</h4>
+    <p>A matrix is just a table of numbers, but applied to a point $(x,y)$ it acts like a tiny machine: it can
+    stretch, twist, slide, or warp it. The huge advantage over writing custom code per motion is
+    <strong>composability</strong>: chain two motions = multiply their matrices. So "rotate by 30° then zoom in 2×
+    then slide right" becomes a single 3×3 matrix you apply once per pixel.</p>
+
+    <h4 class="mini">2D vs 3D — why both?</h4>
+    <p>The world is 3D. Cameras flatten it to 2D. Sometimes you reason in 3D (a car drives away from you),
+    sometimes in 2D (how the image of the car shrinks on the sensor). The chapter handles both: §1.1–1.4 are pure
+    2D, §1.5 connects 3D world → 2D image via the camera.</p>
+
+    <h4 class="mini">The six flavours, intuitively</h4>
+    <ul>
+      <li><strong>Translation:</strong> "slide it." Simplest motion, but surprisingly the hardest to express in
+      a pure linear matrix.</li>
+      <li><strong>Scale:</strong> uniform = zoom (both axes the same); non-uniform = stretchier in one axis.</li>
+      <li><strong>Rotation:</strong> spin around the origin. Preserves lengths and angles — a "rigid" motion.</li>
+      <li><strong>Shear:</strong> push the top sideways while the bottom stays put. Italic letters are sheared
+      verticals.</li>
+      <li><strong>Reflection</strong> (a special case of scale with a negative number): mirror image.</li>
+      <li><strong>Projection:</strong> the 3D-to-2D camera effect that makes parallel rails meet in the distance.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Transform Playground</h4><span class="tag">pick mode · drag sliders</span></div>
+    <div class="demo-body">
+      <div class="seg" id="modeSeg" style="margin-bottom:14px">
+        <button data-mode="linear" class="on">Linear (2×2)</button>
+        <button data-mode="affine">Affine (2×3)</button>
+        <button data-mode="homography">Homography (3×3)</button>
+      </div>
+      <canvas id="cv1" width="900" height="470"></canvas>
+      <div class="legend">
+        <span><i style="background:#41d8c9"></i> warped grid</span>
+        <span><i style="background:#6ea8ff"></i> transformed house</span>
+        <span><i style="background:#ff6b81"></i> column 1 (image of (1,0))</span>
+        <span><i style="background:#7ee787"></i> column 2 (image of (0,1))</span>
+        <span><i style="background:#ffb454"></i> origin (0,0)</span>
+      </div>
+      <div class="controls">
+        <div class="control"><label>a <span class="val" id="va">1.00</span></label><input type="range" id="a" min="-2" max="2" step="0.05" value="1"></div>
+        <div class="control"><label>b <span class="val" id="vb">0.00</span></label><input type="range" id="b" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="control"><label>c <span class="val" id="vc">0.00</span></label><input type="range" id="c" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="control"><label>d <span class="val" id="vd">1.00</span></label><input type="range" id="d" min="-2" max="2" step="0.05" value="1"></div>
+        <div class="control"><label>tₓ <span class="val" id="vtx">0.00</span></label><input type="range" id="tx" min="-1.5" max="1.5" step="0.05" value="0" disabled></div>
+        <div class="control"><label>t_y <span class="val" id="vty">0.00</span></label><input type="range" id="ty" min="-1.5" max="1.5" step="0.05" value="0" disabled></div>
+        <div class="control"><label>g (persp. x) <span class="val" id="vg">0.00</span></label><input type="range" id="g" min="-0.4" max="0.4" step="0.01" value="0" disabled></div>
+        <div class="control"><label>h (persp. y) <span class="val" id="vh">0.00</span></label><input type="range" id="h" min="-0.4" max="0.4" step="0.01" value="0" disabled></div>
+      </div>
+      <div class="btnrow">
+        <button class="act" data-preset="identity">Identity</button>
+        <button class="act" data-preset="rotate">Rotate 30°</button>
+        <button class="act" data-preset="scale">Scale</button>
+        <button class="act" data-preset="shear">Shear</button>
+        <button class="act" data-preset="reflect">Reflect</button>
+        <button class="act" data-preset="perspective">Perspective</button>
+      </div>
+      <div class="readout" id="ro1"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">The limit of a 2×2 matrix</span>
+  In <strong>Linear</strong> mode the orange origin <em>never moves</em>. Plug $(0,0)$ into any 2×2 — you get
+  $(0,0)$ back. That is exactly why we need homogeneous coordinates to translate.</div>
+
+  <h2>1.2 Linear Transformation</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 3–4)</span>
+    <p>We will define a point $p = \begin{pmatrix} x \\ y \end{pmatrix}$ and look at the transformation matrix:</p>
+    <div class="eq">$$ p' = A\,p $$</div>
+    <p>Where p' is in dimensions $2\times 1$ and A is in dimensions $2\times 2$. Matrix A represents linear
+    transformation and is able to do the following operations: rotation, scale, and shear. However, it cannot do
+    translation because no matter what operation we do, applying any matrix on $(0,0)$ will always result in
+    $(0,0)$.</p>
+    <p>Suppose now we want to estimate matrix A given matching points p and p'. We develop the following equations:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \end{pmatrix} = \begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix}$$</div>
+    <div class="eq">$$ \begin{pmatrix} x & y & 0 & 0 \\ 0 & 0 & x & y \\ \vdots & \vdots & \vdots & \vdots \end{pmatrix} \begin{pmatrix} a \\ b \\ c \\ d \end{pmatrix} = \begin{pmatrix} x' \\ y' \\ \vdots \end{pmatrix}$$</div>
+    <p>Or: $\tilde{A}\tilde{x} = b$</p>
+    <p>Notice that each matching pair gives us two equations. Since we have 4 unknowns, we will need at least 2
+    matching pairs. If we get exactly two pairs, then we can recover $\tilde{x}^T = (a~~b~~c~~d)^T$ By inverting
+    a $4\times 4$ matrix. If we get more pairs, then we have more equations than unknowns. Usually it gives us a
+    better global result, and to solve this we can use, for example, Least Squares (denoted later as LS).</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>A linear transformation is just "multiply by a 2×2 matrix." Its 4 numbers $a,b,c,d$ together control rotation,
+    scaling, and shearing. <strong>What it can never do is shift the image:</strong> any matrix sends $(0,0)$ to
+    $(0,0)$.</p>
+    <p><strong>The reverse problem.</strong> If you have pairs of "before and after" points, each pair gives 2
+    equations. With 4 unknowns, you need at least 2 pairs (= 4 equations). With more pairs the system is
+    over-determined — no exact solution exists, but <strong>Least Squares</strong> finds the A that fits "best on
+    average."</p>
+
+    <h4 class="mini">Why can't a linear matrix translate?</h4>
+    <p>Apply $A = \begin{pmatrix}a&b\\c&d\end{pmatrix}$ to $(0,0)$. The result is always $(a\cdot 0+b\cdot 0,\;
+    c\cdot 0+d\cdot 0) = (0,0)$. The origin is <em>stuck</em>. To shift the origin you'd need a constant added in
+    — and a pure 2×2 matrix multiplication has nowhere to put a constant. That's why §1.3 adds the homogeneous "1"
+    trick.</p>
+
+    <h4 class="mini">What "Least Squares" actually does, in one paragraph</h4>
+    <p>Imagine each equation is a noisy hint about $A$. With 2 equations and 2 unknowns, you can solve exactly.
+    With 100 noisy equations and 2 unknowns, you can't satisfy them all. LS picks the answer that makes the sum
+    of squared mismatches smallest — geometrically, the point closest (in a Euclidean sense) to all the
+    constraints. The famous formula $x = (A^TA)^{-1}A^Tb$ is just the answer when you set the derivative of the
+    total error to zero.</p>
+
+    <h4 class="mini">Counting equations vs unknowns — the universal rule</h4>
+    <p>You will see this rule again and again. Every model has $k$ free parameters. Every match gives $m$
+    equations. You need <em>at least</em> $\lceil k/m \rceil$ matches. More than that = over-determined, solve
+    with LS for robustness. Fewer than that = under-determined, infinite solutions, problem ill-posed.</p>
+  </div>
+
+  <h2>1.3 Affine Transformation</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 4)</span>
+    <p>The Affine transformation is a linear transformation with translation:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \end{pmatrix} = (A~~t)_{[2\times 3]} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} $$</div>
+    <p>Notice that now we add a third coordinate with value "1" to all the points. This makes it possible to move
+    the origin point $(x,y)=(0,0)$ to any $(x',y')$. If we want to be consistent with dimensions, we can do:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \\ 1 \end{pmatrix} = \begin{pmatrix} A & t \\ 0_{[1\times 2]} & 1 \end{pmatrix}_{[3\times 3]} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} $$</div>
+    <p>Estimating A and t given a couple of matching points is done as before:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \end{pmatrix} = \begin{pmatrix} a & b & c \\ d & e & f \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} $$</div>
+    <div class="eq">$$ \begin{pmatrix} x & y & 1 & 0 & 0 & 0 \\ 0 & 0 & 0 & x & y & 1 \\ \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \end{pmatrix} \begin{pmatrix} a \\ b \\ c \\ d \\ e \\ f \end{pmatrix} = \begin{pmatrix} x' \\ y' \\ \vdots \end{pmatrix} $$</div>
+    <p>$\tilde{A}\tilde{x} = b$</p>
+    <p>Notice now we need at least 3 matching pairs instead of 2.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>The trick to add translation is sneaky and clever. We append a "fake" third coordinate equal to 1 — this is
+    called <strong>homogeneous coordinates</strong>. Now the matrix is 2×3; the extra column $t = (t_x, t_y)$ is the
+    translation. Because the input ends in 1, that column gets added on at the end.</p>
+    <p>Affine has 6 unknowns, so you need at least <strong>3 point pairs</strong> (3×2 = 6 equations). Affine can do
+    rotation + scale + shear + translation, and it always keeps parallel lines parallel — no perspective yet.</p>
+
+    <h4 class="mini">Why "homogeneous" coordinates?</h4>
+    <p>The name sounds intimidating but the idea is: every 2D point gets a third "shadow" coordinate equal to 1.
+    Now your 2D point lives one dimension up. With this extra dimension the matrix has room to encode translation
+    AS IF it were a multiplication. It's the algebraic equivalent of "I can't add a constant in 2D, so let me sneak
+    the constant in by pretending it's a coefficient multiplied by 1."</p>
+
+    <h4 class="mini">Affine preserves "parallelism"</h4>
+    <p>Take two parallel lines in the source. After ANY affine transform, they're still parallel in the output.
+    Take a square — it becomes a parallelogram (never a trapezoid). Take a triangle — it stays a triangle with the
+    same angle ratios. The only thing that escapes affine is true perspective — which needs homography.</p>
+
+    <h4 class="mini">When 6 parameters are too many</h4>
+    <p>If you only need to track a tiny far-away dot, six parameters fit noise. Use translation (2 params) or
+    similarity (4 params: scale + rotation + translation). The simpler model is statistically more robust.</p>
+  </div>
+
+  <h2>1.4 Homography</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 5)</span>
+    <p>Homography is a transformation of the form:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \\ 1 \end{pmatrix} \cong H \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>Where $\cong$ means up to scale. This makes the input and output to have the same dimension.</p>
+    <div class="eq">$$ \begin{pmatrix} x'/w' \\ y'/w' \\ 1 \end{pmatrix} \cong \begin{pmatrix} x' \\ y' \\ w' \end{pmatrix} = Hp $$</div>
+    <p>This representation is called Homogenic Coordinates.</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \\ 1 \end{pmatrix} = \begin{pmatrix} a & b & c \\ d & e & f \\ g & h & i \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>For simplicity, we write this as follows:</p>
+    <div class="eq">$$ \begin{pmatrix} x' \\ y' \\ 1 \end{pmatrix} = \begin{pmatrix} -~H_1~- \\ -~H_2~- \\ -~H_3~- \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>Where $H_i$ is row i of matrix H. The way we deal with up to scale is by dividing the last element:</p>
+    <div class="eq">$$ \frac{x'}{1} = \frac{H_1 p}{H_3 p}, \qquad \frac{y'}{1} = \frac{H_2 p}{H_3 p} $$</div>
+    <p>Rearranging the equations gives:</p>
+    <div class="eq">$$ p^T H_1^T = x' p^T H_3^T \implies (x~~y~~1) H_1^T - x'(x~~y~~1) H_3^T = 0 $$</div>
+    <div class="eq">$$ p^T H_2^T = y' p^T H_3^T \implies (x~~y~~1) H_2^T - y'(x~~y~~1) H_3^T = 0 $$</div>
+    <div class="eq">$$ \begin{pmatrix} x & y & 1 & 0 & 0 & 0 & -x'x & -x'y & -x' \\ 0 & 0 & 0 & x & y & 1 & -y'x & -y'y & -y' \\ \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \end{pmatrix} \begin{pmatrix} H_1^T \\ H_2^T \\ H_3^T \end{pmatrix} = \begin{pmatrix} 0 \\ 0 \\ \vdots \end{pmatrix}$$</div>
+    <p>$Ax = 0$</p>
+    <p>A has dimensions of $2N \times 9$. By having 4 matching points, we will get $8 \times 9$, which is still not
+    enough. As a result, in the last row we can choose a vector of ones as a constraint to normalize the values of
+    H. This usually provides a stable solution and avoids large numerical values.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Homography is the next step up from affine — it can do everything affine does <strong>plus true perspective</strong>:
+    making a square look like a trapezoid, the way train tracks appear to meet in the distance.</p>
+    <p>The matrix H is 3×3 (9 numbers). The catch: the result is meaningful only <em>up to scale</em>, so we divide
+    by the last coordinate. That division is what creates perspective distortion. There are 8 truly independent
+    unknowns (the 9th is fixed by a normalization constraint). You need at least <strong>4 matching points</strong>
+    (8 equations).</p>
+    <p>Use homography when a flat plane in the world maps to a flat plane in the image — photographing a poster
+    from an angle, stitching a panorama.</p>
+
+    <h4 class="mini">What "up to scale" really means</h4>
+    <p>$(2,4,2)$ and $(1,2,1)$ are the SAME image point — both represent the pixel $(1,2)$ after dividing by the
+    last coordinate. So when we compute $H \cdot p$, the answer is meaningful only after this final division by
+    the third entry. That tiny division is where all the perspective magic happens — when the third entry varies
+    across the image, far parts get divided by larger numbers and shrink.</p>
+
+    <h4 class="mini">Why "8 unknowns" instead of 9?</h4>
+    <p>$H$ has 9 numbers but multiplying ALL of them by the same constant doesn't change the result (the constant
+    cancels in the division). So we have 9 raw numbers minus 1 redundancy = 8 truly free parameters. That's why
+    we need 8 equations = 4 point pairs.</p>
+
+    <h4 class="mini">Real-world uses of homography</h4>
+    <ul>
+      <li><strong>Panorama stitching:</strong> two photos taken from the same camera position but different
+      orientations are related by a homography.</li>
+      <li><strong>Document scanning apps:</strong> snap a tilted photo of a receipt; the app finds the corners
+      and uses homography to "flatten" it.</li>
+      <li><strong>Augmented reality markers:</strong> recognize a QR-like marker, compute the homography, then
+      overlay a virtual object that appears glued to it.</li>
+      <li><strong>Sports analytics:</strong> map a tilted camera view of a field to a top-down view of the
+      tactical grid.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Drag corners — see a homography in action</h4><span class="tag">drag the red corners</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag the four red corners to warp the blue image. Lines stay straight,
+      but parallel lines no longer stay parallel — that is perspective.</p>
+      <canvas id="homog" width="900" height="400"></canvas>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 6)</span>
+    <p>When solving a tracking problem, the more parameters the model has, the harder it becomes to estimate them
+    reliably, since noise can significantly affect the solution. If the object is small and far away, a linear
+    transformation may be sufficient. If it is closer, an affine transformation might be more appropriate, and if
+    the object is large and close to the camera, a homography may be required.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — picking a model</span>
+    <p>More flexibility = more unknowns = more sensitivity to noise. Rule of thumb: small &amp; far → linear;
+    medium &amp; close → affine; large &amp; close-up → homography. Always pick the <em>simplest</em> model that
+    fits — extra parameters fit noise instead of signal.</p>
+  </div>
+
+  <h2>1.5 Projection Matrix</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 6–7)</span>
+    <p>In the following section, we will show briefly how a point in the 3D world is projected onto a pixel in the
+    image. The full pipeline will be:</p>
+    <div class="eq">$$ \underbrace{\begin{pmatrix} u \\ v \\ 1 \end{pmatrix}}_{\text{pixel in the image}} = \underbrace{\begin{pmatrix} x \\ y \\ 1 \end{pmatrix}}_{\text{Camera coords (2D)}} \leftarrow \underbrace{\begin{pmatrix} X_C \\ Y_C \\ Z_C \\ 1 \end{pmatrix}}_{\text{Camera coords (3D)}} \leftarrow \underbrace{\begin{pmatrix} X_W \\ Y_W \\ Z_W \\ 1 \end{pmatrix}}_{\text{World coords (3D)}} $$</div>
+    <p>The main assumption is that we consider a pinhole camera model (without any lens). Suppose a point in 3D is
+    described in the world coordinate system W. Our goal is to express this point in the camera coordinate system
+    (denoted by C). If the camera is rotated by a rotation matrix R and translated by a translation vector T w.r.t.
+    the coordinate system W, then we can describe this transformation mathematically as follows:</p>
+    <div class="eq">$$ \begin{pmatrix} X_C \\ Y_C \\ Z_C \\ 1 \end{pmatrix} = \begin{pmatrix} R_{3\times 3} & t_{3\times 1} \\ 0_{1\times 3} & 1 \end{pmatrix} \begin{pmatrix} X_W \\ Y_W \\ Z_W \\ 1 \end{pmatrix}$$</div>
+    <p>Next, we examine the geometry of the world and the image. From triangle similarity rule:</p>
+    <div class="eq">$$ \frac{x}{f} = \frac{X}{Z} \implies x = X\frac{f}{Z}, \qquad \frac{y}{f} = \frac{Y}{Z} \implies y = Y\frac{f}{Z}$$</div>
+    <p>Where f is a known camera parameter. If we work with Hogogenic coordinates:</p>
+    <div class="eq">$$ \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} = \begin{pmatrix} X \\ Y \\ Z/f \end{pmatrix} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1/f & 0 \end{pmatrix} \begin{pmatrix} X \\ Y \\ Z \\ 1 \end{pmatrix}$$</div>
+    <p>Finally, the transformation to pixel coordinates will be:</p>
+    <div class="eq">$$ u = u_0 + k_u x, \qquad v = v_0 + k_v y $$</div>
+    <p>Where $k_u, k_v$ are known camera parameters which transform from cm to pixels. This can be written as:</p>
+    <div class="eq">$$ \begin{pmatrix} u \\ v \\ 1 \end{pmatrix} = \begin{pmatrix} k_a & 0 & u_0 \\ 0 & k_v & v_0 \\ 0 & 0 & 1 \end{pmatrix} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix}$$</div>
+    <p>To conclude:</p>
+    <div class="eq">$$ \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} \cong \underbrace{\begin{pmatrix} k_a & 0 & u_0 \\ 0 & k_v & v_0 \\ 0 & 0 & 1 \end{pmatrix} \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1/f & 0 \end{pmatrix} \begin{pmatrix} R_{3\times 3} & t_{3\times 1} \\ 0_{1\times 3} & 1 \end{pmatrix}}_{P} \begin{pmatrix} X \\ Y \\ Z \\ 1 \end{pmatrix}$$</div>
+    <p>Where P is the projection matrix.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — the journey of a 3D point</span>
+    <p>This section traces a real-world point as it becomes a pixel. Three steps:</p>
+    <ol>
+      <li><strong>World → Camera (rotation + translation).</strong> R aligns the world axes with the camera's; t
+      slides the origin to the camera's position.</li>
+      <li><strong>Camera 3D → Camera 2D (pinhole projection).</strong> A point at depth Z lands on the image plane
+      at $Xf/Z$ — pure triangle similarity. The $1/Z$ is what makes faraway things small.</li>
+      <li><strong>cm → Pixels.</strong> Multiply by $k_u, k_v$ (pixels per cm) and add $u_0, v_0$ (where pixel
+      origin sits on the sensor).</li>
+    </ol>
+    <p>Multiply all three together → one $3\times 4$ <strong>projection matrix P</strong>. Apply it to any
+    $(X,Y,Z,1)$ and out pops the pixel.</p>
+
+    <h4 class="mini">Intrinsics vs extrinsics — the universal split</h4>
+    <p>The matrix P contains two distinct sets of facts about your camera:</p>
+    <ul>
+      <li><strong>Extrinsics ($R, t$)</strong> = where the camera <em>is</em> and where it's <em>pointing</em>.
+      Move the camera = these change.</li>
+      <li><strong>Intrinsics ($f, k_u, k_v, u_0, v_0$)</strong> = how the camera <em>maps rays to pixels</em> (its
+      lens + sensor). Buy a new camera = these change.</li>
+    </ul>
+    <p>Calibration usually means measuring the intrinsics once and reusing them forever.</p>
+
+    <h4 class="mini">The pinhole assumption</h4>
+    <p>A real lens introduces distortion (barrel/pincushion). The pinhole model assumes the lens is a single
+    infinitely-small hole, so light travels in straight lines. Real cameras come close enough after a calibration
+    step that undistorts pixels first.</p>
+
+    <h4 class="mini">Where this matters in practice</h4>
+    <p>Anywhere you need to relate "what's in the image" to "what's in the world": robotics, AR, self-driving,
+    photogrammetry, SLAM. The projection matrix is the bridge between geometry and pixels.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Pinhole projection — slide the depth</h4><span class="tag">drag sliders</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Same-size 3D object, different depth Z. Watch the projected size shrink
+      as $Z$ grows. Classic $1/Z$ behaviour.</p>
+      <canvas id="pin" width="900" height="320"></canvas>
+      <div class="controls">
+        <div class="control"><label>depth Z <span class="val" id="vdz">150</span></label><input id="dz" type="range" min="30" max="500" value="150"></div>
+        <div class="control"><label>focal length f <span class="val" id="vdf">150</span></label><input id="df" type="range" min="50" max="300" value="150"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Takeaways</span>
+    <ul style="margin:6px 0 0">
+      <li>Motion is a matrix on coordinates. Climb the ladder only as far as you must.</li>
+      <li>Homogeneous coordinates (the appended "1") let matrices translate <em>and</em> project.</li>
+      <li>Unknowns set minimum matches: linear → 2 pairs, affine → 3, homography → 4 (+ normalization).</li>
+      <li>Extra matches → over-determined → solve with Least Squares.</li>
+    </ul></div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Pick the simplest model that fits the motion.</strong> Extra parameters fit noise, not signal.</li>
+      <li><strong>Tiny / far object</strong> → translation (2 params) or linear (4 params).</li>
+      <li><strong>Medium / closer object</strong> → affine (6 params).</li>
+      <li><strong>Large flat object close to camera</strong> → homography (8 params).</li>
+      <li><strong>Full 3D scene → camera</strong> → projection matrix P (11 params: 6 extrinsic + 5 intrinsic).</li>
+      <li><strong>Always have at least 1.5× the minimum matches</strong> and solve with Least Squares — it
+      averages out noise.</li>
+      <li><strong>If a fit looks crazy</strong>, your matches are probably wrong (outliers). Filter them with
+      RANSAC before LS (see Chapter 3).</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — the model ladder at a glance</span>
+    <table>
+      <tr><th>Model</th><th>Matrix size</th><th>Free params</th><th>Min point pairs</th><th>Can do…</th><th>Preserves</th></tr>
+      <tr><td>Translation</td><td>—</td><td>2</td><td>1</td><td>slide</td><td>everything except position</td></tr>
+      <tr><td>Linear (§1.2)</td><td>2×2</td><td>4</td><td>2</td><td>rot, scale, shear</td><td>origin fixed; lines through O stay lines through O</td></tr>
+      <tr><td>Affine (§1.3)</td><td>2×3</td><td>6</td><td>3</td><td>linear + translate</td><td>parallel lines stay parallel</td></tr>
+      <tr><td>Homography (§1.4)</td><td>3×3</td><td>8</td><td>4</td><td>+ perspective</td><td>straight lines stay straight; parallels can converge</td></tr>
+      <tr><td>Projection P (§1.5)</td><td>3×4</td><td>11</td><td>6+</td><td>full 3D→2D mapping</td><td>incidence (point on line stays on line)</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>One-line takeaway:</strong> every motion model is a matrix; the only
+    questions are <em>how many numbers</em> are in it and <em>how many point pairs</em> you need to estimate
+    them.</p>
+  </div>
+
+  <div class="pager">
+    <a class="disabled"><span class="dir">‹ Prev</span><span class="ttl">—</span></a>
+    <a class="next" href="ch02_optical_flow.html"><span class="dir">Next ›</span><span class="ttl">2 · Optical Flow</span></a>
+  </div>
+</div>
+
+<script>
+/* ---------------- Transform Playground ---------------- */
+(function(){
+  const cv = document.getElementById('cv1'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, cx = W*0.5, cy = H*0.5, scale = 95;
+  let mode = 'linear';
+  const P = {a:1,b:0,c:0,d:1,tx:0,ty:0,g:0,h:0};
+  const ids = ['a','b','c','d','tx','ty','g','h'];
+  function toPx(x,y){ return [cx + x*scale, cy - y*scale]; }
+  function xf(x,y){
+    let tx=(mode==='linear')?0:P.tx, ty=(mode==='linear')?0:P.ty;
+    let g=(mode==='homography')?P.g:0, h=(mode==='homography')?P.h:0;
+    let w = g*x + h*y + 1; if(Math.abs(w)<1e-4) w = (w<0?-1:1)*1e-4;
+    return [(P.a*x+P.b*y+tx)/w, (P.c*x+P.d*y+ty)/w];
+  }
+  const house = [[-0.8,-0.8],[0.8,-0.8],[0.8,0.4],[0,1.05],[-0.8,0.4]];
+  const door  = [[-0.22,-0.8],[0.22,-0.8],[0.22,-0.05],[-0.22,-0.05]];
+  function drawPoly(pts, transform, stroke, fill, lw){
+    ctx.beginPath();
+    pts.forEach((p,i)=>{ const q=transform?xf(p[0],p[1]):p; const [X,Y]=toPx(q[0],q[1]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+    ctx.closePath();
+    if(fill){ctx.fillStyle=fill;ctx.fill();}
+    ctx.lineWidth=lw||2; ctx.strokeStyle=stroke; ctx.stroke();
+  }
+  function arrow(x0,y0,x1,y1,col){
+    const [X0,Y0]=toPx(x0,y0),[X1,Y1]=toPx(x1,y1);
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(X0,Y0);ctx.lineTo(X1,Y1);ctx.stroke();
+    const ang=Math.atan2(Y1-Y0,X1-X0),s=10;
+    ctx.beginPath();ctx.moveTo(X1,Y1);
+    ctx.lineTo(X1-s*Math.cos(ang-0.4),Y1-s*Math.sin(ang-0.4));
+    ctx.lineTo(X1-s*Math.cos(ang+0.4),Y1-s*Math.sin(ang+0.4));
+    ctx.closePath();ctx.fill();
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle='#243049';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+    ctx.strokeStyle='rgba(65,216,201,0.30)';ctx.lineWidth=1;
+    const N=8, R=2;
+    for(let i=-N;i<=N;i++){
+      const t=i/N*R;
+      ctx.beginPath();
+      for(let j=-N*4;j<=N*4;j++){ const s=j/(N*4)*R; const q=xf(t,s); const [X,Y]=toPx(q[0],q[1]); j===-N*4?ctx.moveTo(X,Y):ctx.lineTo(X,Y);} ctx.stroke();
+      ctx.beginPath();
+      for(let j=-N*4;j<=N*4;j++){ const s=j/(N*4)*R; const q=xf(s,t); const [X,Y]=toPx(q[0],q[1]); j===-N*4?ctx.moveTo(X,Y):ctx.lineTo(X,Y);} ctx.stroke();
+    }
+    drawPoly(house,false,'rgba(160,176,204,0.45)',null,1.5);
+    drawPoly(door,false,'rgba(160,176,204,0.35)',null,1.2);
+    drawPoly(house,true,'#6ea8ff','rgba(110,168,255,0.13)',2.5);
+    drawPoly(door,true,'#6ea8ff','rgba(110,168,255,0.18)',2);
+    const o=xf(0,0), e1=xf(1,0), e2=xf(0,1);
+    arrow(o[0],o[1],e1[0],e1[1],'#ff6b81');
+    arrow(o[0],o[1],e2[0],e2[1],'#7ee787');
+    const [OX,OY]=toPx(o[0],o[1]);
+    ctx.fillStyle='#ffb454';ctx.beginPath();ctx.arc(OX,OY,6,0,7);ctx.fill();
+    ctx.strokeStyle='#0a0f1c';ctx.lineWidth=2;ctx.stroke();
+  }
+  function fmt(n){ return (n>=0?' ':'')+n.toFixed(2); }
+  function refresh(){
+    ids.forEach(k=>{ const el=document.getElementById('v'+k); if(el) el.textContent=P[k].toFixed(2); });
+    let m;
+    if(mode==='linear') m = `A =\n[ ${fmt(P.a)}  ${fmt(P.b)} ]\n[ ${fmt(P.c)}  ${fmt(P.d)} ]   (origin fixed)`;
+    else if(mode==='affine') m = `[ ${fmt(P.a)}  ${fmt(P.b)}  ${fmt(P.tx)} ]\n[ ${fmt(P.c)}  ${fmt(P.d)}  ${fmt(P.ty)} ]`;
+    else m = `[ ${fmt(P.a)}  ${fmt(P.b)}  ${fmt(P.tx)} ]\n[ ${fmt(P.c)}  ${fmt(P.d)}  ${fmt(P.ty)} ]\n[ ${fmt(P.g)}  ${fmt(P.h)}   1.00 ]`;
+    const det = (P.a*P.d-P.b*P.c).toFixed(2);
+    document.getElementById('ro1').innerHTML = m + `\n\ndet(A) = <b>${det}</b>  ` + (det<0?'(orientation flipped)':'(orientation preserved)');
+    draw();
+  }
+  ids.forEach(k=>{ document.getElementById(k).addEventListener('input',e=>{ P[k]=parseFloat(e.target.value); refresh(); }); });
+  function setEnabled(){
+    const aff = mode!=='linear', hom = mode==='homography';
+    ['tx','ty'].forEach(k=>document.getElementById(k).disabled=!aff);
+    ['g','h'].forEach(k=>document.getElementById(k).disabled=!hom);
+  }
+  document.querySelectorAll('#modeSeg button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on'); mode=btn.dataset.mode; setEnabled(); refresh();
+    });
+  });
+  const presets={
+    identity:{a:1,b:0,c:0,d:1,tx:0,ty:0,g:0,h:0},
+    rotate:{a:0.866,b:-0.5,c:0.5,d:0.866},
+    scale:{a:1.4,b:0,c:0,d:0.7},
+    shear:{a:1,b:0.6,c:0,d:1},
+    reflect:{a:-1,b:0,c:0,d:1},
+    perspective:{a:1,b:0,c:0,d:1,tx:0,ty:0,g:0.25,h:-0.12,mode:'homography'}
+  };
+  document.querySelectorAll('[data-preset]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const pr=presets[btn.dataset.preset];
+      if(pr.mode){ mode=pr.mode;
+        document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
+        setEnabled(); }
+      Object.keys(pr).forEach(k=>{ if(k!=='mode' && k in P){ P[k]=pr[k]; const s=document.getElementById(k); if(s) s.value=pr[k]; } });
+      refresh();
+    });
+  });
+  setEnabled(); refresh();
+})();
+
+/* ---------------- Homography drag-corner demo ---------------- */
+(function(){
+  const c=document.getElementById('homog'); const ctx=c.getContext('2d');
+  let corners=[[260,80],[700,80],[700,330],[260,330]];
+  let drag=-1;
+  function inv3(M){const d=M[0][0]*(M[1][1]*M[2][2]-M[1][2]*M[2][1])-M[0][1]*(M[1][0]*M[2][2]-M[1][2]*M[2][0])+M[0][2]*(M[1][0]*M[2][1]-M[1][1]*M[2][0]);
+    return [[(M[1][1]*M[2][2]-M[1][2]*M[2][1])/d,(M[0][2]*M[2][1]-M[0][1]*M[2][2])/d,(M[0][1]*M[1][2]-M[0][2]*M[1][1])/d],
+            [(M[1][2]*M[2][0]-M[1][0]*M[2][2])/d,(M[0][0]*M[2][2]-M[0][2]*M[2][0])/d,(M[0][2]*M[1][0]-M[0][0]*M[1][2])/d],
+            [(M[1][0]*M[2][1]-M[1][1]*M[2][0])/d,(M[0][1]*M[2][0]-M[0][0]*M[2][1])/d,(M[0][0]*M[1][1]-M[0][1]*M[1][0])/d]];}
+  function mv(M,v){return [M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2], M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2], M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];}
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    const src=[[40,60],[200,60],[200,330],[40,330]];
+    ctx.strokeStyle='#41d8c9';ctx.fillStyle='rgba(65,216,201,0.10)';ctx.lineWidth=2;
+    ctx.beginPath();src.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.strokeStyle='rgba(65,216,201,0.5)';ctx.lineWidth=1;
+    for(let i=1;i<6;i++){const t=i/6;
+      ctx.beginPath();ctx.moveTo(40+160*t,60);ctx.lineTo(40+160*t,330);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(40,60+270*t);ctx.lineTo(200,60+270*t);ctx.stroke();}
+    ctx.strokeStyle='#ff6b81';ctx.fillStyle='rgba(255,107,129,0.10)';ctx.lineWidth=2;
+    ctx.beginPath();corners.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.strokeStyle='rgba(255,107,129,0.45)';ctx.lineWidth=1;
+    for(let i=1;i<6;i++){const t=i/6;
+      const top=[corners[0][0]+(corners[1][0]-corners[0][0])*t, corners[0][1]+(corners[1][1]-corners[0][1])*t];
+      const bot=[corners[3][0]+(corners[2][0]-corners[3][0])*t, corners[3][1]+(corners[2][1]-corners[3][1])*t];
+      ctx.beginPath();ctx.moveTo(top[0],top[1]);ctx.lineTo(bot[0],bot[1]);ctx.stroke();
+      const lft=[corners[0][0]+(corners[3][0]-corners[0][0])*t, corners[0][1]+(corners[3][1]-corners[0][1])*t];
+      const rgt=[corners[1][0]+(corners[2][0]-corners[1][0])*t, corners[1][1]+(corners[2][1]-corners[1][1])*t];
+      ctx.beginPath();ctx.moveTo(lft[0],lft[1]);ctx.lineTo(rgt[0],rgt[1]);ctx.stroke();}
+    ctx.fillStyle='#ff6b81';corners.forEach(p=>{ctx.beginPath();ctx.arc(p[0],p[1],8,0,7);ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();});
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('Source (fixed plane)',60,40);ctx.fillText('Destination (drag the 4 red corners)',360,40);
+  }
+  c.addEventListener('mousedown',e=>{const r=c.getBoundingClientRect();const mx=(e.clientX-r.left)*c.width/r.width,my=(e.clientY-r.top)*c.height/r.height;
+    drag=-1;corners.forEach((p,i)=>{if(Math.hypot(p[0]-mx,p[1]-my)<14)drag=i;});});
+  c.addEventListener('mousemove',e=>{if(drag<0)return;const r=c.getBoundingClientRect();
+    corners[drag]=[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];draw();});
+  window.addEventListener('mouseup',()=>{drag=-1;});
+  draw();
+})();
+
+/* ---------------- Pinhole demo ---------------- */
+(function(){
+  function draw(){
+    const c=document.getElementById('pin');const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);
+    const Z=+document.getElementById('dz').value;document.getElementById('vdz').textContent=Z;
+    const f=+document.getElementById('df').value;document.getElementById('vdf').textContent=f;
+    const w=60, cx=100, cy=160;
+    // axis
+    ctx.strokeStyle='#243049';ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(890,cy);ctx.stroke();
+    // camera
+    ctx.fillStyle='#41d8c9';ctx.beginPath();ctx.arc(cx,cy,7,0,7);ctx.fill();
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';ctx.fillText('Camera (pinhole)',cx-25,cy+30);
+    // image plane
+    const sx=cx+f*1.0;
+    ctx.strokeStyle='#888';ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(sx,30);ctx.lineTo(sx,290);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#ffb454';ctx.fillText('image plane (at f)',sx-50,28);
+    // object
+    const ox=cx+Z*1.2;
+    ctx.fillStyle='rgba(110,168,255,0.18)';ctx.strokeStyle='#6ea8ff';ctx.lineWidth=2;
+    ctx.fillRect(ox-15,cy-w,30,2*w);ctx.strokeRect(ox-15,cy-w,30,2*w);
+    ctx.fillStyle='#6ea8ff';ctx.fillText('3D object (depth Z)',ox-30,cy-w-10);
+    // rays
+    ctx.strokeStyle='rgba(255,107,129,0.5)';
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ox,cy-w);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ox,cy+w);ctx.stroke();
+    // image
+    const projY=w*f/Z;
+    ctx.strokeStyle='#ff6b81';ctx.fillStyle='#ff6b81';ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(sx,cy-projY);ctx.lineTo(sx,cy+projY);ctx.stroke();
+    ctx.lineWidth=1;ctx.fillStyle='#fff';
+    ctx.fillText('image height = '+(2*projY).toFixed(0)+' px',sx+8,cy+projY+18);
+    ctx.fillStyle='#9fb0cc';ctx.fillText('x = X·f/Z   →   the 1/Z makes faraway things small',cx,300);
+  }
+  document.getElementById('dz').addEventListener('input',draw);
+  document.getElementById('df').addEventListener('input',draw);
+  draw();
+})();
+</script>
+</body>
+</html>

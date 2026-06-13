@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7 · Video Magnification</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>7</b> · Video Magnification</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch06_layer_representation.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch08_background_subtraction.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 7</div>
+    <h1>Video Magnification</h1>
+    <p class="lede">Some motions are too small to see: a pulse in the neck, a building swaying in the wind, an
+    engine's vibration. Eulerian video processing amplifies them with a one-line Taylor trick — no per-pixel
+    motion estimation needed.</p>
+  </header>
+
+  <h2>7 &nbsp; Video Magnification</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 50–51)</span>
+    <p>Following the previous section, motion magnification (also called Lagrangian Video Processing) estimates
+    the motion vector of each pixel, clusters the pixels into layers, and amplifies the motion in a specific
+    layer.</p>
+    <p>However, a new approach, called Eulerian Video Processing, addresses the same problem in a simpler and more
+    elegant way. The main difference between the two approaches lies in the coordinates: Lagrangian methods track
+    individual pixels over time, whereas Eulerian methods fixate on a region in the frame and observe its
+    intensity profile. In other words, Lagrangian methods operate in the image plane, while Eulerian methods
+    operate in the time domain. In the Eulerian approach, each pixel is observed independently, without
+    considering its neighborhood. The most distinctive property of the Eulerian method is its ability to capture
+    subtle, minor changes.</p>
+    <p>Given I(x, t) a 1-D image, where I(x, t) is the value of the piel at time t. We will define:</p>
+    <div class="eq">$$ I(x, t) = f(x + \delta(t)), \qquad I(x, 0) = f(x) $$</div>
+    <p>Intuitively, at every pixel we observe: [intensity profile]</p>
+    <p>Our goal is to calculate:</p>
+    <div class="eq">$$ \tilde{I}(x, t) = f(x + (1 + \alpha)\delta(t)) $$</div>
+    <p>Here, $\alpha$ is a given amplification factor. There are two approaches to motion magnification. The first
+    is the Lagrangian approach, which operates in the image plane. The second is the Eulerian approach, which
+    observes the temporal derivative. This method links the rate of change over time to motion in the image
+    plane: if a pixel moves quickly in the image plane, its temporal derivative will be large.</p>
+    <p>For that, we will use first order Tailor approximation:</p>
+    <div class="eq">$$ I(x, t) \approx f(x) + \underbrace{\delta(t) \frac{\partial f(x)}{\partial x}}_{B(x,t)} $$</div>
+    <p>We want: $\tilde{I}(x, t) = I(x.t) + \alpha B(x, t)$. We insert:</p>
+    <div class="eq">$$ \tilde{I}(x, t) \approx f(x) + (1 + \alpha)\delta(t) \frac{\partial f(x)}{\partial x} $$</div>
+    <p>And get: $\tilde{I}(x, t) \approx f(x + (1 + \alpha)\delta(t))$.</p>
+    <p>In practive, we take the difference in time between two frames, amplify it and add to the base image. The
+    following diagram visualize this:</p>
+    <p>[it is supposed to be (1+alpha) and not alpha*B]</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Goal:</strong> reveal hidden motions — a pulse in the neck, a tall building's wind sway. Two
+    approaches, named after fluid dynamics:</p>
+    <ul>
+      <li><strong>Lagrangian:</strong> follow each pixel ("particle") as it moves. Needs motion estimation.</li>
+      <li><strong>Eulerian:</strong> sit at a fixed location and watch how the value changes over time. No motion
+      estimation — just temporal filtering. Way simpler.</li>
+    </ul>
+    <p><strong>The Eulerian trick.</strong> By Taylor, $I(x,t) \approx f(x) + \delta(t) f'(x)$. The change-over-
+    time term is $B(x,t) = \delta(t) f'(x)$. Add $\alpha$ copies of $B$ back to the original and you effectively
+    have $(1+\alpha)\delta(t)$ — the motion has been amplified by $\alpha$.</p>
+    <p>In practice: compute $B \approx I_2 - I_1$, multiply by $\alpha$, add to $I_1$. Done.</p>
+
+    <h4 class="mini">Why the Taylor trick works</h4>
+    <p>If something shifted by a tiny δ in space, the change in pixel value is approximately δ × slope. Multiply
+    that change by α and add it back, and the pixel "moves" as if δ were (1+α)δ. Crucially, we never had to
+    estimate δ explicitly. The temporal difference $I_2 - I_1$ IS the change-in-value we needed.</p>
+
+    <h4 class="mini">Why "sub-pixel" magnification is possible</h4>
+    <p>A pixel value can encode a 0.01-pixel motion via an intensity change of 0.01 × slope — a small but real
+    number. LK can't see that motion (its Taylor approximation is overwhelmed by sensor noise) but Eulerian
+    magnification can amplify it 100× and make it visible. The motion was always in the data; we just couldn't
+    perceive it.</p>
+
+    <h4 class="mini">Band-pass filtering — the missing ingredient</h4>
+    <p>Real implementations don't amplify ALL temporal changes — that would amplify lighting drift, JPEG noise,
+    everything. Instead they band-pass the temporal signal first (e.g., keep only 1–2 Hz for heart-rate) and
+    amplify just that band. The result: heart rate visualized, ambient lighting unchanged.</p>
+
+    <h4 class="mini">Why this matters in real life</h4>
+    <ul>
+      <li><strong>Medicine:</strong> contactless pulse and respiration measurement from a webcam.</li>
+      <li><strong>Civil engineering:</strong> measure micro-vibrations of buildings, bridges, dams without
+      attaching sensors.</li>
+      <li><strong>Manufacturing:</strong> diagnose machine faults from camera footage of housings.</li>
+      <li><strong>Music:</strong> reconstruct sound from video of a chip bag vibrating ("the visual microphone").</li>
+    </ul>
+
+    <h4 class="mini">Limits of the trick</h4>
+    <p>If the motion exceeds about 1 pixel, the Taylor approximation breaks and you get ringing/ghosting. Solution
+    again: pyramid decomposition + amplify each spatial scale independently.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Eulerian magnification — amplify a tiny wobble</h4><span class="tag">drag α</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Top: a "pixel" wobbles by a tiny amount $\delta(t)$ in the original
+      signal. Bottom: the magnified copy, which moves by $(1+\alpha)\delta(t)$.</p>
+      <canvas id="cvMag" width="900" height="320"></canvas>
+      <div class="controls">
+        <div class="control"><label>α (amplification) <span class="val" id="valpha">3.0</span></label><input id="alf" type="range" min="0" max="12" step="0.1" value="3"></div>
+        <div class="control"><label>true δ amplitude <span class="val" id="vdel">3</span></label><input id="dam" type="range" min="0" max="10" step="0.5" value="3"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Why this matters</span>
+  Used to extract resting heart rate from a webcam video of a face, to monitor structural vibrations of bridges
+  from drone footage, and to diagnose engines from a microphone of their housing — all from amplifying motion no
+  human eye could see.</div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Pick Eulerian over Lagrangian</strong> for sub-pixel and low-amplitude motion. Eulerian is also
+      orders of magnitude simpler to implement.</li>
+      <li><strong>α between 5 and 50</strong> is the typical useful range. Higher α reveals more but introduces
+      more artifacts (ringing).</li>
+      <li><strong>Temporally band-pass first</strong> if you know the target frequency (heartrate ≈ 1 Hz,
+      respiration ≈ 0.2 Hz, building sway ≈ 0.5 Hz). Cuts noise dramatically.</li>
+      <li><strong>If you see ringing/halos around edges</strong>, your motion exceeded 1 pixel — switch to pyramid
+      magnification (amplify each scale separately).</li>
+      <li><strong>Keep the camera rock-still.</strong> Any camera shake gets magnified too — mount it on a
+      tripod.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — video magnification at a glance</span>
+    <table>
+      <tr><th></th><th>Lagrangian</th><th>Eulerian</th></tr>
+      <tr><td>Track</td><td>each pixel through time</td><td>each location's value through time</td></tr>
+      <tr><td>Needs motion estimation?</td><td>yes (LK/HS)</td><td>no</td></tr>
+      <tr><td>Sub-pixel motions?</td><td>fails</td><td>shines</td></tr>
+      <tr><td>Compute cost</td><td>high</td><td>very low</td></tr>
+      <tr><td>Best for</td><td>large, sparse motions</td><td>tiny, dense changes</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>One-line takeaway:</strong> motion = $\delta$ shifts the signal by $\delta$;
+    Taylor turns that into "value changes by $\delta \cdot$ slope." Amplify the value change and you've amplified
+    the motion — no motion estimation required.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch06_layer_representation.html"><span class="dir">‹ Prev</span><span class="ttl">6 · Layer Representation</span></a>
+    <a class="next" href="ch08_background_subtraction.html"><span class="dir">Next ›</span><span class="ttl">8 · Background Subtraction</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('cvMag');const ctx=c.getContext('2d');
+  let t=0,raf=null;
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    const alpha=+document.getElementById('alf').value;document.getElementById('valpha').textContent=alpha.toFixed(1);
+    const dam=+document.getElementById('dam').value;document.getElementById('vdel').textContent=dam.toFixed(1);
+    const delta=dam*Math.sin(t*0.06);
+    // top: original
+    ctx.fillStyle='#6b7a99';ctx.font='13px "Segoe UI"';ctx.fillText('original — moves by δ(t)',20,30);
+    ctx.strokeStyle='#243049';ctx.strokeRect(20,40,860,100);
+    ctx.fillStyle='#6ea8ff';ctx.fillRect(200+delta*8,60,140,60);
+    ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.fillText('Δx = '+delta.toFixed(1)+' px',355,95);
+    // bottom: magnified
+    ctx.fillStyle='#6b7a99';ctx.font='13px "Segoe UI"';ctx.fillText('magnified — moves by (1+α)·δ(t)',20,170);
+    ctx.strokeStyle='#243049';ctx.strokeRect(20,180,860,100);
+    ctx.fillStyle='#41d8c9';ctx.fillRect(200+delta*(1+alpha)*8,200,140,60);
+    ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.fillText('Δx = '+(delta*(1+alpha)).toFixed(1)+' px',355,235);
+    // axes mark
+    ctx.strokeStyle='#ffb454';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(270,40);ctx.lineTo(270,280);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#ffb454';ctx.fillText('rest position',225,15);
+  }
+  function loop(){t++;draw();raf=requestAnimationFrame(loop);}
+  loop();
+})();
+</script>
+</body>
+</html>

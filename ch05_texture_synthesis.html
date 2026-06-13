@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5 · Texture Synthesis</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>5</b> · Texture Synthesis</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch04_kalman_particle.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch06_layer_representation.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 5</div>
+    <h1>Texture Synthesis</h1>
+    <p class="lede">Generate endless frames of a flickering candle, swirling smoke, or rippling water that look like
+    the source clip but never repeat. The trick: assume the texture is the visible output of a hidden low-dimensional
+    state-space process. Recover that process with SVD, then drive it with random noise.</p>
+  </header>
+
+  <h2>5 &nbsp; Texture synthesis</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 41)</span>
+    <p>We will start by giving the bottom line of the algorithm and then develop the equations. In order to process
+    a signal in time, we have learned we can use Kalman filter for that. However, Kalman won't be given to us and
+    we will instead try to estimate it's parameters. We are given a series of frames:</p>
+    <p>Kalman assumes we have the measurements and the states. They assumed:</p>
+    <div class="eq">$$ x_{t+1} = A x_t + B v, \qquad y_t = C x_t + w $$</div>
+    <p>Where v is a random noise vector. A and $x_t$ are not given, and we aim to estimate them from the
+    observations $y_t$. In some sense, texture can be viewed as a process in which we use past states to estimate
+    the current state. To prevent the process from being purely deterministic, we introduce noise. This can be
+    visualized as follows:</p>
+    <p>We define a state space in which the texture evolves over time along a trajectory. Each state along this
+    trajectory is mapped to an image y. The mapping is defined by the second equation introduced earlier: we apply
+    the matrix C and add noise w, which makes the generated image y appear more natural. Thus, the first equation
+    represents the motion model in the state space, while the second equation describes the transformation from the
+    state to the observed image, which is the final output we observe.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Goal:</strong> after seeing a short clip of e.g. a flame, generate new frames that look like the same
+    flame but aren't a literal copy.</p>
+    <p><strong>Hidden-state insight:</strong> at any moment a "texture frame" is governed by a small hidden state
+    $x_t$ (50 numbers, say). The state drifts over time with a simple linear rule + noise. Each state $x_t$ is
+    rendered as an image $y_t$ via another linear map + noise. Learn $A$ and $C$ from a sample clip, then drive
+    the state forward forever to generate novel texture.</p>
+
+    <h4 class="mini">"Dynamic texture" — what counts?</h4>
+    <p>Anything that looks similar over time but is not literally repeating: ocean waves, flames, escalators,
+    swaying grass, smoke, escalator handrails, falling water. The visual statistics are stationary even though
+    individual frames differ. Anything with a recognisable object (a face walking by) is NOT a dynamic texture
+    and this method won't work.</p>
+
+    <h4 class="mini">Why noise is essential</h4>
+    <p>If the model were $x_{t+1} = Ax_t$ with no noise, after enough steps the state either dies (eigenvalues
+    &lt; 1), explodes (eigenvalues &gt; 1), or cycles forever (eigenvalues on unit circle). Real textures don't
+    do any of those — they wander. Noise $v(t)$ keeps the trajectory exploring while $A$ keeps it on the manifold
+    of plausible textures.</p>
+
+    <h4 class="mini">The two noise sources, restated</h4>
+    <ul>
+      <li>$v(t)$ — drives the hidden state. This is what makes flames flicker, not repeat.</li>
+      <li>$w(t)$ — pixel noise on the final image. This is what hides the low-rank seams and gives a "real
+      camera" feel.</li>
+    </ul>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 42–44)</span>
+    <p>In order to solve the problem, we represent each frame y as a long vector. If there is a periodic phenomenon
+    between the frames, then constructing a matrix from these frame vectors will result in a matrix whose rank is
+    much smaller than the number of pixels. There are several solutions to this problem. For example, we could
+    apply wavelet decomposition or DCT decomposition, but it has been found that SVD decomposition works best in
+    practice. In other words, the solutions for $x_t$ correspond to the eigenvectors of the matrix described
+    earlier.</p>
+    <p>We can estimate the process of the texture in time as an ARMA model:</p>
+    <p><strong>Auto Regressive:</strong> $x_t = C + \sum_{i=1}^P p_i x_{t-1} + \epsilon_t$</p>
+    <p>Where C is constant, $p_i$ are the parameters and $\epsilon_t$ is the noise. This can also be written with
+    vectors and a matrix:</p>
+    <div class="eq">$$ \begin{pmatrix} x_1 & \cdots & x_5 \\ x_2 & \cdots & x_6 \\ \vdots & \cdots & \vdots \end{pmatrix} \begin{pmatrix} p_1 \\ p_2 \\ \vdots \end{pmatrix} = \begin{pmatrix} x_6 \\ x_7 \\ \vdots \end{pmatrix}$$</div>
+    <p><strong>Moving Average:</strong> $x_t = \mu + \sum_{i=1}^P \theta_i \epsilon_{t-1} + \epsilon_t$</p>
+    <p>Where $\mu$ is the mean value, $\theta_i$ are the parameters and $\epsilon_t$ are the noise.</p>
+    <p>Let's go back to our problem: we are given a series of images $(I(t))_{i=1}^T$ and we observe a series of
+    images:</p>
+    <div class="eq">$$ y(t) = I(t) + w(t) $$</div>
+    <p>Let's assume we can model the texture in time with:</p>
+    <div class="eq">$$ x(t + 1) = A x(t) + B v(t), \qquad y(t) = C x(t) + w(t) $$</div>
+    <p>Where $x \in R^n (n \sim 50), y \in R^m (m \sim 200 \times 300)$. There are two noise sources: v(t) is for
+    creating the texture (otherwise we will get a deterministic model which gives a constant behavior), and the
+    second is the noise in the image itself to get a natural look.</p>
+    <p>To solve the problem, we need to define the error function we need to minimize. One way would be ML
+    estimation: given y(1)...y(T), we would like to find:</p>
+    <div class="eq">$$ \hat{A}, \hat{B}, \hat{C}, \hat{q} = \arg\max_{A,B,C,q} \log P(y(1) \cdots y(T)) $$</div>
+    <p>s.t. the equations and $v(t) \sim q$ (q is a distribution). However, we will use Minimum Mean Error:</p>
+    <div class="eq">$$ \hat{A}, \hat{B}, \hat{C}, \hat{q} = \lim_{t \to \infty} E(\|y(t + 1) - \hat{C}\hat{x}(t + 1)|t\|) $$</div>
+    <p>However, this is also considered a hard problem to solve, so they came up with another approach (under some
+    assumptions) to the problem:</p>
+    <div class="eq">$$ x(t + 1) = A x(t) + B v(t), \qquad y(t) = C x(t) + w(t) $$</div>
+    <p>However, $v(t) \sim N(0, Q)$ and $w(t) \sim N(0, R)$ and the initial condition of x is assumed to be $x_0$.
+    <strong>There is not a single solution to this</strong> because if A, B and C are the solution, then given T an
+    invertable matrix, we could replace $A = TAT^{-1}$, $Q = TQT^{-1}$, $C = CT^{-1}$ and $x_0 = T x_0$ and get an
+    equivalent solution. In our solution we will choose one candidate from the set of solutions.</p>
+    <p>WE will use SVD decomposition to solve the problem. WE define:</p>
+    <div class="eq">$$ Y_1^\tau = [y(1) \cdots y(T)] \in R^{m \times \tau}, \tau > n $$</div>
+    <div class="eq">$$ X_1^\tau = [x(1) \cdots x(T)] \in R^{m \times \tau}, \tau > n $$</div>
+    <div class="eq">$$ W_1^\tau = [w(1) \cdots w(T)] \in R^{m \times \tau}, \tau > n $$</div>
+    <p>In matrix form: $Y_1^\tau = C X_1^\tau + W_1^\tau$, $C \in R^{m \times n}$.</p>
+    <p>We will demand $C^T C = I$, where I would be called the Identity Motion. This will strict the columns will
+    be orthonormal and we chose this constraint to get a single solution from the set of all solutions. From SVD
+    decomposition we will get:</p>
+    <div class="eq">$$ Y_1^\tau = U \Sigma V^T, \quad U \in R^{m \times n}, \Sigma \in R^{n \times n}, V \in R^{n \times \tau} $$</div>
+    <p>We assumed $w \sim N(0, R)$ so we search $\hat{C}, \hat{x}$ that minimize $\|w_1^\tau\|_F$. We will get:</p>
+    <div class="eq">$$ \hat{C}(\tau) = U, \qquad \hat{x}(\tau) = \Sigma V^T $$</div>
+    <p>To calculate $\hat{A}$ we need to solve:</p>
+    <div class="eq">$$ \hat{A}(\tau) = \arg\min_A \|x_1^\tau - A x_0^{\tau - 1}\| $$</div>
+    <p>Where: $X_0^{\tau-1} = [x(0) \cdots x(\tau - 1)]$, $X_1^\tau = [x(1) \cdots x(\tau)]$. The solution will be:</p>
+    <div class="eq">$$ \hat{A}(\tau) = \underbrace{\Sigma V^T D_1}_{X_1^\tau} V (V^T \underbrace{D_2 V)^{-1} \Sigma^{-1}}_{(X_0^{\tau-1})^{-1}} $$</div>
+    <p>Where:</p>
+    <div class="eq">$$ D_1 = \begin{pmatrix} 0 & 0 \\ I_{\tau-1} & 0 \end{pmatrix}, \qquad D_2 = \begin{pmatrix} I_{\tau-1} & 0 \\ 0 & 0 \end{pmatrix}, \qquad I_{\tau-1} \in (\tau-1) \times (\tau-1) $$</div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Frames as vectors.</strong> Stack every frame's pixels into a single long column. Put all the
+    columns side by side into a giant matrix $Y$. If the texture is low-dimensional, $Y$ has low rank — most rows
+    are redundant.</p>
+    <p><strong>SVD magic.</strong> $Y = U\Sigma V^T$ factors into:</p>
+    <ul>
+      <li>$U$ — fundamental patterns (eigenimages). Set $C = U$.</li>
+      <li>$\Sigma V^T$ — how each frame mixes the patterns over time. Set $x_t = \Sigma V_t^T$.</li>
+    </ul>
+    <p>Adding the constraint $C^TC = I$ pins down one specific solution out of infinitely many.</p>
+    <p><strong>State dynamics.</strong> Once you have the state sequence $x_t$ (only ~50-dim), fit a linear
+    auto-regression $x_{t+1} = A x_t + \epsilon$ by least squares.</p>
+    <p><strong>Generate forever.</strong> Pick any starting state, push through $A$ with random noise, multiply
+    each new state by $C$, add a touch of image noise — endless new texture frames.</p>
+
+    <h4 class="mini">Why SVD is the right tool</h4>
+    <p>SVD is the gold standard for "find the lowest-rank approximation of this matrix" — it's literally optimal
+    in the Frobenius-norm sense. Truncating to the top $n$ singular values gives the best rank-$n$ approximation
+    of your data. For texture, the top-50-ish singular values usually capture 95%+ of the variance.</p>
+
+    <h4 class="mini">Identifiability — why the solution isn't unique</h4>
+    <p>You can absorb any invertible matrix $T$ into the state: replace $A \to TAT^{-1}$, $C \to CT^{-1}$,
+    $x_0 \to Tx_0$, and the observations $y$ are unchanged. There's a whole family of equivalent solutions. The
+    constraint $C^TC = I$ picks one canonical representative.</p>
+
+    <h4 class="mini">Where this fails</h4>
+    <p>If the texture has any structured object (face, building) the low-rank linear model can't capture it. You'd
+    get blurry blobs. Modern methods use neural GANs/VAEs, which can represent non-linear manifolds.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>State-space trajectory — 2-D dynamic texture</h4><span class="tag">drag · play</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Each dot is one frame's hidden state $x_t$ in a 2-D state space. The
+      AR rule $x_{t+1} = A x_t + \epsilon$ swirls the trajectory; noise keeps it from being a perfect circle. In a
+      real texture, multiplying $C \cdot x_t$ would render a full image at each step.</p>
+      <canvas id="cvTex" width="900" height="320"></canvas>
+      <div class="controls">
+        <div class="control"><label>rotation in A (deg/step) <span class="val" id="vRa">3</span></label><input type="range" id="Ra" min="-15" max="15" value="3"></div>
+        <div class="control"><label>noise σ <span class="val" id="vSi">3</span></label><input type="range" id="Si" min="0" max="20" value="3"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="texPlay">Play / Pause</button>
+        <button class="act" id="texReset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Pick $n$</strong> (state dim) by keeping enough singular values to capture ≥95% variance.
+      Typically 20–100.</li>
+      <li><strong>Constraint $C^TC = I$</strong> isn't just maths — it picks the canonical solution out of a
+      family of equivalent ones.</li>
+      <li><strong>Both noise sources matter:</strong> $v$ keeps the trajectory exploring, $w$ hides the rank.
+      Set $v$ small (a few percent of state magnitude) and $w$ to match real sensor noise.</li>
+      <li><strong>Validate by re-rendering the training clip</strong> — if it looks like the original, the model
+      captures the texture; if it looks blurry, increase $n$ or revisit assumptions.</li>
+      <li><strong>Avoid object-textures.</strong> Trees waving = OK. A person walking = no.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — texture synthesis at a glance</span>
+    <table>
+      <tr><th>Step</th><th>What</th><th>How</th></tr>
+      <tr><td>1. Vectorize frames</td><td>each frame → column</td><td>flatten H×W image</td></tr>
+      <tr><td>2. SVD</td><td>$Y = U\Sigma V^T$</td><td>truncate to top $n$ singular values</td></tr>
+      <tr><td>3. Extract $C$ and $x_t$</td><td>$\hat C = U$, $\hat x_t = \Sigma V_t^T$</td><td>with $C^TC = I$ constraint</td></tr>
+      <tr><td>4. Fit dynamics $A$</td><td>$x_{t+1} \approx A x_t$</td><td>least squares</td></tr>
+      <tr><td>5. Generate</td><td>$x_{t+1} = Ax_t + \epsilon$, $y_t = Cx_t + w$</td><td>infinite novel frames</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Big idea:</strong> the texture is a low-dim linear state-space process —
+    same shape as Kalman from Ch.4, except now $A$ and $C$ are unknown and we estimate them from data (system
+    identification).</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch04_kalman_particle.html"><span class="dir">‹ Prev</span><span class="ttl">4 · Kalman & Particle Filters</span></a>
+    <a class="next" href="ch06_layer_representation.html"><span class="dir">Next ›</span><span class="ttl">6 · Layer Image Representation</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('cvTex');const ctx=c.getContext('2d');
+  let x=20,y=0,trail=[],t=0,raf=null,playing=true;
+  function step(){
+    const a=+document.getElementById('Ra').value*Math.PI/180;
+    const s=+document.getElementById('Si').value;
+    document.getElementById('vRa').textContent=document.getElementById('Ra').value;
+    document.getElementById('vSi').textContent=document.getElementById('Si').value;
+    const nx=x*Math.cos(a)-y*Math.sin(a)+(Math.random()-0.5)*s*2;
+    const ny=x*Math.sin(a)+y*Math.cos(a)+(Math.random()-0.5)*s*2;
+    x=nx*0.985;y=ny*0.985;trail.push([x,y,t]);if(trail.length>240)trail.shift();t++;
+  }
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle='#243049';ctx.beginPath();ctx.moveTo(0,160);ctx.lineTo(900,160);ctx.moveTo(450,0);ctx.lineTo(450,320);ctx.stroke();
+    ctx.fillStyle='#6b7a99';ctx.font='13px "Segoe UI"';ctx.fillText('hidden state space (2-D projection of x_t)',20,22);
+    trail.forEach((p,i)=>{ctx.fillStyle='hsl('+(p[2]*1.5%360)+',70%,55%)';ctx.globalAlpha=0.4+0.6*(i/trail.length);
+      ctx.beginPath();ctx.arc(450+p[0]*3,160-p[1]*3,3,0,7);ctx.fill();});
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(450+x*3,160-y*3,6,0,7);ctx.fill();
+    // mini "rendered image" panel
+    ctx.strokeStyle='#2c3650';ctx.strokeRect(740,40,140,140);
+    ctx.fillStyle='#9fb0cc';ctx.font='12px "Segoe UI"';ctx.fillText('rendered y_t = C·x_t (mock)',740,32);
+    for(let py=0;py<14;py++)for(let px=0;px<14;px++){
+      const v=128+Math.sin(px*0.3+x*0.04+t*0.01)*60+Math.cos(py*0.3+y*0.04)*60;
+      const g=Math.max(0,Math.min(255,v));ctx.fillStyle=`rgb(${g|0},${(g*0.85)|0},${(g*0.6)|0})`;
+      ctx.fillRect(740+px*10,40+py*10,10,10);
+    }
+  }
+  function loop(){if(playing){step();draw();}raf=requestAnimationFrame(loop);}
+  document.getElementById('texPlay').onclick=()=>{playing=!playing;};
+  document.getElementById('texReset').onclick=()=>{x=20;y=0;t=0;trail=[];draw();};
+  loop();
+})();
+</script>
+</body>
+</html>

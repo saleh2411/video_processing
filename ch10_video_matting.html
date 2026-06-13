@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 · Video Matting</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>10</b> · Video Matting</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch09_video_colorization.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 10</div>
+    <h1>Video Matting</h1>
+    <p class="lede">Green-screen, but without a green screen. The pipeline is trimap (definitely-fg / definitely-bg
+    / unsure) → opacity map (a real α value for each unsure pixel) → matting (composite onto a new background
+    without colour bleed).</p>
+  </header>
+
+  <h2>10 &nbsp; Video Matting</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 67)</span>
+    <p>The purpose of video matting is taking the foreground of an image and insert it to a new background. The
+    entire framework of video matting compromises:</p>
+    <p><strong>Input:</strong> A 3-channel image ($I : \Omega \to R^3$ or denoted as $c: \Omega \to R^3$) and
+    scribbles of the foreground ($\Omega_F \in \Omega$) and the background ($\Omega_F \in \Omega$). We can even
+    add more information to the input (such as optical flow for better segmentation), so the input image does not
+    necessarily belong to $R^3$.</p>
+    <p><strong>Trimap:</strong> This is essentially a map of only 3 values (hence the name): 1 - we confidently
+    know the pixel is foreground. 0 - we confidently know the pixel is background. Undecided value $\phi$ - we
+    are not sure if the pixel is foreground or background.</p>
+    <p><strong>Opacity map:</strong> It will fill the undecided region with values which are between 0 and 1.</p>
+    <p><strong>Matting:</strong> This process takes as input an opacity map and a new background, and performs the
+    final matting between the foreground of the original image and the new background. In regions where the
+    opacity map is 0, the new background is inserted, while in regions where the opacity map is 1, the original
+    foreground is preserved.</p>
+    <p>The question remains on what to insert to pixels where the opacity map was brtween 0 and 1. One possible
+    way is to implement $\alpha I + (1 - \alpha)B$, but we won't do that. The reason is because in all those
+    semi-transparent areas we will have a mix between the colors of the foreground and the background, which is
+    not desired. For example, if we had a light hair on a red background, the color of the hair will be mixed
+    with red.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Matting is "extract the person, put them on a new background." Easy parts: clearly-inside-person and
+    clearly-not-person pixels. Hard part: the boundary — wisps of hair, fuzzy edges — where a pixel is a mix of
+    foreground and background colour.</p>
+    <p><strong>Three stages:</strong></p>
+    <ol>
+      <li><strong>Trimap</strong> — every pixel labelled 1 / 0 / unsure (φ).</li>
+      <li><strong>Opacity map</strong> — each unsure pixel gets a real $\alpha \in [0,1]$ ("how foreground is
+      it?").</li>
+      <li><strong>Matting</strong> — composite onto the new background <em>without</em> colour bleed from the
+      old one.</li>
+    </ol>
+
+    <h4 class="mini">Why "trimap" instead of just "mask"</h4>
+    <p>A binary mask (foreground/background) is what we eventually want, but at fuzzy edges no binary answer is
+    honest. The trimap admits "I don't know for these pixels — refine me" instead of guessing. Stage 2 then
+    spends compute only where it matters (the narrow uncertain band), not the whole image.</p>
+
+    <h4 class="mini">The hair-on-red-background nightmare</h4>
+    <p>A single pixel of light hair on a red shirt is, say, 60% hair + 40% red shirt. Its observed colour is a
+    mix — pinkish-white. If you simply paste it on a new green background, the pinkish-white pixel doesn't match
+    either pure hair OR pure green — it looks wrong. The third stage (matting) recovers the PURE hair colour and
+    re-mixes properly.</p>
+
+    <h4 class="mini">Where the scribbles are critical</h4>
+    <p>The whole algorithm is bootstrapped from the user's scribbles. Sparse scribbles in well-chosen locations
+    do the trick: at least one scribble per distinct colour region of foreground/background. A scribble for a
+    person's blonde hair and another for brown skin = good; one stroke straddling both = bad.</p>
+  </div>
+
+  <h2>10.1 Trimap Estimation</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 68–70)</span>
+    <p>If we had a light foreground and dark background, the most simple approach would be creating a histogram,
+    dividing the values to bins and finding a threshold for which bins belong to the background. However, we are
+    working with at least 3-channel images, so making for example 10 bins in each dimention, we will have in total
+    1000 bins which is a lot.</p>
+    <p>We will, therefore, work with what is called <strong>Kernel Density Estimation (KDE)</strong>. This is a
+    method to estimate a distribution from a finite sample set. What we have is the color value $c \in R^3$ for
+    every pixel, and we want to find the color distribution of foreground and background. The scribles themselves
+    indicate we have conditional probability: we have a color given the scribble is foreground or background.
+    More formally: $\forall x \in \Omega_F : c(x) \in f_{C|F}$ and $\forall x \in \Omega_B : c(x) \in f_{C|B}$.</p>
+    <p>We will start with an example in 1-D. Usually, if we want to create a histogram, we would divide the axis
+    to bins and count how many pixels we had at every bin. Instead, we would draw around each pixel a "bell".</p>
+    <p>We estimate:</p>
+    <div class="eq">$$ f(c|F) \propto \sum_{x \in \Omega_F} K(c, c(x)) $$</div>
+    <p>The same will be done with the background. This is sometimes called Parzen window. Usually the function K
+    is: $K(c, c') \propto e^{-\frac{\|c - c'\|_2^2}{2\sigma^2}}$. An ideal histogram would look like: [two
+    non-overlapping bumps]</p>
+    <p>However, in most cases, we will have a very large overlap. The complexity would be for calculating $f(c|F)$
+    is $O(|\Omega| \cdot |\Omega_F|)$ since K gets two parameters c and c'. This is too large, and as a result we
+    will do something else. We will assume for now we have calculated them, and later introduce a practical
+    approach for them.</p>
+    <p>We will develop the equations:</p>
+    <div class="eq">$$ P(F|c) = \frac{f(c|F) P(F)}{f(c)} = \frac{f(c|F) P(F)}{f(c|F) P(F) + f(c|B) P(B)} $$</div>
+    <div class="eq">$$ P(B|c) = \frac{f(c|B) P(B)}{f(c)} = \frac{f(c|B) P(B)}{f(c|F) P(F) + f(c|B) P(B)} $$</div>
+    <p>The main parameters unkown to us here are P(F) and P(B). In worst case, we can assume uniform distribution:
+    $P(F) = P(B) = \frac{1}{2}$, $\implies P(F|c) = \frac{f(c|F)}{f(c|F) + f(c|B)}$.</p>
+    <p>Now we will do distance maps similar to video colorization. We had a path $p \in \Omega$ but now:</p>
+    <div class="eq">$$ L(p) = \int_p |\langle W(p(t)), \dot{p}(t) \rangle| dl, \qquad W(x) = \nabla_x p(F|c(x)) $$</div>
+    <p>We have taken this function because it will be consistently larger in the foreground and smaller in the
+    background. Next:</p>
+    <div class="eq">$$ x, y \in \Omega: d_L(x, y) = \min_{p \in [x, y]} L(p) $$</div>
+    <p>Where we go over all the points p from x to y and find the minimum. Next:</p>
+    <div class="eq">$$ D_F(x) = d_L(x, \Omega_F) = \min_{y \in \Omega_F} d_L(x, y), \qquad D_B(x) = d_L(x, \Omega_B) = \min_{y \in \Omega_B} d_L(x, y) $$</div>
+    <p>This will eventually create two regions: the first region would be for the foreground and the second would
+    be for the background.</p>
+    <p>Within each region, pixels will have similar distance values, whereas crossing between regions leads to a
+    sharp change in distance. Consequently, in each distance map, one region will exhibit relatively small values
+    while the other will have larger values. By comparing the two distance maps, we can determine whether a given
+    pixel belongs to the foreground or the background:</p>
+    <div class="eq">$$ V_F = (x \in \Omega: D_F(x) < D_B(x)), \quad V_B = (x \in \Omega: D_F(x) > D_B(x)) $$</div>
+    <p>And we can also define the boundary: $\Delta = (x \in \Omega: D_F(x) = D_B(x))$.</p>
+    <p>Usually, this set will be empty because the probabilty for the distance to be equal is very low. As a
+    result, the boundary can be found using interpolation. Now, we will create a narrow band around the boundary:</p>
+    <div class="eq">$$ B_p(\Delta) = \bigcup_{x \in \Delta} B_\rho(x) $$</div>
+    <p>Where $B_\rho(x)$ is a ball around x with radius $\rho$. We can also write this as:</p>
+    <div class="eq">$$ x \in B_\rho(\Delta) \iff \exists y \in \Delta : \|x - y\| <= \rho $$</div>
+    <p>Finally, the Trimap will be:</p>
+    <div class="eq">$$ \forall x \in V_F \setminus B_\rho(\Delta): \alpha_T(x) = 1 $$</div>
+    <div class="eq">$$ \forall x \in V_B \setminus B_\rho(\Delta): \alpha_T(x) = 0 $$</div>
+    <div class="eq">$$ \forall x \in B_\rho(\Delta): \alpha_T(x) = \phi $$</div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Step 1 — KDE.</strong> 3D histograms would have 1000 bins (mostly empty). Instead, place a soft
+    Gaussian "bell" around each scribble pixel. Sum the bells for foreground → $f(c|F)$. Same for background.</p>
+    <p><strong>Step 2 — Bayes.</strong> $P(F|c) = f(c|F) / (f(c|F)+f(c|B))$ (uniform prior).</p>
+    <p><strong>Step 3 — Geodesic distance</strong> using $P(F|c)$ as the underlying field. Compute distance to FG
+    scribbles ($D_F$) and to BG scribbles ($D_B$).</p>
+    <p><strong>Step 4 — Classify.</strong> $D_F < D_B$ → foreground; otherwise background. The set where they're
+    equal = the boundary $\Delta$.</p>
+    <p><strong>Step 5 — Trimap.</strong> Far from boundary → confident 0/1. Within radius ρ of boundary → "unsure"
+    (φ). The narrow uncertain band is what the opacity map handles next.</p>
+
+    <h4 class="mini">KDE in plain words</h4>
+    <p>Think of each scribble pixel as putting a little colored bell-curve "puff" on a colour map. Sum all the
+    puffs from foreground scribbles → you have a smooth surface that's high in colour regions the foreground
+    occupies, low elsewhere. Same for background. To classify a new pixel, look up its colour on both surfaces and
+    pick the one that's higher.</p>
+
+    <h4 class="mini">Why we don't just use colour alone</h4>
+    <p>Sometimes foreground and background have OVERLAPPING colours (think a man in a brown jacket against a
+    brown sofa). The colour distributions overlap heavily, so just $P(F|c)$ would say "I dunno, could be either."
+    Geodesic distance breaks the tie using <em>spatial proximity through edges</em>: even if colour is ambiguous,
+    the pixel is closer (via edges) to one scribble than the other.</p>
+
+    <h4 class="mini">Why ρ matters</h4>
+    <p>ρ defines the width of the "unsure" band. Too small → boundary region is one pixel wide, opacity map can't
+    capture soft hair. Too big → most of the image is "unsure" and the opacity map has too much work to do.
+    Typical ρ ≈ 5–15 pixels.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Trimap demo — drag the boundary band width</h4><span class="tag">slide ρ</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A mock binary foreground / background mask. Green = confidently FG (α=1),
+      grey = confidently BG (α=0), amber band = unsure (α=φ). Slide ρ to widen/narrow the unsure band.</p>
+      <canvas id="cvTri" width="900" height="320"></canvas>
+      <div class="controls">
+        <div class="control"><label>boundary radius ρ <span class="val" id="vRho">12</span></label><input type="range" id="rho" min="0" max="40" value="12"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>10.2 Trimap Refinement — Opacity map</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 71–72)</span>
+    <p>Let's draw only the area that is interesting for us:</p>
+    <p>At this stage, we now have a much richer set of data. Previously, we only had a few scribbles indicating
+    foreground and background, which were the sole sources of information for the entire image, despite its large
+    color variability. Now, our focus is on a specific region with much more limited color variation. We have a
+    lot more samples of the foreground and background on the <strong>boundary</strong>.</p>
+    <p>Thus, we will estimate again the distribution functions for refinement. And since we have a curve, we can
+    put a coordinate system and measure the length of the curve. We will denote that as $\tau$. Every point we
+    can denote as $(\tau, c(x))$. Since the boundary in very narrow, this problem is nearly 1-D. Now we can
+    develop the equations:</p>
+    <div class="eq">$$ \forall x \in B_\rho(\Delta): \quad \alpha() = \frac{w_F(x)}{x_F(x) + w_B(x)} $$</div>
+    <div class="eq">$$ w_F(x) = \tilde{D}_F(x)^{-r} \tilde{P}_F(x), \qquad r \in (0, 2] $$</div>
+    <p>Here $\tilde{P}_F(x)$ is computed based on previous step. The equation of $w_F(x)$ was chosen intuitively
+    in the paper.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — opacity map</span>
+    <p>The first KDE used scribbles all over the image to model FG/BG colour distributions. But colour statistics
+    near the boundary can differ from the bulk. So re-estimate distributions using just pixels right next to the
+    boundary — much more reliable locally. Then combine local probability $\tilde P_F$ with geodesic distances to
+    assign each unsure pixel a continuous $\alpha \in [0,1]$.</p>
+  </div>
+
+  <h2>10.3 Matting</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 72–73)</span>
+    <p>Now we are given:<br>
+    B - new background<br>
+    $\alpha$ - opacity map<br>
+    c - original image.<br>
+    As said earlier, we could do: $J(x) = \alpha c(x) + (1 - \alpha(x)) B(x)$.</p>
+    <p>This will be done on the foreground and background, but not on the boundary. That is because the colors
+    will mix and we even may get a halo around the foreground. We will do something else then. Suppose we have
+    the point x:</p>
+    <p>We can write down the value of the pixel as:</p>
+    <div class="eq">$$ c(x) = \alpha f(x) + (1 - \alpha(x)) b(x) $$</div>
+    <p>Where in this case f(x) and b(x) are some unkown foreground and background values respectively. Our goal
+    would be to estimate them. This is an ill-problem (one equation with 2 unknowns), but we have a lot of colors
+    around the pixel that we know they are foreground and background. We will open a window around the pixel, and
+    claim that there are two pixels in the window sutisfying the equation above.</p>
+    <p>On a very small area this assumption most of the time works. What we will do is each time take two pixels
+    in the window, compute the value according to the equasion earlier, substract c(x), calculate the norm and
+    find those which minimize the result:</p>
+    <div class="eq">$$ (x_F^*, x_B^*) = \arg\min_{\substack{x_F \in N(x) \cap \{x:\alpha(x)=1\} \\ x_B \in N(x) \cap \{x:\alpha(x)=0\}}} \|\alpha(x) c(x_F) + (1 - \alpha(x)) c(x_B) - c(x)\|^2 $$</div>
+    <p>With that we can take the color in $x_F^*$ as the value of the foreground object than c(x):</p>
+    <div class="eq">$$ J(x) = \alpha c(x_F^*) + (1 - \alpha(x)) B(x) $$</div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — matting</span>
+    <p>Naive blend $J = \alpha c + (1-\alpha) B$ fails: at a fuzzy hair pixel, $c$ already mixes hair + the OLD
+    red background. So the result drags the old red onto the NEW background.</p>
+    <p><strong>Fix:</strong> recover the PURE foreground colour $f(x)$. We have one equation with two unknowns
+    ($f$, $b$). Assumption: in a small window, $f$ matches some confident-FG pixel $x_F^*$ and $b$ matches some
+    confident-BG pixel $x_B^*$. Search the window for the pair that best explains the mixed pixel. Composite
+    using the pure $c(x_F^*)$ instead of $c(x)$.</p>
+  </div>
+
+  <h2>10.4 KDE — Kernel Density Estimation</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 73–74)</span>
+    <p>Now we are only left to calculate KDE efficiently. We want to calculate $\forall x \in \Omega$:</p>
+    <div class="eq">$$ f(x) = \sum_{y \in \Omega'} k(x, y) w(y) $$</div>
+    <p>The computation efficiency here is $O(|\Omega| \cdot |\Omega'|)$. We assume the kernel is low-rank. To
+    understand this, lets assume we have:</p>
+    <div class="eq">$$ f_{n \times 1} = K_{n \times m} w_{m \times 1} $$</div>
+    <p>Low rank means: $\text{rank}(K) = p \ll m, n$.</p>
+    <p>The computation efficiency here is O(mn). We can write this as a sum of matrices with rank 1:</p>
+    <div class="eq">$$ K = \sum_{i=1}^p \phi_i \psi_i^T = \begin{pmatrix} | & \cdots & | \\ \phi_1 & \cdots & \phi_p \\ | & \cdots & | \end{pmatrix} \begin{pmatrix} -~\psi_1^T~- \\ \vdots \\ -~\psi_p^T~- \end{pmatrix} = \Phi_{n \times p} \Psi_{m \times p}^T $$</div>
+    <p>The rank of this matrix is maximum p. Now we will insert this to previous equation: $f = \Phi \Psi^T w$.</p>
+    <p>The computation time of $\Psi^T w$ is $O(pm)$, where p is very small. If we denote $a = \Psi^T w$, then
+    $f = \Phi a$ will take $O(pn)$. In total we will have $O(p(m+n))$. Insead of quadratic complexity, we have
+    linear complexity. If we say that our kernel $K(x,y)$ is low rank, then: $p \ll |\Omega|, |\Omega'|$.</p>
+    <p>we can write it as:</p>
+    <div class="eq">$$ K(x, y) = \sum_{i=1}^p \phi_i(x) \psi_i^T(y), \qquad a_i = \sum_{y \in \Omega'} \Psi_i(y) w(y), \qquad f(x) = \sum_{i=1}^p a_i \phi_i(x) $$</div>
+    <p>The calculation of $a_i$ takes $O(|\Omega'|p)$, the calculation of the last equation also takes
+    $O(|\Omega|p)$ - in total $O((|\Omega| + |\Omega'|)p)$. Thus there is a lot of consideration when choosing the
+    kernel and to pick one which is low rank. Gaussian kernel is for example infinite-rank, but if we take its
+    singular values we will see they decay to 0. We will not discuss this in the course, but the methods for
+    factorizing kernels is called <strong>Fast multiple method</strong>.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — making KDE fast</span>
+    <p><strong>Problem:</strong> KDE at every pixel = sum over every scribble pixel = $O(NM)$. Too slow for 1MP
+    images.</p>
+    <p><strong>Trick — low-rank kernel.</strong> If $K(x,y) = \sum_{i=1}^p \phi_i(x) \psi_i(y)$ with small $p$,
+    the sum factors:</p>
+    <ul>
+      <li>$a_i = \sum_y \psi_i(y) w(y)$ — depends only on y. Compute ONCE in $O(Mp)$.</li>
+      <li>$f(x) = \sum_i a_i \phi_i(x)$ — for each pixel, just p multiplications.</li>
+    </ul>
+    <p>Total: $O((N+M)p)$ — linear, not quadratic. Gaussians are infinite-rank but their singular values decay,
+    so a small effective rank works. <strong>Fast Multipole Method</strong> exploits this.</p>
+
+    <h4 class="mini">A general lesson — low-rank everywhere</h4>
+    <p>The same "low-rank trick" appeared in Chapter 5 (texture as low-rank state-space). It's one of the most
+    powerful ideas in numerical computing: if a matrix has effective rank $p \ll \min(m, n)$, you can usually
+    replace an O(mn) operation with O((m+n)p). Look for opportunities everywhere.</p>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Scribble inside each colour region of FG and BG.</strong> One per region is the minimum; more is
+      safer.</li>
+      <li><strong>Boundary band radius ρ ≈ 5–15 pixels.</strong> Smaller = sharper but misses hair; larger =
+      smoother but expensive.</li>
+      <li><strong>Use BOTH local KDE refinement</strong> and geodesic distance for the opacity map. Either alone
+      is fragile; combined they're robust.</li>
+      <li><strong>Don't blend the original pixel directly</strong> at the boundary — recover pure foreground
+      (using neighbour windows) and composite that on the new background, to avoid colour bleed.</li>
+      <li><strong>Add optical flow as an extra channel</strong> in video. It separates moving objects from static
+      background better than colour alone.</li>
+      <li><strong>For real-time use</strong>, swap the iterative geodesic computation for fast sweeping (Ch.9).</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — video matting pipeline</span>
+    <table>
+      <tr><th>Stage</th><th>Input</th><th>Output</th><th>Core method</th></tr>
+      <tr><td>1. Trimap</td><td>image + scribbles</td><td>map of 1 / 0 / φ</td><td>KDE + geodesic distance + boundary band</td></tr>
+      <tr><td>2. Opacity map</td><td>trimap + image</td><td>α ∈ [0,1] in unsure band</td><td>local KDE refinement + distance-weighted blending</td></tr>
+      <tr><td>3. Matting</td><td>α + original image + new BG</td><td>composited frame J(x)</td><td>recover pure FG colour from window neighbours, then composite</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Pattern alert:</strong> notice how this chapter literally reuses Chapter 9's
+    geodesic-distance machinery — except the "edge weights" come from foreground probability instead of luminance
+    gradient. The same idea, repurposed for a different cost field, solves a totally different problem. Watch for
+    this kind of cross-pollination as you read more vision papers.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch09_video_colorization.html"><span class="dir">‹ Prev</span><span class="ttl">9 · Video Colorization</span></a>
+    <a class="next" href="ch11_retargeting_patchmatch.html"><span class="dir">Next ›</span><span class="ttl">11 · Re-targeting & PatchMatch</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('cvTri'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  function shape(x,y){
+    const cx=W/2,cy=H/2;const d=Math.hypot(x-cx,y-cy);
+    return d<110 || (Math.abs(x-cx)<30 && y>cy && y<cy+120);
+  }
+  function distToBoundary(x,y){
+    // signed distance roughly
+    const cx=W/2,cy=H/2;const d=Math.hypot(x-cx,y-cy);
+    return shape(x,y) ? 110-d : d-110;
+  }
+  function draw(){
+    const rho=+document.getElementById('rho').value;document.getElementById('vRho').textContent=rho;
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,W,H);
+    const img=ctx.createImageData(W,H);const d=img.data;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const idx=(y*W+x)*4;
+      const sgn=distToBoundary(x,y);
+      let r,g,b;
+      if(Math.abs(sgn)<rho){r=255;g=180;b=84;}        // amber unsure
+      else if(sgn>0){r=126;g=231;b=135;}              // green FG
+      else {r=80;g=80;b=90;}                           // grey BG
+      d[idx]=r;d[idx+1]=g;d[idx+2]=b;d[idx+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+    ctx.fillStyle='#fff';ctx.font='14px "Segoe UI"';
+    ctx.fillText('green = α=1 (FG)   ·   amber = α=φ (unsure, refine next)   ·   grey = α=0 (BG)',20,28);
+  }
+  document.getElementById('rho').addEventListener('input',draw);draw();
+})();
+</script>
+</body>
+</html>

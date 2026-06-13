@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4 · Kalman & Particle Filters</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>4</b> · Kalman &amp; Particle Filters</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch03_motion_applications.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch05_texture_synthesis.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 4</div>
+    <h1>Kalman and Particle Filters</h1>
+    <p class="lede">In live video we can't see the future — we have to update an estimate frame by frame. Filtering
+    is the math of "predict + correct": guess where the target will be, then nudge that guess with each new
+    measurement. Kalman is optimal for linear Gaussian worlds; particle filters handle anything else.</p>
+  </header>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 28)</span>
+    <p>Typically, we do not have access to the entire video at once, so we need to process it online. In such
+    situations, filtering techniques are the main tools used. We will first motivate their use through the example
+    of a tracking problem.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>"Online" = frames arrive one at a time, no peeking ahead. <strong>Filters</strong> combine your
+    accumulated belief about the world with each new measurement, producing an updated belief.</p>
+  </div>
+
+  <h2>4.1 Tracking</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 28–30)</span>
+    <p>Let us assume we have a collection of frames and a motion estimation algorithm. Suppose an external algorithm
+    has detected an object for tracking. The Lucas–Kanade method requires a template to work with — in our case,
+    the content inside the tracking window from the previous frame — as well as a good initial estimate of the
+    object's position in the current frame. In the figure below, the ground truth is marked in red, and the initial
+    guess is marked in blue:</p>
+    <p>One possible initial guess is the position of the object in the previous frame. When using Lucas–Kanade, we
+    assume that the video has a high enough frame rate so that a few iterations starting from this initial guess
+    will allow the algorithm to converge.</p>
+    <p>In practice, we do not always have a high frame rate — for example, due to limited CPU performance — and the
+    object may move significantly between frames. In such cases, the initial guess can be far from the ground
+    truth:</p>
+    <p>In this situation, the Lucas–Kanade method may fail to converge to the correct solution. To address this,
+    we can make assumptions about the motion of the object — assumptions that will later be used by Kalman and
+    Particle filters.</p>
+    <p>For example, we might assume that the object moves along a straight line, with constant velocity, or with
+    constant acceleration.</p>
+    <p>Using one of these assumptions, we can predict the object's motion according to the chosen model and refine
+    our initial guess:</p>
+    <p>In fact, what Lucas–Kanade (LK) does is essentially gradient descent. Suppose this is not what we want.
+    Instead, we may prefer a template matching approach: we take the tracking window from the previous frame, slide
+    it over the current frame, and assign a score at each position based on how well the window matches. In this
+    scenario, we need a Kalman filter for several reasons:</p>
+    <p>1. <strong>Computation efficiency</strong>: By predicting the object's position in the current frame, we do
+    not need to perform template matching over the entire frame; instead, we can search within a smaller, localized
+    area:</p>
+    <p>2. <strong>Object ambiguity</strong>: There may be multiple objects in the frame that look sinilar — for
+    example, several white cars. In such cases, template matching alone can easily fail to distinguish between
+    them. However, a Kalman filter prediction provides an estimate of the desired object's position, helping to
+    eliminate other candidates.</p>
+    <p>3. <strong>Appearance space</strong>: There are cases where an object's appearance may change drastically
+    between frames — for example, due to changes in orientation, lighting, or brightness. In such situations,
+    template matching should not rely solely on the tracking window from the previous frame. Instead, we can create
+    a template that better represents the object's appearance over time. One approach is to average N tracking
+    windows (i.e., compute the average of several images), which is more robust to drastic changes and provides a
+    better representation of the object accumulated over time. Since this involves integrating information over
+    time, using a Kalman filter is particularly effective in this context.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Tracking: some other algorithm picks an object in frame 1, you keep the box on it for the rest of the video.
+    LK works <em>only if</em> the object barely moved and you have a decent starting guess. Three reasons we need a
+    filter on top:</p>
+    <ul>
+      <li><strong>Speed:</strong> predict → search only near the prediction.</li>
+      <li><strong>Disambiguation:</strong> multiple lookalike targets → prediction picks the right one.</li>
+      <li><strong>Appearance over time:</strong> build a template that averages many frames; the filter accumulates
+      that information naturally.</li>
+    </ul>
+
+    <h4 class="mini">The bigger picture — why "filter" at all?</h4>
+    <p>A filter is just a function that takes "what I believed yesterday + what I see today" and outputs "what I
+    believe today." This recursive structure means you don't need to store the whole video — just a small state.
+    That's life-saving for real-time systems.</p>
+
+    <h4 class="mini">Three common motion assumptions</h4>
+    <ul>
+      <li><strong>Constant position</strong> (random walk): cheap; assumes object barely moves.</li>
+      <li><strong>Constant velocity</strong>: object moves at a steady speed; state = (pos, vel).</li>
+      <li><strong>Constant acceleration</strong>: state = (pos, vel, acc). Use for cars / projectiles.</li>
+    </ul>
+    <p>Higher-order = more flexible but more parameters to estimate from noisy data. Same trade-off as in Ch.1.</p>
+  </div>
+
+  <h2>4.2 Kalman Filter</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 30–34)</span>
+    <p>The following are the main equations of Kalman Filter:</p>
+    <div class="eq">$$ \text{Project: } \hat{x}_{k+1}' = \Phi \hat{x}_k, \quad P'_{k+1} = \Phi P_k \Phi^T + Q $$</div>
+    <div class="eq">$$ \text{Update — Kalman Gain: } K_k = P'_k H^T (H P'_k H^T + R)^{-1} $$</div>
+    <div class="eq">$$ \hat{x}_k = \hat{x}_k' + K_k(Z_k - H \hat{x}_k'), \qquad P_k = (I - K_k H) P'_k $$</div>
+    <p>Kalman Filter is divided by two stages: project and update.</p>
+    <p><strong>Project stage</strong></p>
+    <p>In the project stage, we used all the information of past frames we could accumulate and now we project this
+    information to the new frame. The vector $\hat{x_k}$ has all the information we need (for example the position,
+    velocity, etc). The matrix $\Phi$ predicts the state at time $k + 1$ based on the time $k$.</p>
+    <p>$P_{K+1}$ is the covariance matrix of x at time k+1.</p>
+    <p><strong>Update stage</strong></p>
+    <p>In the update stage, we go over the information received from the current frame and check whether it agrees
+    with the information of past frames. Mathematically, we update the vector $\hat{x_k}$ and it's covarience based
+    on the information of the current frame. This is done by what is called "<strong>Kalman Gain</strong>". It is
+    the result of the optimal solution we can get based on gaussian assumptions and independence of random
+    variables which will be shown later.</p>
+    <p>In the tracking example, the initial guess is computed based on past frames. We then apply Lucas–Kanade (LK)
+    or template matching on the current frame to estimate the object's current position. The final result is an
+    integration of the initial guess and the measurement from LK or template matching. If we place more trust in
+    the motion model, the result will be closer to the initial guess; if the current frame provides more reliable
+    information, the result will be closer to the LK or template matching estimate.</p>
+    <p>Before we start with developing the equations, we will the following notations:<br>
+    $\hat{x_k}$ - <strong>Posterior state vector</strong>. This is the final result of Kalman Filter after the
+    processing of frame k.<br>
+    $\hat{x_k}'$ - <strong>Prior state vector</strong>. This is the prediction, or the initial guess, based on the
+    past frames.<br>
+    $\hat{z_k}$ - <strong>Measurement vector</strong>. This is the output of LK based on the current frame.</p>
+    <p><strong>Equation Development</strong> — Let's assume:</p>
+    <div class="eq">$$ x_{k+1} = \Phi x_k + w_k $$</div>
+    <p>Where: $x \in R^n$, $\Phi \in R^{n \times n}$, $w \sim N(0, \sigma^2)$.<br>
+    $x_{k+1}$ is a vector with all the information we want about the world - position, velocity, acceleration,
+    etc. We have a known matrix $\Phi$ which transforms the state $x_k$ to state $x_{k+1}$. $w_k$ is the noise of
+    the model itself. For example, suppose the object we are tracking becomes occluded for 10 frames. We can
+    continue to track it using the motion model's prediction, but without measurements from the current frames,
+    the uncertainty grows over time, and the tracking error accumulates.</p>
+    <p>Now, let's define the measurement vector:</p>
+    <div class="eq">$$ z_k = H x_k + v_k $$</div>
+    <p>Where: $z \in R^m$, $H \in R^{m \times n}$, $v \sim N(0, \tilde{\sigma}^2)$.<br>
+    $x_k$ has all the information of the object (for example, if we have position and velocity then we have 4
+    parameters). The measurement itself doesn't necessary need all the information. For example, the measurement
+    can be only the position and thus it will have only 2 parameters. H therefore is linear relation between
+    between $x_k$ and $z_k$. $v_k$ is the noise of the measurements )we assume it has normal distribution).</p>
+    <p>We assume the noise of the process and the noise of the measurements are independent:
+    $E[w_k v_j^T] = 0$.</p>
+    <p>We will define the <strong>System noise</strong> as: $Q = E[w_k w_k^T]$</p>
+    <p>We will define the <strong>Measurement noise</strong> as: $R = E[v_k v_k^T]$</p>
+    <p>We will define the error to be: $e_k = x_k - \hat{x_k}$</p>
+    <p>Where $x_k$ is the ground truth and $\hat{x_k}$ the approximation. Usually, the GT is not given to us, so in
+    Kalman filter we assume the position given in the first frame is the GT (someone gave it to us), and we assume
+    an invariant phenomenon where we try to preserve the optimal position given until now we were at the optimal
+    position.</p>
+    <p>The covarience matrix would be:</p>
+    <div class="eq">$$ P_k = E[e_k e_k^T] = E[(x_k - \hat{x_k})(x_k - \hat{x_k})^T] $$</div>
+    <p>Our task is to minimize P (or more accurately, it's eigen values). We emphasize that we want the mean error
+    on the entire frames is minimized, and not just in a single frame. We can visualize this as an elipse of
+    uncertainty, and we want it to be small as possible,</p>
+    <p>We want: $\hat{x_k} = \hat{x_k}' + K_k(z_k - H \hat{x_k}')$. We insert $z_k = H x_k + v_k$ and get:</p>
+    <div class="eq">$$ \hat{x_k} = \hat{x_k}' + K_k(H x_k + v_k - H \hat{x_k}') $$</div>
+    <p>We will insert to the definition of P and get:</p>
+    <div class="eq">$$ P_k = E[((I - K_k H)(x_k - \hat{x_k}') - K_k v_k)((I - K_k H)(x_k - \hat{x_k}') - K_k v_k)^T] $$</div>
+    <p>We simplify the expression and get:</p>
+    <div class="eq">$$ P_k = (I - K_k H) P'_k (I - K_k H)^T + K_k R K_k^T $$</div>
+    <p>Where $P'_k$ is the covarience before the update, R is the measurement error and $P_k$ is the weighted
+    average of both of them. If K is 0, we don't have measurement error (we don't use the measurement of the
+    current frame). If K is equalt to 1, then the first element will be 0 and we will only have the measurement
+    error.</p>
+    <p>Kalman suggested finding K which minimize $\text{Trace}[P_k]$. This is because trace is the sum of all the
+    elements in the main diagonal, and in $E[e_k e_k^T]$ those are exactly the variances of each variable in our
+    vector state x. Everything is known to us except K, and this is what we want to find. This is done by
+    differentiating and finding K which makes the derivative 0.</p>
+    <p>We will get:</p>
+    <div class="eq">$$ T[P_k] = T[P'_k] - 2 T[K_k H P'_k] + T[K_k(H P'_k H^T + R) K_k^T] $$</div>
+    <div class="eq">$$ \frac{\partial T[P_k]}{\partial K_k} = -2(H P'_k)^T + 2 K_k(H P'_k H^T + R) = 0 $$</div>
+    <p>And we got the <strong>Kalman Gain</strong>:</p>
+    <div class="eq">$$ K_k = P'_k H^T(H P'_k H^T + R)^{-1} $$</div>
+    <p>Now we will calculate $P_k$:</p>
+    <div class="eq">$$ P_k = P'_k - P'_k H^T(H P'_k H^T + R)^{-1} H P'_k = P'_k - K_k H P'_k = (I - K_k H) P'_k $$</div>
+    <p>As shown before. In a private case, let's assume for now that everything is 1-D. We will get in this case:</p>
+    <div class="eq">$$ K = \frac{P'}{P' + R} $$</div>
+    <p>We can see that when $R \to 0$ (the measurement error goes to 0), then $K \to 1$. In that case, we believe
+    in our measurement and the new state will be solely influenced by the measurement. In other case, if
+    $R \to \infty$, then $K \to 0$ and the new state is only calculated based on the prediction of the model.</p>
+    <p>By definition: $\hat{x}'_{k+1} = \Phi \hat{x_k}$,
+    $e'_{k+1} = x_{k+1} - \hat{x}'_{k+1} = (\Phi x_k + w_k) - \Phi \hat{x_k} = \Phi e_k + w_k$. We will get:</p>
+    <div class="eq">$$ P'_{k+1} = E[e'_{k+1}(e'_{k+1})^T] = E[(\Phi e_k + w_k)(\Phi e_k + w_k)^T] $$</div>
+    <p>Let's assume $w_k, e_k$ are independant and we will get:</p>
+    <div class="eq">$$ P'_{k+1} = E[(\Phi e_k)(\Phi e_k)^T] + E[w_k w_k^T] = \Phi P_k \Phi^T + Q $$</div>
+    <p>The following diagram explains visually how Kalman filter works:</p>
+    <p>We start with a posterior at time t-1. The x-axis is the state vector x (in this case it's scalar), and the
+    y-axis is the probability of each state vector. We have the deterministic drift which is our $\Phi$. It is the
+    prediction of the current state based on past states. The stochastic diffusion adds error, flattening the
+    gaussian. In addition, we get the measurement of the current time t (the dashed gaussian). Then we incorporate
+    the data of both gaussians to get posterior at time t.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — Kalman in one paragraph</span>
+    <p>You have a noisy guess about the world and noisy measurements. Kalman is the <em>mathematically optimal</em>
+    way to fuse them (assuming Gaussian noise + linear models).</p>
+    <p><strong>Two alternating stages:</strong></p>
+    <ol>
+      <li><strong>Predict.</strong> Push your estimate forward with the motion model $\Phi$. Uncertainty grows (Q).</li>
+      <li><strong>Update.</strong> Mix prediction + measurement via the <strong>Kalman gain</strong> K:
+      $R \to 0$ ⇒ $K \to 1$ (trust the measurement); $R \to \infty$ ⇒ $K \to 0$ (trust the model). Uncertainty
+      shrinks.</li>
+    </ol>
+
+    <h4 class="mini">The state vector — what to put in it</h4>
+    <p>Anything you want to track over time. Common combos:</p>
+    <ul>
+      <li>$(x,y)$ — pure position. Cheap, fragile to occlusion.</li>
+      <li>$(x, y, \dot x, \dot y)$ — position + velocity. Coasts through brief occlusions.</li>
+      <li>$(x, y, \dot x, \dot y, \ddot x, \ddot y)$ — + acceleration. For cars/projectiles.</li>
+      <li>Add scale, rotation, appearance descriptors as needed. The richer the state, the more measurement you
+      need per frame to keep it well-conditioned.</li>
+    </ul>
+
+    <h4 class="mini">Why H exists (and isn't always identity)</h4>
+    <p>Your <em>state</em> may contain things you can't directly measure. Example: state = (pos, vel). Your
+    measurement (LK match) gives you pos but not vel. H = [I_2 | 0_2] projects state onto pos. Kalman still
+    estimates velocity, by integrating positions over time.</p>
+
+    <h4 class="mini">The covariance ellipse — your visible uncertainty</h4>
+    <p>$P$ is the covariance matrix of the state error. Its eigenvalues/vectors form an ellipse around the
+    estimate showing "I'm pretty sure the truth is in here." Predict step inflates the ellipse (more
+    uncertainty). Update step shrinks it (less uncertainty). Over many steps the ellipse stays bounded if Q and R
+    are reasonable.</p>
+
+    <h4 class="mini">Practical gotchas</h4>
+    <ul>
+      <li><strong>Wrong $\Phi$</strong> → biased estimate. A real car doesn't move at constant velocity forever.</li>
+      <li><strong>Q too small</strong> → over-confident in model, ignores measurements, drifts during occlusions
+      or motion changes.</li>
+      <li><strong>R wrong</strong> → either too jumpy (R small but data noisy) or too slow (R big but data
+      accurate).</li>
+      <li><strong>Linear-Gaussian assumption</strong> doesn't hold (e.g., motion is non-linear, or noise has
+      heavy tails)? Look at Extended/Unscented Kalman, or just use a particle filter.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Kalman 1-D — predict & update fuse gaussians</h4><span class="tag">step or auto-run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Top: target position vs time. Bottom: at every step three Gaussians —
+      blue prior (predicted), amber measurement, teal posterior. Kalman picks the optimal blend.</p>
+      <canvas id="cvKF" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>R (measurement noise) <span class="val" id="vR">40</span></label><input type="range" id="R" min="2" max="120" step="2" value="40"></div>
+        <div class="control"><label>Q (process noise) <span class="val" id="vQ">0.5</span></label><input type="range" id="Q" min="0" max="10" step="0.1" value="0.5"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act" id="stepKF">Step</button>
+        <button class="act primary" id="autoKF">Auto-run</button>
+        <button class="act" id="resetKF">Reset</button>
+      </div>
+      <div class="readout" id="roKF"></div>
+    </div>
+  </div>
+
+  <h2>4.3 Particle Filter</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 35–40)</span>
+    <p>Particle filters wants to do the same as Kalman filter, but without gaussian assumptions. The diagram would
+    be similar:</p>
+    <p>The distribution on Particle Filter (the red one in the diagram) would no longer be a gaussian. Solving
+    tracking problem with a Particle Filter will be in the following way:</p>
+    <p>We have a probability distribution over the state space. To represent this distribution, we randomly generate
+    particles — discrete states where the object could be located (typically 100–200 particles). The particles are
+    sampled according to the distribution function, and we need enough particles so that their distribution closely
+    approximates the underlying probability distribution.</p>
+    <p>During stochastic diffusion, we reduce the probability of each particle to account for uncertainty in the
+    model. Next, we compute the posterior by evaluating how well each particle (tracking window) matches the
+    template. This is done by calculating a matching score for each particle, which measures its similarity to the
+    template. These scores represent the likelihood of each particle.</p>
+    <p>Then, we compute the posterior by combining the prior and the likelihood. For example, if the model predicts
+    that the object is at a certain tracking window (the prior), but the image in that window does not match the
+    template (the likelihood), then the posterior probability for that particle will be low.</p>
+    <p>Finally, we select the particle with the highest posterior probability. In the Kalman filter, the maximum of
+    the Gaussian is straightforward to compute—it is simply the mean. In a particle filter, however, determining
+    the most likely state is less direct, and there are several approaches, such as using a weighted average of the
+    particles or selecting the particle with the maximum posterior.</p>
+    <p>To explain the tradeoff between the maximum and the average, we will use the following figure:</p>
+    <p>When selecting the particle with the maximum posterior, if two objects have similarly high probabilities,
+    the algorithm may jitter between them, resulting in an unstable estimate. On the other hand, using a weighted
+    average produces a more stable result, but it may sometimes yield an incorrect estimate if the average does not
+    correspond to an actual object location.</p>
+    <p><strong>Equation development</strong></p>
+    <p>We will define:<br>
+    $x_t$ - state vector at time t.<br>
+    $x_{1:t}$ - $(x_1, ..., x_t)$ the history.<br>
+    $z_t$ - the measurement at time t.<br>
+    $z_{1:t}$ - $(z_1, ..., z_t)$ the history of measurements.<br>
+    One thing we can be interested is the posterior distribution $P(x_{1:t} | z_{1:t})$. However, we will work with
+    <strong>filter distribution</strong>
+    $P(x_t | z_{1:t}) = \int_{x_1} \cdots \int_{x_{t-1}} P(x_{1:t} | z_{1:t})$.<br>
+    Lately, we will work with the likelihood:</p>
+    <div class="eq">$$ P(x_{1:t} | z_{1:t}) = \frac{P(z_{1:t} | x_{1:t}) P(x_{1:t})}{P(z_{1:t})} $$</div>
+    <p>We will use the following assumptions for simplicity:</p>
+    <p>1. <strong>Markov assumption</strong>:</p>
+    <div class="eq">$$ P(x_t | x_{1:t}) = P(x_t | x_{t-1}) $$</div>
+    <p>This assumption was also used in Kalman filter. Therefore:</p>
+    <div class="eq">$$ P(x_{1:t}) = P(x_t | x_{t-1}) P(x_{1:t-1}) = p(x_1) \prod_{j=2}^t P(x_j | x_{j-1}) $$</div>
+    <p>In the case of Kalman, the matrix $\Phi$ would be $P(x_t | x_{t-1})$.</p>
+    <p>2. <strong>Conditional Independance</strong>:</p>
+    <div class="eq">$$ P(z_{1:t} | x_{1:t}) = P(z_t | x_t) P(z_{1:t-1} | x_{1:t-1}) = \prod_{\tau=1}^t P(z_\tau | x_\tau) $$</div>
+    <p>Now we will develop the equations:</p>
+    <div class="eq">$$ P(x_{1:t} | z_{1:t}) \propto P(z_{1:t} | x_{1:t}) P(x_{1:t}) = \prod_{\tau=1}^t P(z_\tau | x_\tau) \cdot (x_1) \prod_{j=2}^t P(x_j | x_{j-1}) \propto P(z_t | x_t) P(x_t | x_{t-1}) P(x_{1:t-1} | z_{1:t-1}) $$</div>
+    <p>This expression allows us to describe $P(x_{1:t} | z_{1:t})$ recursively. We can see from here that
+    $P(x_{1:t-1} | z_{1:t-1})$ is the recursion, $P(x_t | x_{t-1})$ is the motion model and $P(z_t | x_t)$ is the
+    likelihood. It can be shown:</p>
+    <div class="eq">$$ P(x_t | z_{1:t}) = \int_{x_1} \cdots \int_{x_{t-1}} P(x_{1:t} | z_{1:t}) = C \cdot P(z_t | x_t) P(x_t | z_{1:t-1}) $$</div>
+    <div class="eq">$$ P(x_t | z_{1:t-1}) = \int_{x_{t-1}} P(x_t | x_{t-1}) P(x_t | z_{1:t-1}) $$</div>
+    <p>The final equations are therefore:</p>
+    <p><strong>Posterior:</strong></p>
+    <div class="eq">$$ P(x_{1:t} | z_{1:t}) = B \cdot P(z_t | x_t) P(x_t | x_{t-1}) P(x_{1:t-1} | z_{1:t-1}) $$</div>
+    <p><strong>Filtering:</strong></p>
+    <div class="eq">$$ P(x_t | z_{1:t}) = \int_{x_1} \cdots \int_{x_{t-1}} P(x_{1:t} | z_{1:t}) = C \cdot P(z_t | x_t) P(x_t | z_{1:t-1}) $$</div>
+    <div class="eq">$$ P(x_t | z_{1:t-1}) = \int_{x_{t-1}} P(x_t | x_{t-1}) P(x_{t-1} | z_{1:t-1}) $$</div>
+    <p>Now, we will go over the algorithm of Particle filter.</p>
+    <p><strong>Condensation</strong></p>
+    <p>Input: $\{S_{t-1}^{(n)}, \Pi_{t-1}^{(n)}, C_{t-1}^{(n)}\}_{n=1}^N$<br>
+    Output: $\{S_t^{(n)}, \Pi_t^{(n)}, C_t^{(n)}\}_{n=1}^N$<br>
+    1) Select $S_t^{'(n)}$ as follows: (a) generate r at random r∈[0,1]; (b) find smallest j: $C_{t-1}^{(j)} > r$;
+    (c) Set $S_t^{'(n)} = S_{t-1}^{(j)}$<br>
+    2) Predict $P(x_t | x_{t-1} = S_t^{(n)})$, i.e. $S_t^{(n)} = A S_t^{'(n)} + B w_t^{(n)}$<br>
+    3) Measure $\Pi_t^{(n)} = P(Z_t | x_t = S_t^{(n)})$<br>
+    Normalize: $\sum_n \Pi_t^{(n)} = 1$, and let: $C_t^{(0)} = 0$, $C_t^{(n)} = C_t^{(n-1)} + \Pi_t^{(n)}$<br>
+    Return $\sum \Pi_t^{(n)} f(S_t^{(n)})$</p>
+    <p>S - State vector (which was x)<br>
+    C - slack variable (will be later explained).<br>
+    $\pi$ - weight of a particle<br>
+    n - the index of the particle<br>
+    t - timestep index</p>
+    <p>At the select stage, we randomly pick particles. $S_t'^{(n)}$ are in fact priors. We will use an example to
+    explain how we randomly sample. Suppose we have 3 particles and we want them to have the following
+    probabilities:</p>
+    <p>In this case, we desire that we pick the 1st particle 10% of the time, the 2nd particle 60% and the 3rd -
+    30% of the time. We will do this sampling a random variable r which is has a uniform distribution between 0 and
+    1. If the $0 < r < 0.1$, then we pick particle 1. If $0.1 < r < 0.1 + 0.6$, then we choose the 2nd particle,
+    otherwise the 3rd particle.</p>
+    <p>The predict stage is in fact the same as the one in Kalman filter but is more general and we do this for
+    every particle n. In the measure stage, we look at the probability which tells that if the state $x_t$ was
+    $S_t^{(n)}$, then how good was this state for describing the data This is where the similarity function between
+    templates comes in and $\pi$ will indicate the score. An example of could be calculating the Sum of Square
+    Difference (SSD), and then calculate $e^{-SSD}$ to get a value between 0 and 1. The final returned result is a
+    weighted sum.</p>
+    <p>The following diagram describes the algorithm:</p>
+    <p>We begin with a weighted set of particles at time t1 and aim to produce a weighted set at time t. The weight
+    of each particle represents its importance: the higher the weight, the higher the probability that the state
+    corresponds to that particle. Next is the resampling stage, where we draw particles deterministically from the
+    original distribution, which is approximated by the current particle set. Particles with large weights may be
+    sampled multiple times, medium-weight particles are sampled once, and very small-weight particles may not be
+    sampled at all. This process is guided by the random variable r described earlier. We then apply drift and
+    diffusion to predict the next state, and finally, we multiply by the likelihood to compute the posterior. The
+    output is the updated weighted particle set, which can be interpreted as a weighted sum representing the state
+    distribution.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — particle filter</span>
+    <p>Kalman assumes Gaussian beliefs. Real beliefs can be <em>multimodal</em> — "the ball is on the table OR
+    under the chair." A Gaussian can't have two peaks.</p>
+    <p><strong>Particle filter = represent any distribution as a cloud of weighted samples.</strong> Each particle
+    is one possible state; its weight is its plausibility. The Condensation loop:</p>
+    <ol>
+      <li><strong>Resample</strong>: draw N new particles weighted by old weights — heavy ones get duplicated, light
+      ones die. The cumulative-array + uniform-r trick is a roulette wheel.</li>
+      <li><strong>Predict</strong>: push each particle through the motion model + noise.</li>
+      <li><strong>Measure</strong>: weigh each particle by similarity to the actual measurement (e.g. $e^{-SSD}$).</li>
+      <li>Normalize. Output = weighted average (smoother) or max-weight (sharper but jittery).</li>
+    </ol>
+
+    <h4 class="mini">Why "particles" and not just one estimate</h4>
+    <p>A Gaussian has one mean and one variance — that's it. Real beliefs can have <em>multiple modes</em>
+    ("under the desk OR on the table") and weird shapes. Particles are a non-parametric way to represent ANY
+    distribution: just throw down enough dots in proportion to probability, and you've got it. With 200 dots you
+    can approximate any reasonable distribution to good accuracy.</p>
+
+    <h4 class="mini">Resampling — the magic and the danger</h4>
+    <p>Resampling concentrates effort where probability is high — dead particles in low-probability regions get
+    pruned. But over-resample and you collapse to a single point ("sample impoverishment"). Standard fix:
+    diffusion (random noise) added on every step keeps the cloud alive.</p>
+
+    <h4 class="mini">When to use particle filter over Kalman</h4>
+    <ul>
+      <li>Non-Gaussian noise (e.g. impulse noise, fat tails).</li>
+      <li>Non-linear dynamics (Kalman needs linearization tricks like EKF/UKF).</li>
+      <li>Multi-modal beliefs (multiple hypotheses about target position).</li>
+      <li>Discrete state spaces.</li>
+    </ul>
+
+    <h4 class="mini">Cost — be careful</h4>
+    <p>Each particle needs its own measurement evaluation (e.g., template-match score). N particles × M
+    measurement cost = O(NM) per frame. Kalman is O(state³) per frame. For a 4-D state, Kalman wins by orders of
+    magnitude — use particles only when Kalman's assumptions clearly fail.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Condensation — particles chasing a target</h4><span class="tag">step / auto-run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Particles (teal, size ∝ weight) track a target (green) seen only through
+      noisy measurements (amber). Each tick: resample → diffuse → re-weight by likelihood. White line = weighted
+      estimate.</p>
+      <canvas id="cvPF" width="900" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>particles <span class="val" id="vnp">80</span></label><input type="range" id="np" min="15" max="250" step="5" value="80"></div>
+        <div class="control"><label>diffusion <span class="val" id="vdf">14</span></label><input type="range" id="df" min="2" max="40" step="2" value="14"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act" id="stepPF">Step</button>
+        <button class="act primary" id="autoPF">Auto-run</button>
+        <button class="act" id="resetPF">Reset</button>
+      </div>
+      <div class="readout" id="roPF"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Takeaways</span>
+    <ul style="margin:6px 0 0">
+      <li>Filtering = predict (motion model) + correct (measurement).</li>
+      <li>Kalman gain K is a "trust dial" — big R → trust model, small R → trust data.</li>
+      <li>Kalman is optimal for linear-Gaussian. Particle filter handles non-Gaussian multimodal worlds.</li>
+    </ul></div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Default to Kalman</strong> if your dynamics are roughly linear and noise is roughly Gaussian.
+      It's cheaper and analytically optimal.</li>
+      <li><strong>Switch to Particle Filter</strong> when you have multiple hypotheses (lookalike objects) or
+      strongly non-linear dynamics. Start with 100–200 particles; double if estimate looks unstable.</li>
+      <li><strong>Q (process noise) is usually small</strong> — say 1–5% of typical step size. Too big = noisy
+      estimate; too small = drift during occlusions.</li>
+      <li><strong>R (measurement noise) ≈ variance of your sensor</strong>. Estimate it empirically from a static
+      scene if possible.</li>
+      <li><strong>Use the simplest state that works.</strong> Adding velocity costs nothing but accel often
+      over-fits.</li>
+      <li><strong>Always re-initialize</strong> if the filter "loses" the target (innovation too large too long).
+      Don't let it drift forever.</li>
+      <li><strong>For particle filters, add diffusion noise</strong> every step — this prevents sample
+      impoverishment (all particles collapsing to one point).</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — Kalman vs Particle Filter at a glance</span>
+    <table>
+      <tr><th></th><th>Kalman</th><th>Particle</th></tr>
+      <tr><td>Belief representation</td><td>single Gaussian (mean + cov)</td><td>cloud of N weighted samples</td></tr>
+      <tr><td>Dynamics</td><td>linear only</td><td>any function</td></tr>
+      <tr><td>Noise</td><td>Gaussian only</td><td>any distribution</td></tr>
+      <tr><td>Modes</td><td>unimodal</td><td>multimodal</td></tr>
+      <tr><td>Cost / frame</td><td>O(n³) (n = state dim)</td><td>O(NM) (N particles × M meas cost)</td></tr>
+      <tr><td>Output</td><td>mean of posterior</td><td>weighted mean OR max-weight particle</td></tr>
+      <tr><td>Optimal?</td><td>yes (BLUE) under its assumptions</td><td>asymptotically optimal as N→∞</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Mental model:</strong> Both filters live in "predict then update" rhythm.
+    The only real difference is HOW they store uncertainty — one number (variance) vs a whole sample cloud.
+    Everything else, including the Kalman-gain trust dial, has a particle analogue in the importance weights.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch03_motion_applications.html"><span class="dir">‹ Prev</span><span class="ttl">3 · Motion Applications</span></a>
+    <a class="next" href="ch05_texture_synthesis.html"><span class="dir">Next ›</span><span class="ttl">5 · Texture Synthesis</span></a>
+  </div>
+</div>
+
+<script>
+/* Kalman 1D */
+(function(){
+  const cv=document.getElementById('cvKF'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;const topH=230, botY=250, botH=150;
+  let R=40,Q=0.5, st,P,k,truePos,trueVel,hist,prior,post,Kgain,lastZ;
+  function reset(){st=[40,3]; P=[[100,0],[0,100]]; k=0; truePos=40; trueVel=3.2; hist=[]; prior=null;post=null;Kgain=0;lastZ=null; draw();}
+  function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function step(){
+    trueVel = 3.2+1.6*Math.sin(k*0.18); truePos += trueVel;
+    const z = truePos + randn()*Math.sqrt(R); lastZ=z;
+    const xp=[st[0]+st[1], st[1]];
+    const Pp=[[P[0][0]+P[1][0]+P[0][1]+P[1][1]+Q, P[0][1]+P[1][1]],[P[1][0]+P[1][1], P[1][1]+Q]];
+    prior={m:xp[0],v:Pp[0][0]};
+    const S=Pp[0][0]+R;const Kv=[Pp[0][0]/S, Pp[1][0]/S];Kgain=Kv[0];const innov=z-xp[0];
+    st=[xp[0]+Kv[0]*innov, xp[1]+Kv[1]*innov];
+    P=[[(1-Kv[0])*Pp[0][0], (1-Kv[0])*Pp[0][1]],[Pp[1][0]-Kv[1]*Pp[0][0], Pp[1][1]-Kv[1]*Pp[0][1]]];
+    post={m:st[0],v:P[0][0]};
+    hist.push({t:k,true:truePos,z,est:st[0],sd:Math.sqrt(P[0][0])});
+    if(hist.length>60)hist.shift();k++;draw();
+  }
+  const all=()=>hist.length?hist.map(h=>[h.true,h.z,h.est]).flat():[40];
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='#1d2740';ctx.strokeRect(10,10,W-20,topH-10);
+    ctx.fillStyle='#6b7a99';ctx.font='12px "Segoe UI"';ctx.fillText('position over time',22,28);
+    if(hist.length>1){
+      const minP=Math.min(...all())-30,maxP=Math.max(...all())+30;
+      const X=i=>22+i/59*(W-50), Yp=p=>topH-12-(p-minP)/(maxP-minP)*(topH-50);
+      ctx.fillStyle='rgba(65,216,201,0.18)';ctx.beginPath();
+      hist.forEach((h,i)=>{const x=X(i),y=Yp(h.est+h.sd);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+      for(let i=hist.length-1;i>=0;i--){const h=hist[i];ctx.lineTo(X(i),Yp(h.est-h.sd));}ctx.closePath();ctx.fill();
+      ctx.fillStyle='#ffb454';hist.forEach((h,i)=>{ctx.beginPath();ctx.arc(X(i),Yp(h.z),2.6,0,7);ctx.fill();});
+      ctx.strokeStyle='#7ee787';ctx.lineWidth=2;ctx.beginPath();
+      hist.forEach((h,i)=>{const x=X(i),y=Yp(h.true);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+      ctx.strokeStyle='#41d8c9';ctx.lineWidth=2.4;ctx.beginPath();
+      hist.forEach((h,i)=>{const x=X(i),y=Yp(h.est);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+    } else {ctx.fillStyle='#6b7a99';ctx.fillText('press Step to begin…',W/2-70,topH/2);}
+    ctx.strokeStyle='#1d2740';ctx.strokeRect(10,botY,W-20,botH);
+    ctx.fillStyle='#6b7a99';ctx.fillText('belief at current step (position axis)',22,botY+18);
+    if(prior&&post){
+      const centers=[prior.m,post.m,lastZ];const lo=Math.min(...centers)-60,hi=Math.max(...centers)+60;
+      const X=p=>22+(p-lo)/(hi-lo)*(W-50),base=botY+botH-16;
+      function bell(m,v,col,lab){const sd=Math.sqrt(Math.max(v,1));ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+        let peak=1/(sd*Math.sqrt(2*Math.PI));
+        for(let p=lo;p<=hi;p+=(hi-lo)/240){const g=Math.exp(-(p-m)*(p-m)/(2*v))/(sd*Math.sqrt(2*Math.PI));
+          const y=base-g/peak*100;const x=X(p);p===lo?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();
+        ctx.fillStyle=col;ctx.font='12px monospace';ctx.fillText(lab,X(m)-10,base-105);}
+      bell(prior.m,prior.v,'#6ea8ff','prior');bell(lastZ,R,'#ffb454','meas');bell(post.m,post.v,'#41d8c9','post');
+    }
+    document.getElementById('roKF').innerHTML = prior?
+      `step <b>${k}</b>   Kalman gain K = <b>${Kgain.toFixed(3)}</b>  `+
+      (Kgain>0.5?'(leaning on measurement)':'(leaning on model)')+
+      `\nprior σ² = ${prior.v.toFixed(1)}   →   posterior σ² = <b>${post.v.toFixed(1)}</b>   (update always shrinks uncertainty)`
+      : 'R = measurement noise, Q = process noise. Press Step.';
+  }
+  let timer=null;
+  document.getElementById('R').oninput=e=>{R=+e.target.value;document.getElementById('vR').textContent=R;draw();};
+  document.getElementById('Q').oninput=e=>{Q=+e.target.value;document.getElementById('vQ').textContent=Q.toFixed(2);};
+  document.getElementById('stepKF').onclick=step;
+  document.getElementById('resetKF').onclick=()=>{if(timer){clearInterval(timer);timer=null;document.getElementById('autoKF').textContent='Auto-run';document.getElementById('autoKF').classList.remove('primary');}reset();};
+  document.getElementById('autoKF').onclick=function(){
+    if(timer){clearInterval(timer);timer=null;this.textContent='Auto-run';this.classList.remove('primary');return;}
+    this.textContent='Stop';this.classList.add('primary');timer=setInterval(step,260);
+  };
+  reset();
+})();
+
+/* Particle filter */
+(function(){
+  const cv=document.getElementById('cvPF'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,trackY=150;
+  let np=80,df=14,parts=[],truePos,t,est,timer=null,lastZ;
+  function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function reset(){truePos=W*0.3;t=0;parts=[];for(let i=0;i<np;i++)parts.push({x:Math.random()*W,w:1/np});est=W/2;lastZ=truePos;draw();}
+  function step(){
+    truePos += 6+5*Math.sin(t*0.2);if(truePos>W-20){truePos=20;}t++;
+    const z=truePos+randn()*22;lastZ=z;
+    const cum=[];let s=0;parts.forEach(p=>{s+=p.w;cum.push(s);});
+    const newp=[];for(let i=0;i<np;i++){const r=Math.random()*s;let j=cum.findIndex(c=>c>r);if(j<0)j=parts.length-1;newp.push({x:parts[j].x,w:1/np});}
+    newp.forEach(p=>{p.x += 6 + randn()*df;if(p.x>W)p.x-=W;if(p.x<0)p.x+=W;});
+    let wsum=0;newp.forEach(p=>{const d=p.x-z;p.w=Math.exp(-(d*d)/(2*28*28));wsum+=p.w;});
+    newp.forEach(p=>p.w/=(wsum||1));parts=newp;est=parts.reduce((a,p)=>a+p.x*p.w,0);draw();
+  }
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='#1d2740';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,trackY);ctx.lineTo(W-20,trackY);ctx.stroke();
+    if(lastZ!=null){ctx.strokeStyle='rgba(255,180,84,0.35)';ctx.lineWidth=1.5;ctx.beginPath();
+      for(let x=0;x<=W;x+=4){const d=x-lastZ;const g=Math.exp(-(d*d)/(2*28*28));const y=trackY-60-g*55;x?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+    parts.forEach(p=>{const rad=3+Math.min(16,p.w*np*4);ctx.fillStyle='rgba(65,216,201,0.5)';ctx.beginPath();ctx.arc(p.x,trackY,rad,0,7);ctx.fill();});
+    parts.forEach(p=>{ctx.fillStyle='#41d8c9';ctx.beginPath();ctx.arc(p.x,trackY,2,0,7);ctx.fill();});
+    function marker(x,col,lab,dy){ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,trackY-22);ctx.lineTo(x,trackY+22);ctx.stroke();ctx.font='12px "Segoe UI"';ctx.fillText(lab,x+4,trackY+dy);}
+    marker(truePos,'#7ee787','true',-28);if(lastZ!=null)marker(lastZ,'#ffb454','meas',40);
+    ctx.strokeStyle='#fff';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(est,trackY-30);ctx.lineTo(est,trackY+30);ctx.stroke();ctx.font='12px "Segoe UI"';ctx.fillText('estimate',est+4,trackY-32);
+    document.getElementById('roPF').innerHTML=`particles = <b>${parts.length}</b>   estimate error = <b>${Math.abs(est-truePos).toFixed(1)} px</b>   (resample → diffuse → re-weight each tick)`;
+  }
+  document.getElementById('np').oninput=e=>{np=+e.target.value;document.getElementById('vnp').textContent=np;reset();};
+  document.getElementById('df').oninput=e=>{df=+e.target.value;document.getElementById('vdf').textContent=df;};
+  document.getElementById('stepPF').onclick=step;
+  document.getElementById('resetPF').onclick=()=>{if(timer){clearInterval(timer);timer=null;document.getElementById('autoPF').textContent='Auto-run';document.getElementById('autoPF').classList.remove('primary');}reset();};
+  document.getElementById('autoPF').onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent='Auto-run';this.classList.remove('primary');return;}this.textContent='Stop';this.classList.add('primary');timer=setInterval(step,240);};
+  reset();
+})();
+</script>
+</body>
+</html>

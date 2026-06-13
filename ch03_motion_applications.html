@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3 · Applications of Motion Estimation</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>3</b> · Applications of Motion Estimation</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch04_kalman_particle.html">Next ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 3</div>
+    <h1>Applications of Motion Estimation</h1>
+    <p class="lede">Three concrete things you can do once you can estimate motion well: <em>super resolution</em>
+    fuses several blurry low-res frames into one sharp image; <em>hyperlapse</em> condenses a jittery long video
+    into a smooth fast one; and <em>motion magnification</em> reveals invisible sub-pixel motion. This chapter
+    covers the first two; magnification is its own chapter.</p>
+  </header>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 19)</span>
+    <p>We will go over the 3 applications:</p>
+    <p>1. <strong>Super Resolution</strong> - We are given a low-resolution video and aim to produce a high-resolution
+    version. To begin, we will focus on a simpler problem: generating a single high-resolution image from a set of
+    low-resolution frames. For example, we could take the first five frames, combine them to create one
+    high-resolution frame, and then repeat the process for the next five frames.</p>
+    <p>2. <strong>Hyperlapse</strong> - This problem addresses video stabilization in a challenging context. When
+    recording a video with a modern smartphone, the footage is often longer than desired, and we may want to
+    produce a shorter version. One approach is to sample frames at regular intervals, but this often results in a
+    jittery video that is unpleasant to watch. Instead, we aim to generate a smooth, condensed version of the
+    video.</p>
+    <p>3. <strong>Motion Magnification</strong> - The task is to detect very small motions, even those smaller than
+    a single pixel. Lucas–Kanade (LK) and Horn–Schunck (HS) cannot handle such sub-pixel motions, but other
+    approaches have successfully addressed this challenge.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Once you can estimate motion, you can do useful things:</p>
+    <ul>
+      <li><strong>Super resolution:</strong> 5 blurry photos in → 1 sharp photo out.</li>
+      <li><strong>Hyperlapse:</strong> turn a 1-hour bumpy run into a smooth 1-minute time lapse.</li>
+      <li><strong>Motion magnification:</strong> amplify motion so small you can't see it (heart pulse on skin, a
+      bridge swaying in wind).</li>
+    </ul>
+
+    <h4 class="mini">The unifying idea behind all three</h4>
+    <p>Each application turns motion knowledge into something you couldn't get from a single frame: more detail
+    (SR), fewer frames (hyperlapse), or visible-but-tiny dynamics (magnification). The recipe is always the same:
+    <em>estimate motion → use it to redistribute pixel information across time</em>.</p>
+  </div>
+
+  <h2>3.1 Super Resolution</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 19–21)</span>
+    <p>We are given a series of low resolution images $(Y_i)_{i=1}^n$ and we search for HR image "x" which will
+    describe $(Y_i)_{i=1}^n$. WE first need to define a model which takes this series of LR images and outputs one
+    HR image.</p>
+    <p>The model we will take will be:</p>
+    <div class="eq">$$ Y_{i[n^2 \times 1]} = D_i H_i F_i X_{[r^2 n^2 \times 1]} $$</div>
+    <p>Where:<br>
+    X - HR image which was upscaled by r in both height and width. This image was then converted to a 1-D vector.<br>
+    F - Motion - We believe the camera moves a bit between frames so F estimates it's motion. Its dimensions are
+    $r^2 n^2 \times r^2 n^2$<br>
+    H - Blur - The camera may blur the image a bit. In our case, we will use gaussian blur for example. Its
+    dimensions are also $r^2 n^2 \times r^2 n^2$<br>
+    D - Decimation. The dimentions are $n^2 \times r^2 n^2$<br>
+    $Y_i$ - LR frame converted to a 1-D vecotr.</p>
+    <p>We will use the following assumptions:<br>
+    1. H - the blur kernel is known and fixed for all the frames. We will use gaussian blur here.<br>
+    2. D - the sampling matrix is known and fixed to all the frames. It will simply take every r element<br>
+    3. $F_i$ - is calculated on the frames $(Y_i)_{i=1}^n$, where $F_1$ is the identity.</p>
+    <p>Using those assumptions we got:</p>
+    <div class="eq">$$ Y_i = DHF_i X $$</div>
+    <div class="eq">$$ \begin{pmatrix} Y_1 \\ \vdots \\ Y_k \end{pmatrix} = \begin{pmatrix} DHF_1 \\ DHF_2 \\ \vdots \\ DHF_k \end{pmatrix} X $$</div>
+    <p>This can be written in the form: $b = AX$. From here we can use linear operations to find X.</p>
+    <p>We can look at this from a statistical approach:</p>
+    <div class="eq">$$ Y_i = DHF_i X + v_i, \qquad v_i \sim N(0, \sigma^2) $$</div>
+    <p>There are two methods to solve this:</p>
+    <p><strong>1. Maximum Likelihood:</strong></p>
+    <div class="eq">$$ x = \arg\min_x \sum_{i=1}^k \|DHF_x X - Y_i\|_2^2 $$</div>
+    <div class="eq">$$ \epsilon_{ML}^2(x) = \sum_{i=1}^k \|DHF_x X - Y_i\|_2^2 $$</div>
+    <div class="eq">$$ \frac{\partial \epsilon_{ML}^2(x)}{\partial X} = 2 \sum_{i=1}^k F_i^T H^T D^T (DHF_i X - Y_i) = 0 $$</div>
+    <div class="eq">$$ \sum_{i=1}^k F_i^T H^T D^T DHF_i X = \sum_{i=1}^k F_i^T H^T D^T Y_i $$</div>
+    <p>Which can also be written as: $AX = B$.</p>
+    <p>In this case we have a statistical explanaiton for this. However, those matrices are huge, so we will solve
+    them iteratively:</p>
+    <div class="eq">$$ X_{n+1} = X_n - \beta \sum_{i=1}^k F_i^T H^T D^T (DHF_i X_n - Y_i) $$</div>
+    <p>Each one of those operations don't need to be described with huge matrices but with functions implemented by
+    code.</p>
+    <p>In addition, we can notice here the error in LR is $DHF_i X_n - Y_i$ and the backproject to HR is
+    $F_i^T H^T D^T$. This problem is linear so it will converge to the solution.</p>
+    <p><strong>2. Maximum A-Posteriori (MAP)</strong> - the most acceptable solution</p>
+    <p>Instead of calculating $Pr(Y|X)$ we will calculate $Pr(X|Y)$. From Bayes:</p>
+    <div class="eq">$$ P(X|Y) = \frac{P(Y|X) P(X)}{P(Y)} $$</div>
+    <p>Here, $P(Y|X)$ is the likelihood which describes how good is X in describing the data Y. $P(X)$ is the prior
+    and describes how legitimate is X for the solution. Thus, we want to maximize the posterior $P(X|Y)$ and not
+    the likelihood $P(Y|X)$ because the X which describes best the data Y is not legitimate. In other words, we
+    want X to look like a real image and describes best the data Y. This is similar to how we worked with HS.</p>
+    <p>We got: $x = \arg\max_X P(X|Y) = \arg\max_X P(Y|X)P(X)$</p>
+    <p>Assumption: The distribution function of the images is assumed to be Gibbs distribution:</p>
+    <div class="eq">$$ P(x) = C e^{-A(x)} $$</div>
+    <div class="eq">$$ X_{map} = \arg\min_X \|DHFX - Y\|_2^2 + \lambda A(x) $$</div>
+    <p>We would also define what is the functional $A(x)$. An example for $A(x)$ would be the Laplacian
+    $\begin{pmatrix} 0 & -1 & 0 \\ -1 & 4 & -1 \\ 0 & -1 & 0 \end{pmatrix}$ and we want to find X for which
+    $\|Lx\|$ is small. In other words, the image is smooth to fragments. The final solution will be:</p>
+    <div class="eq">$$ X_{n+1} = X_n - \beta \sum_{i=1}^k F_i^T H^T D^T (DHF_i X_n - Y_i) + \gamma L(X_n) $$</div>
+    <p>Where $\gamma L(X_n)$ is a penalty for not getting a legitimate image.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>The setup.</strong> Several blurry low-res frames of the same scene. You want one crisp HR image.
+    The camera shook a bit between frames, so each LR frame samples the HR image slightly differently — combining
+    them recovers detail.</p>
+    <p><strong>Forward model:</strong> $Y_i = D \cdot H \cdot F_i \cdot X$ (decimate · blur · warp · HR image).</p>
+    <p><strong>ML:</strong> find the X that best explains the LRs (least squares). Closed form exists but matrices
+    are huge → iterate: predict what each LR should look like, compare, nudge X toward smaller error.</p>
+    <p><strong>MAP:</strong> ML alone produces ugly artifacts. Add a prior (e.g. Laplacian smoothness, like in HS)
+    so the solution also <em>looks like</em> a real image. Recipe: data + smoothness.</p>
+
+    <h4 class="mini">Why SR is fundamentally possible</h4>
+    <p>If all your LR frames were sampled at <em>identical</em> sub-pixel offsets, no extra information would
+    exist and SR couldn't help. The reason it works is that hand-shake / camera-motion lands each frame on a
+    slightly different sub-pixel grid. Each LR frame becomes a "different question" about the same scene; combine
+    enough questions and you can reconstruct detail at the HR grid.</p>
+
+    <h4 class="mini">Iterating instead of inverting</h4>
+    <p>The matrix $A$ has billions of entries — you can't invert it directly. The iterative update
+    $X_{n+1} = X_n - \beta \sum F^T H^T D^T (DHF X_n - Y_i)$ is just gradient descent on the LS loss. Each
+    operation (warp $F$, blur $H$, downsample $D$) is implemented as a function call, never as a matrix
+    multiplication.</p>
+
+    <h4 class="mini">ML vs MAP, restated</h4>
+    <p>ML: "find X that best explains observed LR." MAP: "find X that best explains observed LR <em>and</em>
+    looks like a real image." The "looks like" part is encoded by a regularizer (penalty for un-image-like
+    outputs, e.g. roughness). This is the same recipe behind HS in Chapter 2.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Super-resolution — fuse shifted LR frames</h4><span class="tag">click "Fuse"</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Five low-res frames of the same scene, each shifted slightly. None has
+      the full detail, but together they cover every HR pixel. Press <em>Fuse</em> to reconstruct.</p>
+      <canvas id="cvSR" width="900" height="280"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="srFuse">Fuse → HR</button>
+        <button class="act" id="srReset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>3.2 Hyperlapse</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 22)</span>
+    <p>Let's consider an example: a person running while recording a video. We want to take this long video and
+    sample frames at regular time intervals. Simply doing this would produce a jittery video, which we want to
+    smooth. Suppose this represents the running route, and we aim to sample frames at each time interval:</p>
+    <p>The problem is that the motion vector can vary significantly from frame to frame, making video stabilization
+    challenging. Initially, the solution was to use the available frames and stabilize the video based on the best
+    possible reference. Later, it was discovered that it is not necessary to sample frames at constant time
+    intervals; instead, selecting frames where the camera is oriented in approximately the same direction produces
+    better results.</p>
+    <p>We will do the following steps:<br>
+    1. We will define cost function C which will measure the matching between a pair of images.<br>
+    2. We will build matrix "Dynamic Programming" and find the optimal path.</p>
+    <p>The cost function between two images will be:</p>
+    <div class="eq">$$ C_r(i, j) = \frac{1}{n} \sum_{p=1}^n \|(x_p, y_p)_j^T - T(i, j)(x_p, y_p)_i^T\|_2 $$</div>
+    <p>$C_r(i, j)$ - the cost of geometrical match between image i and image j<br>
+    $T(i, j)$ - the transformation matrix which is calculated</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>You filmed a 1-hour run with a GoPro. You want a 1-minute timelapse. Keeping every 60th frame gives unwatchable
+    jitter. The trick: keep frames where the camera was pointing in similar directions to each other — even if
+    they're not evenly spaced. The cost $C_r(i,j)$ measures how jarring frame $j$ looks right after frame $i$.</p>
+
+    <h4 class="mini">Why uniform sub-sampling fails</h4>
+    <p>Imagine a runner whose head bobs through a sine wave 2 Hz. Pick every 30th frame at random and you'll
+    grab samples at random phases of the bob — visually equivalent to a violent shake. The brain doesn't read it
+    as "fast-forward" but as "broken camera."</p>
+
+    <h4 class="mini">The cost function explained</h4>
+    <p>$C_r(i,j)$ takes feature points from frame $i$, applies the estimated transform $T(i,j)$, and measures how
+    far they land from their actual positions in frame $j$. A small value means the camera <em>could plausibly
+    have continued</em> from frame $i$ to frame $j$ without a jolt.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — feature pipeline + BRIEF (PDF page 23)</span>
+    <p>The way the do that is the following:</p>
+    <p>1. Find points of interest - use Harris in each image seperately.<br>
+    2. Describe points of interest. The most naive approach is open a window of 5x5 and do cross corelation of the
+    patch with every points of interest and find the one which minimize the errror. Instead, we used BRIEF
+    algorithm.<br>
+    3. Match points of interest - calculate Hamming distance between BRIEF descriptors.<br>
+    4. Calculate $T(i, j)$. Specifically, they used 2D Affine.</p>
+    <p><strong>BRIEF algorithm</strong><br>
+    We build a series of pixels and ask:</p>
+    <p>We define a window with a fixed size and in a fixed positions if $p_i > q_i$ and create a binary string
+    which describes the patch. This description is resillient to small changes in the brightness and and posiions.
+    This also gets the results very fast.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — feature matching</span>
+    <p>To estimate $T(i,j)$ you need point correspondences. Pipeline:</p>
+    <ol>
+      <li>Find corners with Harris (frames i and j separately).</li>
+      <li><strong>Describe</strong> each corner with a binary "fingerprint" — BRIEF picks fixed pixel pairs around
+      the corner and writes "1" if pixel A is brighter than B, else "0". Concatenate hundreds of bits.</li>
+      <li>Match by Hamming distance (one XOR + popcount). Extremely fast.</li>
+      <li>Fit a 2D affine via least squares (or RANSAC, next).</li>
+    </ol>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — RANSAC (PDF pages 24–25)</span>
+    <p><strong>RANSAC</strong>. When calculating transformations, there is a risk of matching false pairs of points.
+    The RANSAC algorithm is designed to address this problem. A common way to explain RANSAC is through line
+    fitting. Suppose we have a set of points and want to estimate the parameters of a line:</p>
+    <p>The main problem here is the presence of outliers—false points that are incorrectly identified by the
+    algorithm and negatively affect the solution. RANSAC is designed to eliminate these outliers.</p>
+    <p>First, we must determine how many points are needed to solve the model. In the case of line fitting, only
+    two points are required. We start by selecting two points and solving for the model parameters. The problem
+    arises if one of these points is an outlier: in that case, most of the other points will not satisfy the
+    solution. RANSAC addresses this by randomly selecting points many times and identifying the model that is
+    consistent with the largest number of points.</p>
+    <p>In our case, for a 2D affine transformation, we need only three pairs of matching points. Using RANSAC, we
+    randomly select three pairs of matching points and, for each set, determine how many points are consistent with
+    the resulting transformation. A point is considered consistent if, after applying the transformation to a point
+    that was not used in RANSAC from image i, the distance between the transformed point and its corresponding
+    point in image j is below a given threshold.</p>
+    <p>Now the question is How many times to we need to randomly choose 3 pairs.<br>
+    Assume:<br>
+    W - the fraction of inliers in the data<br>
+    P - the probability to sample inliers<br>
+    n - the minimal number of points to solve the model<br>
+    t - the threshold for a point to be considered an inlier<br>
+    d - the minimal number of points to support the model<br>
+    We need to find K - the number of draws required</p>
+    <p>The probability all the points are inliers is $W^n$. Thus, the probability at least one is outlier is
+    $1 - W^n$. The probability of K failures will then be $(1 - W^n)^K$. Thus, we want:</p>
+    <div class="eq">$$ 1 - P = (1 - W^n)^K, \qquad K = \frac{\log(1-P)}{\log(1-W^n)} $$</div>
+    <p>In summery, RANSAC algorithm would be:<br>
+    1. Sample n points<br>
+    2. Compute model<br>
+    3. Count inliers (&lt;t)<br>
+    4. If #inliers &gt; d keep solution<br>
+    Loop K times<br>
+    5. Recompute using all inliers</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — RANSAC</span>
+    <p>If some of your matches are wrong, one bad match drags a least-squares fit way off. RANSAC's trick: pick
+    just enough points to fit a model (2 for a line, 3 for affine), see how many other points <em>agree</em> with
+    it; repeat many times; the model that gets the most votes wins. Finally refit using only the agreeing
+    ("inlier") points.</p>
+
+    <h4 class="mini">Why "minimum sample size"?</h4>
+    <p>RANSAC samples the smallest number of points that pins down the model. Why? Because the probability of
+    drawing all-inliers shrinks fast with the sample size. For a line you need 2 points; if 50% are outliers, a
+    random pair is "all-good" with probability $0.5^2 = 25\%$. For an affine you need 3 pairs, so probability
+    $0.5^3 = 12.5\%$. Take the minimum, repeat many times.</p>
+
+    <h4 class="mini">How many iterations K?</h4>
+    <p>The formula $K = \log(1-P) / \log(1-W^n)$ tells you how many samples to take to have probability $P$ of
+    drawing at least one all-inlier sample. Example: $W=0.5$, $n=3$, $P=0.99$ → $K \approx 35$. Very cheap.</p>
+
+    <h4 class="mini">Where RANSAC appears</h4>
+    <p>Anywhere there's a fitting problem with outliers: SLAM front-ends, panorama stitching, fundamental-matrix
+    estimation, robust regression. It's one of the most-cited algorithms in computer vision.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>RANSAC vs Least Squares — line fitting with outliers</h4><span class="tag">click to add points</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Click in the canvas to add points. LS gets dragged by outliers. RANSAC
+      ignores them. The amber band shows the RANSAC inlier zone.</p>
+      <canvas id="cvRSC" width="900" height="320"></canvas>
+      <div class="btnrow">
+        <button class="act" id="lsBtn">Fit (Least Squares)</button>
+        <button class="act primary" id="rsBtn">Fit (RANSAC)</button>
+        <button class="act" id="rsReset">Reset</button>
+      </div>
+      <div class="readout" id="roRSC"></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text — adjustments to hyperlapse (PDF pages 26–27)</span>
+    <p><strong>Adjustments to Hyperlapse solution</strong></p>
+    <p>1. <strong>Geometric index</strong>. We will define:</p>
+    <div class="eq">$$ C_0(i, j) = \|(x_0, y_0)_j^T - T(i, j)(x_0, y_0)_i^T\|_2 $$</div>
+    <div class="eq">$$ C_m(i, j) = \begin{cases} C_0(i, j) & \text{if } C_r(i, j) < \theta \\ \gamma & \text{O.W.} \end{cases} $$</div>
+    <p>$C_0(i, j)$ is distance between the center of image i after transformation to the center of image j.</p>
+    <p>2. <strong>Speedup Error</strong></p>
+    <div class="eq">$$ C_s(i, j, \mu) = \min(\|(j - i) - \mu\|_2^2, T_s) $$</div>
+    <p>This measures the speedup. $\mu$ is the desired speedup, and larger the difference between i and j is from
+    the desired sampling rate $\mu$ we get larger penalty upto some threshold $T_s$.</p>
+    <p>3. <strong>Constant speed</strong></p>
+    <div class="eq">$$ C_a(h, i, j) = \min(\|(j - i) - (i - h)\|_2^2, T_a) $$</div>
+    <p>This cost forces a triplet of frames taken to be about constant intervals.</p>
+    <p>4. <strong>Total cost function</strong></p>
+    <div class="eq">$$ C(h, i, j, \mu) = C_m(i, j) + \lambda_s C_s(i, j, \mu) + \lambda_a C_a(h, i, j) $$</div>
+    <p><strong>Hyperlapse Algorithm</strong></p>
+    <p>Input: V - Speed up. Output: P - Path.<br>
+    Initialization:<br>
+    For i=1 to g, For j=i+1 to i+w:  $D_v(i,j) = C_m(i,j) + \lambda_s C_s(i,j,v)$<br>
+    Pass I:<br>
+    For i=g to N, For j=i+1 to i+w:
+    $c = C_m(i,j) + \lambda_s C_s(i,j,P)$;
+    $D(i,j) = c + \min_k[D_v(i-k,i) + \lambda_a C_a(i-k,i,j)]$;
+    $T(i,j) = \arg\min_{k=1}^w[D_v(i-k,i) + \lambda_a C_a(i-k,i,j)]$<br>
+    Pass II:  P ← Back-Trace(T)</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>The cost has three terms:</p>
+    <ul>
+      <li><strong>$C_m$:</strong> are frames $i,j$ a smooth continuation? Penalize big jumps.</li>
+      <li><strong>$C_s$:</strong> are we close to the desired speedup $\mu$? Penalize over/under-sampling.</li>
+      <li><strong>$C_a$:</strong> is the pacing roughly constant? Penalize uneven gaps.</li>
+    </ul>
+    <p>Then a 2-pass <strong>dynamic program</strong> finds the path (which frames to keep) that minimizes the sum.</p>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Super resolution:</strong> need at least <em>r² frames</em> (where r is the upscale factor) with
+      varied sub-pixel shifts. Five LR frames → 2×2 = 4× pixel count HR is a safe target.</li>
+      <li><strong>ML before MAP:</strong> always run plain ML first. If it looks noisy or ringing, add a smoothness
+      prior (MAP) and tune γ slowly upward.</li>
+      <li><strong>Hyperlapse weights:</strong> $\lambda_s$ (speedup) typically ≫ $\lambda_a$ (smoothness). You'd
+      rather drop the speedup constraint than make the playback uneven.</li>
+      <li><strong>Always use RANSAC</strong> before fitting a transform from feature matches. Plain LS on raw
+      matches is almost always wrong.</li>
+      <li><strong>BRIEF over raw patches:</strong> BRIEF is faster (XOR + popcount) and more robust to brightness
+      changes.</li>
+      <li><strong>Pyramids again:</strong> for both SR and feature matching, work coarse-to-fine. It improves
+      convergence and speed.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — the three motion-driven applications</span>
+    <table>
+      <tr><th>Application</th><th>Goal</th><th>Inputs</th><th>Core technique</th><th>Tricky bit</th></tr>
+      <tr><td>Super Resolution</td><td>HR image from LR set</td><td>several shifted LR frames</td><td>iterative LS/MAP on $Y_i = DHF_iX$</td><td>need accurate motion $F_i$</td></tr>
+      <tr><td>Hyperlapse</td><td>smooth short version</td><td>long jittery video</td><td>cost matrix + dynamic programming</td><td>balancing speedup vs smoothness</td></tr>
+      <tr><td>Motion Magnification</td><td>show invisible motion</td><td>steady video</td><td>Eulerian Taylor amplification (Ch.7)</td><td>not in this chapter — see Ch.7</td></tr>
+      <tr><td>RANSAC (utility)</td><td>fit despite outliers</td><td>noisy matches</td><td>random minimal sample + vote</td><td>choosing inlier threshold</td></tr>
+      <tr><td>BRIEF (utility)</td><td>fast descriptor</td><td>patch around corner</td><td>binary "is pixel A &gt; B?" string</td><td>not rotation-invariant by default</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Pattern to remember:</strong> SR and Hyperlapse both phrase a vision task
+    as an <em>optimization with constraints</em>. SR optimizes pixel values; Hyperlapse optimizes a discrete
+    frame-selection path. Once it's an optimization, you reach for the standard hammer (LS or DP) and add a
+    regularizer for stability.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch02_optical_flow.html"><span class="dir">‹ Prev</span><span class="ttl">2 · Optical Flow</span></a>
+    <a class="next" href="ch04_kalman_particle.html"><span class="dir">Next ›</span><span class="ttl">4 · Kalman & Particle Filters</span></a>
+  </div>
+</div>
+
+<script>
+/* Super resolution */
+(function(){
+  const c=document.getElementById('cvSR'),ctx=c.getContext('2d');
+  function I(x,y){
+    const cx=14,cy=8;const d=Math.hypot(x-cx,y-cy);
+    return Math.max(0, 200-d*9) + (((x+y)*9)%50) + Math.sin(x*0.5+y*0.3)*30;
+  }
+  let fused=false;
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('5 low-res frames (each shifted by a sub-pixel offset)',20,22);
+    const offsets=[[0,0],[0.5,0],[0,0.5],[0.5,0.5],[0.25,0.25]];
+    for(let k=0;k<5;k++){
+      const ox=20+k*110, oy=40;
+      ctx.strokeStyle='#2c3650';ctx.strokeRect(ox-3,oy-3,84,84);
+      for(let yy=0;yy<8;yy++)for(let xx=0;xx<8;xx++){
+        const v=I(xx*2+offsets[k][0],yy*2+offsets[k][1]);
+        const g=Math.max(0,Math.min(255,v));
+        ctx.fillStyle=`rgb(${g|0},${g|0},${(g*0.9)|0})`;ctx.fillRect(ox+xx*10,oy+yy*10,10,10);
+      }
+    }
+    // arrow
+    if(fused){
+      ctx.fillStyle='#41d8c9';ctx.font='28px "Segoe UI"';ctx.fillText('→',590,90);
+      ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';ctx.fillText('Fused HR (16×16, 4× the pixels)',640,22);
+      const fx=640, fy=40;
+      ctx.strokeStyle='#41d8c9';ctx.strokeRect(fx-3,fy-3,176,176);
+      for(let yy=0;yy<16;yy++)for(let xx=0;xx<16;xx++){
+        const v=I(xx,yy);const g=Math.max(0,Math.min(255,v));
+        ctx.fillStyle=`rgb(${g|0},${g|0},${(g*0.9)|0})`;ctx.fillRect(fx+xx*11,fy+yy*11,11,11);
+      }
+    } else {
+      ctx.fillStyle='#6b7a99';ctx.font='14px "Segoe UI"';
+      ctx.fillText('Click "Fuse" — the algorithm registers the offsets and reconstructs a 4× HR grid.',20,260);
+    }
+  }
+  document.getElementById('srFuse').onclick=()=>{fused=true;draw();};
+  document.getElementById('srReset').onclick=()=>{fused=false;draw();};
+  draw();
+})();
+
+/* RANSAC */
+(function(){
+  const c=document.getElementById('cvRSC'),ctx=c.getContext('2d');
+  let pts=[];
+  function reset(){pts=[];const a=0.4,b=80;for(let i=0;i<20;i++){const x=60+i*30+(Math.random()-0.5)*8;const y=a*x+b+(Math.random()-0.5)*30;pts.push([x,y]);}
+    for(let i=0;i<5;i++)pts.push([60+Math.random()*800,30+Math.random()*240]);draw();}
+  let line=null, inliers=null;
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle='#243049';ctx.beginPath();ctx.moveTo(0,260);ctx.lineTo(900,260);ctx.stroke();
+    if(line){
+      // amber inlier band
+      ctx.fillStyle='rgba(255,180,84,0.10)';ctx.beginPath();
+      ctx.moveTo(20,line[0]*20+line[1]-15);ctx.lineTo(880,line[0]*880+line[1]-15);
+      ctx.lineTo(880,line[0]*880+line[1]+15);ctx.lineTo(20,line[0]*20+line[1]+15);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#41d8c9';ctx.lineWidth=2;ctx.beginPath();
+      ctx.moveTo(20,line[0]*20+line[1]);ctx.lineTo(880,line[0]*880+line[1]);ctx.stroke();
+    }
+    pts.forEach(p=>{
+      const is=line && Math.abs(p[1]-(line[0]*p[0]+line[1]))<15;
+      ctx.fillStyle=is?'#7ee787':'#ff6b81';ctx.beginPath();ctx.arc(p[0],p[1],5,0,7);ctx.fill();
+    });
+    ctx.fillStyle='#9fb0cc';ctx.font='13px "Segoe UI"';
+    ctx.fillText('green = inlier, red = outlier (only after a fit)',20,24);
+  }
+  function ls(pts){let n=pts.length,sx=0,sy=0,sxx=0,sxy=0;pts.forEach(p=>{sx+=p[0];sy+=p[1];sxx+=p[0]*p[0];sxy+=p[0]*p[1];});
+    const a=(n*sxy-sx*sy)/(n*sxx-sx*sx);const b=(sy-a*sx)/n;return [a,b];}
+  c.addEventListener('click',e=>{const r=c.getBoundingClientRect();pts.push([(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]);draw();});
+  document.getElementById('lsBtn').onclick=()=>{line=ls(pts);
+    document.getElementById('roRSC').innerHTML=`Least Squares fit:  slope=<b>${line[0].toFixed(2)}</b>  intercept=<b>${line[1].toFixed(1)}</b>  (dragged by outliers)`;draw();};
+  document.getElementById('rsBtn').onclick=()=>{
+    let best=null,bestC=0;
+    for(let it=0;it<400;it++){
+      const a=pts[Math.floor(Math.random()*pts.length)],b=pts[Math.floor(Math.random()*pts.length)];
+      if(a===b)continue;const sl=(b[1]-a[1])/(b[0]-a[0])||0;const it2=a[1]-sl*a[0];
+      let cnt=0;pts.forEach(p=>{if(Math.abs(p[1]-(sl*p[0]+it2))<15)cnt++;});
+      if(cnt>bestC){bestC=cnt;best=[sl,it2];}
+    }
+    const inl=pts.filter(p=>Math.abs(p[1]-(best[0]*p[0]+best[1]))<15);
+    line=ls(inl);
+    document.getElementById('roRSC').innerHTML=`RANSAC: best model had <b>${bestC}</b> inliers out of ${pts.length}. Refit on inliers → slope=<b>${line[0].toFixed(2)}</b>`;
+    draw();};
+  document.getElementById('rsReset').onclick=()=>{line=null;reset();};
+  reset();
+})();
+</script>
+</body>
+</html>

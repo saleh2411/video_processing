@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11 · Re-targeting & PatchMatch</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>11</b> · Re-targeting &amp; PatchMatch</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch10_video_matting.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 11</div>
+    <h1>Re-targeting and Patch Match</h1>
+    <p class="lede">Resize an image to a new aspect ratio without squishing people; remove an object and paint over
+    the hole; rearrange the scene; fix scratches. All of these reduce to one optimization with two losses —
+    <em>completeness</em> and <em>coherence</em> — solved fast by the PatchMatch algorithm.</p>
+  </header>
+
+  <h2>11.1 Introduction</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 75)</span>
+    <p>The goal of this algorithm is to perform operations on an image—such as resizing, altering the composition,
+    or adding/removing objects—while preserving a natural appearance. For instance, if we naively shrink the image
+    along the x-axis, all objects would appear unnaturally thinner.</p>
+    <p>The algorithm, however, produces a resized image in which the objects retain their original appearance. The
+    key is that it can selectively remove objects, adjust their positions, or even duplicate them as needed to
+    preserve a natural look.</p>
+    <p>However, there are cases where the algorithm may fail—for instance, straight lines that become bent or
+    objects that are distorted. To address this, the algorithm can incorporate constraints by manually marking
+    objects whose shape we want to preserve. These constraints can also serve other purposes, such as specifying
+    objects to be removed rather than preserved.</p>
+    <p>The first algorithm to achieve this was called "Re-targeting", which captured the core idea but was
+    computationally too expensive to be practical. Later, the PatchMatch algorithm overcame this limitation and
+    was able to operate in real time.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>You have a wide photo, want to show it in a square. Plain resize squashes everyone. Cropping cuts content.
+    Re-targeting is smarter: it preserves <em>important</em> regions and squeezes out repetitive ones (sky, grass).
+    It can also remove objects, duplicate them, or repaint a hole.</p>
+    <p>"Re-targeting" was the original (slow). <strong>PatchMatch</strong> is the fast version that powers
+    Photoshop's Content-Aware Fill.</p>
+
+    <h4 class="mini">Why naive resize is bad</h4>
+    <p>Display devices have fixed aspect ratios. A landscape photo on a portrait phone has to fit somehow. Three
+    options:</p>
+    <ul>
+      <li><strong>Squash</strong> uniformly → people look thinner, circles become ellipses.</li>
+      <li><strong>Crop</strong> → entire chunks of the image vanish.</li>
+      <li><strong>Letterbox</strong> (black bars) → wasted screen space.</li>
+    </ul>
+    <p>Content-aware re-targeting is the fourth option: preserve people, squeeze sky.</p>
+
+    <h4 class="mini">The "natural look" criterion</h4>
+    <p>What does "natural" mean precisely? Two formal criteria emerge in §11.2:</p>
+    <ul>
+      <li><strong>Completeness:</strong> nothing from the source is missing in the target.</li>
+      <li><strong>Coherence:</strong> nothing in the target was made up.</li>
+    </ul>
+    <p>Both must hold. Together they say: the target is a faithful summary of the source, no more, no less.</p>
+  </div>
+
+  <h2>11.2 Re-targeting — Formalization</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 75–77)</span>
+    <p><strong>Input:</strong></p>
+    <ul>
+      <li><strong>Source:</strong> $S : \Omega \to R^3$. $\Omega = [0, W] \times [0, H]$ - still image.
+      $\Omega = [0, W] \times [0, H] \times [0, F]$ - video</li>
+      <li><strong>Target domain:</strong> $\Omega' = [0, W'] \times [0, H'] \times [0, F']$ a different pixel
+      matrix which has different resolution, asfect ratio or even different duration if it is a video.</li>
+    </ul>
+    <p><strong>Output:</strong> Target $T : \Omega \to R^3$ with the following constraints:</p>
+    <ol>
+      <li><strong>Completeness:</strong> T contains as much visual information in S as possible. We will later
+      define what is visual information.</li>
+      <li><strong>Coherence</strong>: T doesn't contain visual information absent in S. For example, if the
+      algorithm adds a window in a building, that window was already in the image but repositioned or duplicated.</li>
+      <li><strong>Additional constraints</strong>: for instance preserving the object's form, erasing an object,
+      etc.</li>
+    </ol>
+    <p>Some examples describing the constraints: [image diagrams]</p>
+    <p>Now will will use some notations: We will define a <strong>patch</strong> to be a sub-region of the image
+    around some point x. We could denote the patch as $P \in \Omega$ or $S|_P$, but those notations are a bit
+    complex, so we will do abbuse of natations and just denote it as P.</p>
+    <p>Next, we define a <strong>distance</strong> between two patches P an Q as a dissimilarity measurement
+    between them, and denote it as d(P, Q):</p>
+    <div class="eq">$$ d^2(P, Q) = \|P - Q\|_F^2 $$</div>
+    <p>But for simplicity we will use for now:</p>
+    <div class="eq">$$ d^2(P, Q) = \|P - Q\|_2^2 = \sum_{i,j} \|P_{ij} - Q_{ij}\|_2^2 $$</div>
+    <p>This distance will be used in order to define coherence and completeness. For that, let us assume we are
+    given a source image and a target image:</p>
+    <p>We want to find neighboring patches which are similar to patch P. In other words, we want to minimize the
+    distance d(P, Q) to find a patch $Q^*$ which is the most similar:</p>
+    <div class="eq">$$ Q^* = \arg\min_{Q \in T} d^2(Q, P) $$</div>
+    <p>Using all the notations so far we will be able to define coherence and completeness.</p>
+    <p><strong>Completeness</strong></p>
+    <p>The definition of completeness will be:</p>
+    <div class="eq">$$ D_{com}(S, T) = \frac{1}{N_s} \sum_{p \in S} \min_{Q \in T} d^2(Q, P) $$</div>
+    <p>We go over all the patches in S, find it's corresponding patch Q in T which gives a minimum distance, and
+    calculate their average. As defined earlier, completeness checks if the target image T contains as much
+    visual information in S as possible. If a patch Q has the the same visual information as P, then their
+    distance will be <strong>low</strong>. Thus, we check if all the patches in S have the same visual information
+    as patches in Q by doing the summation of all the minimum distances. The division by $N_s$ will just normilize
+    in order to work with reasonable value range.</p>
+    <p><strong>Coherence</strong></p>
+    <p>The definition of coherence will be:</p>
+    <div class="eq">$$ D_{coh}(S, T) = \frac{1}{N_T} \sum_{Q \in T} \min_{P \in S} d^2(P, Q) $$</div>
+    <p>Here we do the opposite: we go over all the patches in the target image and check if there are patches in
+    source image that look different. A patch in T which looks different that all the patches in S will have
+    large minimum distance.</p>
+    <p><strong>Bidirectional dissimilarity</strong></p>
+    <p>Now we will use completeness and coherence to define a single loss function:</p>
+    <div class="eq">$$ D(S, T) = \alpha D_{com}(S, T) + (1 - \alpha) D_{coh}(S, T) $$</div>
+    <p>Where $\alpha \in [0, 1]$. Thus, image re-targeting can be achieved by:</p>
+    <div class="eq">$$ T = \arg\min_{T : \Omega' \to R^3} D(S, T) $$</div>
+    <p>To solve this, we will each time fix all the pixels except one and ask what should be its value to minimize
+    the loss, and we will do that operation for all the pixels. Formally, we will ask the contribution of T(x) to
+    D(S,T) where $x \in \Omega'$:</p>
+    <p>1. <strong>$D_{coh}$</strong>: In this case we go over all the patches in T. However, the only patches
+    which will be relevant with the pixel x are the patches which contain it. The number of patches is quite
+    known. If we define the patch size and the stepsize between successive patches then it will be
+    straightfoward. Each patch $Q_i$ has its own corresponding patch $P_i$ (also called its <strong>Nearest
+    Neighbor</strong>). If we observe more closely:</p>
+    <p>We can transfer x to the coordinates of the patch (for example the top left corner of the patch). Thus,
+    if $P_i$ is the corresponding patch of $Q_i$, then the corresponding point of x in patch $P_i$ would be in
+    the same patch coordinates and we will denote that point as $y_i$. As a result, the contribution of T(x)
+    would be:</p>
+    <div class="eq">$$ \frac{1}{N_T} \sum_{i=1}^m \|S(y_i) - T(x)\|_2^2 $$</div>
+    <p>Where m is the number of patches containing x and it is known. Thus, $D_{coh}(S, T)$ can be re-written as:</p>
+    <div class="eq">$$ D_{coh}(S, T) = \frac{1}{N_T} \sum_{i=1}^m \|S(y_i) - T(x)\|_2^2 + \text{Const} $$</div>
+    <p>Where the constant is the contribution of other pixels we fixed.</p>
+    <p>2. <strong>$D_{com}$</strong>: In coherence, the patches in T containing x are well defined and constant.
+    Here, however, it is a bit more complicated. The task would be more simple if we were observing patches in S
+    and searching for the corresponding one to a patch in T containing x. However, we are observing a set of
+    patches in T containing x and take only those who has any corresponding patches in P. The amount of patches
+    here is not constant, since not every patch $Q_i$ will necessary have a corresponding patch $P_i$. In fact,
+    there could be a point x in T where no patches containing it have any corresponding ones in S.</p>
+    <p>In practice, we will go over all the patches in T containing x and take only those who have Nearest
+    Neighbor in S. As before, if we observe closely, this is similar to what we have in coherence. Finally, the
+    contribution would be:</p>
+    <div class="eq">$$ \frac{1}{N_S} \sum_{i=1}^n \|S(y_i') - T(x)\|_2^2 $$</div>
+    <p>Thus, the contribution of x to D(S,T) would be:</p>
+    <div class="eq">$$ D(S, T) = \underbrace{\frac{\alpha}{N_S} \sum_{i=1}^n \|S(y_i') - T(x)\|_2^2 + \frac{1-\alpha}{N_T} \sum_{i=1}^m \|S(y_i) - T(x)\|_2^2}_{E(T(x))} + \text{const} $$</div>
+    <p>In order to find the minimum, we will differentiate and demand it to be 0:</p>
+    <div class="eq">$$ \frac{\partial E}{\partial T(x)} = 2[\frac{\alpha}{N_S} \sum_{i=1}^n (T(x) - S(y_i')) + \frac{1-\alpha}{N_T} \sum_{i=1}^m (T(x) - S(y_i))] := 0 $$</div>
+    <div class="eq">$$ (\frac{\alpha n}{N_s} + \frac{(1-\alpha) m}{N_T}) T(x) - \frac{\alpha}{N_S} \sum_{i=1}^n S(y_i') - \frac{1-\alpha}{N_T} \sum_{i=1}^m S(y_i) = 0 $$</div>
+    <div class="eq">$$ \implies T(x) = \frac{\frac{\alpha}{N_S} \sum_{i=1}^n S(y_i') + \frac{1-\alpha}{N_T} \sum_{i=1}^m S(y_i)}{\frac{\alpha n}{N_s} + \frac{(1-\alpha) m}{N_T}} $$</div>
+    <p>Intuitively, the minimum of norm 2 would usually be an average, which we got here in some sense. Now we
+    will write this down as an optimization algorithm:</p>
+    <p><strong>Re-targeting Algorithm</strong></p>
+    <p>1. <u>Initialization:</u> $T^1 : \Omega' \to R^3$<br>
+    2. For $k = 1, 2, \ldots$ until convergence:<br>
+    (a) $\forall x$: (i) $T^{k+1}(x) = 0$; (ii) $C(x) = 0$ - an accumulator for finding the denominator<br>
+    (b) For each $Q \in T^K$: (i) find $P = \arg\min_{P \in S} \|P - Q\|_2^2$;
+    (ii) $T^{k+1}|_Q \leftarrow T^{k+1}|_Q + \frac{1-\alpha}{N_T} P$ - In the subset of image T where we have
+    the patch Q we add the contribution of P. Only to the region Q we add this contribution.;
+    (iii) $C|_Q \leftarrow C|_Q + \frac{1-\alpha}{N_T}$<br>
+    (c) For each $P' \in S$: (i) find $Q' = \arg\min_{Q \in T} \|P - Q\|_2^2$;
+    (ii) $T^{k+1}|_{Q'} \leftarrow T^{k+1}|_{Q'} + \frac{\alpha}{N_S} P'$;
+    (iii) $C|_{Q'} \leftarrow C|_{Q'} + \frac{\alpha}{N_S}$<br>
+    (d) $T^{k+1} \leftarrow \frac{T^{k+1}}{C}$, where the division of the matrices is element-wise.</p>
+    <p>There are a couple of disadvantages to this approach. When we find corresponding patches based on $T^k$,
+    if in previous iteration we got something legitimate, so we will have here. Thus, everything depends on the
+    initialization of $T^1$. If we start with a black image then nothing will work. As a result, we need to make
+    the initialization correctly.</p>
+    <p>In addition, searching for every patch in S its Nearest Neighbor in T takes a lot of computation time. We
+    will need, therefore, to find a practical solution for this. This will be later be shown with Patch Match.</p>
+    <p><strong>Initialization of Re-targetting</strong></p>
+    <p>If S and T have the same (or similar) dimensions, we could pick S as the initialization of T. Otherwise,
+    one way we could initialize is by taking S and crop or resize to the dimensions of T. However, resizing will
+    distort the objects and cropping could potentially miss a lot of visual information.</p>
+    <p>A better approach would be the following:</p>
+    <p>We first convert S from domain $\Omega_0$ to domain $\Omega_1$ which has very similar dimensions to
+    $\Omega_0$. We then do the same for a couple of hierarchies (where every successive domains are close to
+    each other) until we get $\Omega_N = \Omega'$.</p>
+    <p>Mathematically, it will be written in the following way:</p>
+    <p><strong>Initialization algorithm:</strong></p>
+    <p>1. $T_0 = S$<br>
+    2. For k=1,...,N:<br>
+    (a) $T_k^{init} = \text{Resize}(T^{k-1}, \Omega_k)$ - the resize itself is very minor because successive
+    domains are nearly the same<br>
+    (b) $T_k = \arg\min_{T : \Omega \to R^3} D(S, T)$, initialized with $T_k^{init}$. We refine the resize with
+    re-targeting.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — re-targeting</span>
+    <p><strong>Two principles:</strong></p>
+    <ul>
+      <li><strong>Completeness:</strong> every important patch from the source should appear somewhere in the
+      target. Don't lose content.</li>
+      <li><strong>Coherence:</strong> every patch in the target should be findable in the source. Don't invent
+      content.</li>
+    </ul>
+    <p>Combine into one loss: $D = \alpha D_{com} + (1-\alpha) D_{coh}$, minimize it. For each output pixel, set
+    its value to a weighted average of matching source pixels.</p>
+    <p><strong>Two big problems:</strong> (1) initialization matters — start from black and nothing works (solved
+    by a hierarchical resize pyramid). (2) Nearest-neighbour search is slow — solved by PatchMatch next.</p>
+
+    <h4 class="mini">Completeness vs Coherence in plain English</h4>
+    <ul>
+      <li><strong>Completeness check:</strong> "is every important patch from the source somewhere in the target?"
+      If a patch from S has no good match in T → completeness is bad (we lost content).</li>
+      <li><strong>Coherence check:</strong> "is every patch in the target findable in the source?" If a patch in T
+      has no good match in S → coherence is bad (we invented content).</li>
+    </ul>
+    <p>Notice the symmetry — they're each other's reverse. Neither alone suffices: minimizing only completeness can
+    duplicate everything; minimizing only coherence can paint everything sky.</p>
+
+    <h4 class="mini">Why the "average" formula is what it is</h4>
+    <p>Each pixel x in T receives "votes" from multiple source patches that should contain it. Setting its value
+    to the weighted average of all votes is the LS-optimal answer (sum of squared mismatches minimized → mean).
+    The weighting balances completeness vs coherence via α.</p>
+
+    <h4 class="mini">Hierarchical initialization — why it's essential</h4>
+    <p>The optimization is non-convex with many local minima. Start from black → land in a terrible minimum
+    forever. Start from a slightly-resized version → land in a good minimum. The pyramid (gradually-resized
+    intermediate targets) provides a sequence of "easy" optimizations that bootstrap the hard one.</p>
+  </div>
+
+  <h2>11.3 Patch Match</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 83–85)</span>
+    <p>PatchMatch is designed to solve the Retargeting problem in a reasonable amount of tine. The main
+    bottleneck is finding matching patches. PatchMatch assumes spatial coherence: if a patch P in image S matches
+    patch Q in image T, then the neighbors of P are likely to match patches near Q. This means that for a
+    neighboring patch P', we don't need to search the entire image T, only the area around Q. This greatly
+    reduces the search time and speeds up the computation.</p>
+    <p>The basic algorithm relies on two key components: local prediction, which exploits spatial coherence, and
+    randomization, which prevents the algorithm from being overly biased by local predictions. Randomization is
+    implemented by examining a window around each patch and randomly selecting candidate patches within that
+    window.</p>
+    <p>Now we will do this more formally. We are seaching:</p>
+    <div class="eq">$$ \forall P \in S: Q = \arg\min_{Q \in T} \|P - Q\| $$</div>
+    <p>Where $S : \Omega \to R^3$ and $T : \Omega' \to R^3$.</p>
+    <p>For every x, we have <strong>matching field</strong> f with maps x to its corresponding point y:</p>
+    <div class="eq">$$ f : x \in \Omega \to y \in \Omega' $$</div>
+    <div class="eq">$$ f(x) = \arg\min_{y \in \Omega'} \|P_x - Q_y\|_2^2 $$</div>
+    <p>Where patch P is centered around x and patch Q is centered around y.</p>
+    <p>The coordinate system of $\Omega$ and $\Omega'$ are considered to be the same, so the position of x is
+    technically valid in $\Omega'$. As a result, we can look at their offset instead:</p>
+    <div class="eq">$$ f : x \in \Omega \to y \in \Omega' - x, \qquad f(x) = \arg\min_{y \in \Omega'} \|P_x - Q_y\|_2^2 - x $$</div>
+    <p>The original mapping can be done by adding the identity: $y = x + f(x)$.</p>
+    <p>We write this down in the following way because the coherence assumption results in the same offset. In
+    other words, if f(x) is the offset from x to y, then the coherence assumption will make a close point x' to
+    be mapped to y' with offset f(x') which is the <strong>same</strong> as f(x): $f(x) \approx f(x')$.</p>
+    <p><strong>Patch Match Algorithm:</strong></p>
+    <p>1. <u>Initialization:</u> (a) $f \sim \text{Uni}[-\frac{W}{2}, \frac{W}{2}] \times [-\frac{H}{2}, \frac{H}{2}]$;
+    (b) $d(x) = \|P_x - Q_{x+f(x)}\|_2^2 \forall x \in \Omega$</p>
+    <p>2. For k = 1,2,... until convergence: For each $x \in \Omega$ in alternating raster scan order:</p>
+    <p>(i) <u>Propagation</u>: We can update f(x) with casual neighbors.</p>
+    <div class="eq">$$ f(x) = \arg\min_{f \in \{f(x), f(x - e_1), f(x - e_2)\}} \|P_x - Q_{x + f}\| $$</div>
+    <div class="eq">$$ d(x) \leftarrow \min_{f \in \{f(x), f(x - e_1), f(x - e_2)\}} \|P_x - Q_{x + f}\| $$</div>
+    <p>Where $e_1$ is a neighbor from the left and $e_2$ is a neighbor from above (we assume the first raster
+    scan variation). The signs of $e_i$ for each raster scan would be: [variations]</p>
+    <p>(ii) <u>Randomization</u>: This is done only if the propagation minimized the norm. The moment we randomly
+    picked a good guess, it will lead to a better propagation. We will search in a region of the correspondence
+    we have found. The way it is done is by randomly choosing an offset w.r.t. the point we have in a window.
+    This randomness won't be uniform, but rather have high probability around x and lower the further we get
+    away:</p>
+    <p>Repeat a few times:<br>
+    A. Draw $r \sim \text{Exp}[-w, w]^2$, where w is the scanning window size.<br>
+    B. Do: $f(x) = \arg\min_{f(x), f(x) + r} \|P_x - Q_{x+f}\|$<br>
+    C. Save: $d(x) \leftarrow \min_{f(x), f(x) + r} \|P_x - Q_{x+f}\|$</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — PatchMatch</span>
+    <p><strong>The big idea.</strong> If patch at (100,100) in S matches (200,50) in T, the offset is (100,-50).
+    The neighbouring patch at (101,100) almost certainly matches (201,50) — same offset. So neighbours just need
+    to <em>borrow</em> their neighbour's offset; no exhaustive search.</p>
+    <p><strong>Algorithm — two ops per iteration:</strong></p>
+    <ol>
+      <li><strong>Propagation</strong> in raster order: each pixel keeps the best of its own offset, its left
+      neighbour's, and its above neighbour's. Good matches spread to neighbours. Alternate scan direction every
+      iteration so info spreads all ways.</li>
+      <li><strong>Random search</strong> around the current best, with shrinking radius. Catches good matches
+      propagation missed.</li>
+    </ol>
+    <p>4–5 iterations are usually enough — hundreds of times faster than brute force.</p>
+
+    <h4 class="mini">Why "two ops" instead of one</h4>
+    <ul>
+      <li><strong>Propagation alone</strong> would never escape a bad initialization — good matches only spread
+      via neighbours, so isolated good guesses get stuck.</li>
+      <li><strong>Random search alone</strong> would never converge — it's blind to structure.</li>
+      <li>Together they're powerful: propagation exploits spatial coherence (the cheap signal), random search
+      provides exploration (the rare lucky jump that propagation then amplifies).</li>
+    </ul>
+
+    <h4 class="mini">The expected speedup</h4>
+    <p>Brute force: every patch in S vs every patch in T → O(N²) patch comparisons. PatchMatch: each patch only
+    looks at ~3 neighbours + ~log(W) random samples → O(N log W). For a 1MP image, that's a 1000× speedup. Same
+    quality, real-time.</p>
+
+    <h4 class="mini">Why "alternating raster scan"?</h4>
+    <p>Propagation only borrows from already-processed neighbours (causal neighbours). On the forward scan,
+    info spreads down-right. On the backward scan, info spreads up-left. Alternating lets info flow in all
+    directions over a couple of iterations.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>PatchMatch — watch offsets converge</h4><span class="tag">step / auto</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Each cell is a patch. Arrows show the current best-match offset
+      into the target. Initially: random chaos. After a few propagation + random-search passes: neighbouring
+      arrows agree — the matching field has become spatially coherent.</p>
+      <canvas id="cvPM" width="900" height="320"></canvas>
+      <div class="btnrow">
+        <button class="act" id="pmStep">Step (one pass)</button>
+        <button class="act primary" id="pmAuto">Auto-run</button>
+        <button class="act" id="pmReset">Reset</button>
+      </div>
+      <div class="readout" id="roPM"></div>
+    </div>
+  </div>
+
+  <h2>11.4 Generalization in Video</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 86–87)</span>
+    <p>This section will focus on how to handle with 3D patches in a video.</p>
+    <p>A patch in a video captures not only the spatial appearance of an object but also how its visual content
+    changes over time—its temporal dynamics. For objects moving along complex paths, such as circular motion,
+    representing their motion with simple cubic patches can be inefficient and inconvenient.</p>
+    <p>In video, we have more tasks to handle than we could with images. For example, we can keep the dimensions
+    of the frames while only changing the duration of the video. Same as before, we cannot use scaling in the
+    spatial dimensions because it won't preserve completeness and coherence. That is also true in the time domain
+    - if we naively remove frames (shrink from [0, T] to [0, T']) we won't be able to maintain coherence and
+    completeness. However, the equivalents of completeness and coherence are a bit different in the time domain.
+    Maintaining the scale in the time domain would be described by preserving the playback rate (or velocity).</p>
+    <p>As mentioned earlier, the most naive way to speed up a video is simply to remove frames at regular
+    intervals. While fast, this often makes the scene difficult to follow or understand. PatchMatch offers a more
+    informed approach: it can identify parts of the video that are predictable and safely remove or merge them.
+    By considering patches not only in space but also across time, we can describe the content of a current patch
+    using information from both past and future frames. In this offline setting, temporarily ignoring strict
+    causality is acceptable, as it allows for smoother and more visually coherent results.</p>
+    <p>Everything we have done in the image domain can also be easily used in videos as is with some
+    generalizations. Of course in this case the time complexity will increase. We will now go on other examples on
+    the image domain, but they would also be also applicable in video.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>In video, a "patch" becomes a 3-D cube — width × height × time. PatchMatch now finds matching cubes across
+    space and time. Uses: shorten videos without losing key moments, synthesize slow motion, stabilize. Same
+    math, one dimension bigger.</p>
+  </div>
+
+  <h2>11.5 Inpainting</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 87)</span>
+    <p>Let's assume we have a source image corrupted by noise which removed some of the pixels:</p>
+    <p>An example could be removing peoples' faces in photos or an old painting where the paint lost its color in
+    some areas. Our task here is to complete the missing parts. A constraint on the target image T would be that
+    in areas without missing pixels we would expect to have the same pixels as in the source image S. More
+    formally:</p>
+    <p><strong>Input:</strong> Source image $S : \Omega \to R^3$; $\Omega_m \in \Omega$ missing pixels.</p>
+    <p><strong>Output:</strong> Target image $T : \Omega \to R^3$ with the constraint $T|_{\Omega \setminus \Omega_m} = S|_{\Omega \setminus \Omega_m}$.
+    We again want to find:</p>
+    <div class="eq">$$ \min_{T|_{\Omega_m}} D(S, T) $$</div>
+    <p>s.t $T|_{\Omega \setminus \Omega_m} = S|_{\Omega \setminus \Omega_m}$. This will be done by taking the
+    framework of Patch Match and modify some of the operations.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — inpainting</span>
+    <p>Fill in missing pixels — scratches, removed objects, torn paintings. PatchMatch fits perfectly: for each
+    missing pixel, find similar patches elsewhere, copy them in. Constraint: don't touch non-missing pixels.</p>
+  </div>
+
+  <h2>11.6 Re-shuffling</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 88)</span>
+    <p>One application involves taking a region from a source image and pasting it into a target image, similar
+    to reshuffling or rearranging objects within the image. To handle this, we first fix the regions where
+    objects have been pasted, and then ask the algorithm to fill in the remaining areas. We can even combine
+    objects from multiple source images into a single target image; in such cases, PatchMatch is applied using
+    all source images to find suitable matches for the empty regions.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>Move objects within an image (cut tree, paste elsewhere) — PatchMatch fills the hole AND blends the moved
+    object naturally. You can even mix objects from several source images; PatchMatch searches all of them for
+    fill content.</p>
+  </div>
+
+  <h2>11.7 Additional Constraints</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 88)</span>
+    <p>Sometimes it is useful to introduce additional constraints to the task. For example, we may manually mark a
+    face to prevent distortion, mark a straight line to keep it from bending, or mark an area to ensure it is
+    preserved during retargeting. In such cases, we incorporate these constraints by adding weights to D(S,T),
+    assigning higher weights to the constrained regions to prioritize their preservation.</p>
+    <p>The full equation of D was composed of two summation elements. The first was for patches in image S and the
+    second was for patches in image T. The weighting on the source image is simply done by multiplying with a
+    patch-wise weight $W_P$ (for example larger weight near the center of the image, or some sort of statistics on
+    the pixels inside the patch).</p>
+    <p>The weighting on the target image is done by using the weighting of the Nearest Neighbor $P^*$ of each
+    patch Q - denoted as $W_{P^*}$, where: $P^* = \arg\min_{P \in S} \|P - Q\|$.</p>
+    <p>The final equation of D(S,T) will become:</p>
+    <div class="eq">$$ D(S, T) = \alpha \frac{\sum_{P \in S} W_P \min_{Q \in T} \|Q - P\|}{\sum_{P \in S} W_P} + (1 - \alpha) \frac{\sum_{Q \in T} W_{P^*} \min_{P \in S} \|P - Q\|}{\sum_{Q \in T} W_{P^*}} $$</div>
+    <p>This is similar to the weighted averaging approach discussed earlier, and we use this formulation because
+    it is convex. If there is a patch whose content we want to preserve—such as a patch containing a face—we
+    assign it a higher weight in the source image, as well as to its nearest neighbor in the target image,
+    ensuring that its content is prioritized during processing.</p>
+    <p>If, on the other hand, we want to remove an object so that it does not appear in the target image, we do
+    the opposite: we assign the patch a very low weight, effectively close to zero.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation — constraints</span>
+    <p>Attach weights to patches to guide the algorithm:</p>
+    <ul>
+      <li><strong>High weight:</strong> keep this intact (e.g., a face).</li>
+      <li><strong>Zero weight:</strong> remove this object — its patches don't influence the result.</li>
+      <li><strong>Straight-line preservation:</strong> high weights along the line.</li>
+    </ul>
+    <p>The weighted loss stays convex, so iterations still converge. This is what powers Photoshop's
+    Content-Aware tools when you mark "Protect" or "Remove".</p>
+
+    <h4 class="mini">Why "weight = 0" removes things</h4>
+    <p>If a patch has zero weight, its presence in S is invisible to the loss. The optimizer has no reason to
+    represent it in T. Combine with high weights on neighbouring regions and the algorithm naturally fills the
+    space with extrapolated neighbour content — the object effectively vanishes.</p>
+
+    <h4 class="mini">Why this is convex</h4>
+    <p>Each summand is a squared L2 norm in $T(x)$ multiplied by a non-negative weight — that's a convex function
+    of $T(x)$. Sum of convex = convex. Convex problems have a unique global minimum, so iterations converge
+    cleanly (per-pixel; the joint problem with NN matching is non-convex, but the per-pixel update is convex
+    given the matches).</p>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>Always start with a hierarchical pyramid.</strong> Resize the target gradually (1.1× per
+      level). Going straight to the final resolution = catastrophic failure.</li>
+      <li><strong>α (completeness vs coherence)</strong> — start at 0.5; raise to favour completeness (keep more
+      content), lower to favour coherence (smoother but riskier).</li>
+      <li><strong>Patch size 5×5 to 7×7</strong> is the sweet spot. Larger = more context but blurrier; smaller =
+      sharper but ignores structure.</li>
+      <li><strong>PatchMatch iterations: 4–6</strong> are usually enough for visual convergence; check the
+      readout to confirm.</li>
+      <li><strong>For object removal, mark a generous mask</strong> (a few pixels beyond the visible boundary) to
+      avoid edge halos.</li>
+      <li><strong>For object preservation, weight the protected patch 10×</strong> and its nearest neighbour in T
+      also 10×.</li>
+      <li><strong>For video</strong>, use 3-D patches and don't forget temporal coherence — PatchMatch handles it
+      naturally.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — re-targeting &amp; PatchMatch at a glance</span>
+    <table>
+      <tr><th>Application</th><th>Goal</th><th>Constraint trick</th></tr>
+      <tr><td>Re-target (resize)</td><td>same content, different aspect ratio</td><td>minimize $D(S,T)$ with α-balanced completeness + coherence</td></tr>
+      <tr><td>Inpainting</td><td>fill missing pixels</td><td>fix non-missing pixels, optimize over missing</td></tr>
+      <tr><td>Re-shuffling</td><td>move objects around</td><td>fix pasted-object pixels, fill the rest</td></tr>
+      <tr><td>Object removal</td><td>delete unwanted content</td><td>weight target patches → 0</td></tr>
+      <tr><td>Object preservation</td><td>keep a face / line intact</td><td>weight protected patches ↑</td></tr>
+      <tr><td>Video re-timing</td><td>compress / extend duration</td><td>3-D patches, same loss, time dimension</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>Engine under all of this:</strong> PatchMatch. Propagation (spatial
+    coherence) + random search (escape local minima) = real-time nearest-neighbour fields. Everything else is
+    just "what is the loss?" — completeness + coherence + weights.</p>
+    <p style="margin-top:8px"><strong>Course-wide takeaway:</strong> almost every chapter in this book reduces to
+    the same template — <em>define a cost, minimize it iteratively, add a regularizer</em>. Whether the data is
+    optical flow, particles, gaussians, or image patches, the recipe is the same.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">End of book — recap</span>
+    <ol style="margin:6px 0 0">
+      <li>Motion representation — affine, homography, projection.</li>
+      <li>Optical flow — LK, HS, Harris.</li>
+      <li>Motion-based apps — super-resolution, hyperlapse.</li>
+      <li>Online tracking — Kalman &amp; particle filters.</li>
+      <li>Texture synthesis — SVD + ARMA.</li>
+      <li>Layer decomposition — LK + K-means.</li>
+      <li>Eulerian video magnification.</li>
+      <li>GMM background subtraction.</li>
+      <li>Geodesic video colorization.</li>
+      <li>Video matting.</li>
+      <li>Re-targeting &amp; PatchMatch.</li>
+    </ol>
+    Common threads: Least Squares for over-determined systems, MAP / smoothness priors when data is ambiguous,
+    dynamic programming for shortest paths, iterative methods (predict/update, propagation/randomization), and the
+    recurring "model + noise + likelihood" decomposition.</div>
+
+  <div class="pager">
+    <a href="ch10_video_matting.html"><span class="dir">‹ Prev</span><span class="ttl">10 · Video Matting</span></a>
+    <a class="next" href="index.html"><span class="dir">Home ›</span><span class="ttl">Back to Contents</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('cvPM'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  const cols=20,rows=8,cellW=W/cols,cellH=H/rows;
+  // "target" is a 2x repetition of source — so the ideal offset is (cols/2, 0)
+  let f=[];
+  function reset(){f=[];for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)f.push({dx:(Math.random()-0.5)*cols*1.2,dy:(Math.random()-0.5)*rows*1.0});draw();updateRO(0);}
+  function cost(i){
+    // cost lower when offset close to (cols/2,0) and matches neighbours
+    const r=Math.floor(i/cols),cc=i%cols;
+    const tx=cc+f[i].dx, ty=r+f[i].dy;
+    // synthetic: "best" offset varies a bit by cell to be visible
+    const idealDx=cols/2*Math.cos(r*0.4)+1,idealDy=Math.sin(cc*0.3);
+    return (f[i].dx-idealDx)*(f[i].dx-idealDx)+(f[i].dy-idealDy)*(f[i].dy-idealDy);
+  }
+  function step(){
+    // propagation: each cell takes best of self / left / above
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+      const i=y*cols+x;
+      const candidates=[f[i]];
+      if(x>0)candidates.push(f[i-1]);
+      if(y>0)candidates.push(f[i-cols]);
+      let best=candidates[0],bestC=cost(i);
+      candidates.forEach(c2=>{const old=f[i];f[i]=c2;const cc2=cost(i);if(cc2<bestC){best=c2;bestC=cc2;}f[i]=old;});
+      f[i]={dx:best.dx,dy:best.dy};
+    }
+    // random search
+    for(let i=0;i<f.length;i++){
+      let r=cols;while(r>0.5){const dx=f[i].dx+(Math.random()-0.5)*r,dy=f[i].dy+(Math.random()-0.5)*r;
+        const old=f[i];const oldC=cost(i);f[i]={dx,dy};if(cost(i)>oldC)f[i]=old;r*=0.5;}
+    }
+  }
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,W,H);
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+      const i=y*cols+x;
+      const cx=x*cellW+cellW/2, cy=y*cellH+cellH/2;
+      ctx.strokeStyle='#1d2740';ctx.strokeRect(x*cellW,y*cellH,cellW,cellH);
+      // colour by similarity to neighbour offsets
+      let agree=0,n=0;
+      if(x>0){agree+=1/(1+Math.hypot(f[i].dx-f[i-1].dx,f[i].dy-f[i-1].dy));n++;}
+      if(x<cols-1){agree+=1/(1+Math.hypot(f[i].dx-f[i+1].dx,f[i].dy-f[i+1].dy));n++;}
+      const score=n?agree/n:0;
+      const col=`hsl(${160+score*60},75%,${30+score*30}%)`;
+      ctx.fillStyle=col;ctx.globalAlpha=0.6;ctx.fillRect(x*cellW+1,y*cellH+1,cellW-2,cellH-2);
+      ctx.globalAlpha=1;
+      // arrow showing offset (scaled)
+      const dx=f[i].dx*4, dy=f[i].dy*4;
+      const len=Math.hypot(dx,dy);if(len<0.5)return;
+      ctx.strokeStyle='#fff';ctx.fillStyle='#fff';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx,cy+dy);ctx.stroke();
+      const a=Math.atan2(dy,dx);ctx.beginPath();ctx.moveTo(cx+dx,cy+dy);
+      ctx.lineTo(cx+dx-5*Math.cos(a-0.5),cy+dy-5*Math.sin(a-0.5));
+      ctx.lineTo(cx+dx-5*Math.cos(a+0.5),cy+dy-5*Math.sin(a+0.5));ctx.closePath();ctx.fill();
+    }
+  }
+  function totalCost(){let s=0;for(let i=0;i<f.length;i++)s+=cost(i);return s;}
+  function updateRO(it){document.getElementById('roPM').innerHTML=`iteration <b>${it}</b>   total cost = <b>${totalCost().toFixed(1)}</b>   (lower = neighbouring arrows agree)`;}
+  let it=0,timer=null;
+  document.getElementById('pmStep').onclick=()=>{step();it++;updateRO(it);draw();};
+  document.getElementById('pmReset').onclick=()=>{it=0;reset();};
+  document.getElementById('pmAuto').onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent='Auto-run';this.classList.remove('primary');return;}this.textContent='Stop';this.classList.add('primary');timer=setInterval(()=>{step();it++;updateRO(it);draw();},500);};
+  reset();
+})();
+</script>
+</body>
+</html>
