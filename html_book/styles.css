@@ -158,9 +158,12 @@ code, .mono {
 
 /* ---------- equation block ---------- */
 .eq {
-  margin: 16px 0; padding: 12px 16px; overflow-x: auto;
+  margin: 16px 0; padding: 12px 16px;
   background: #0c1322; border: 1px solid var(--line); border-radius: 10px;
 }
+/* MathJax (chtml.displayOverflow:'scale') scales the equation down so the
+   full expression fits the container — no horizontal scrollbar needed. */
+.eq mjx-container[display="true"] { margin: 0 !important; }
 .eq--has-copy { position: relative; padding-right: 44px; }
 .eq-copy-btn {
   position: absolute; top: 6px; right: 6px;
