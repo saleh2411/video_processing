@@ -1,8 +1,26 @@
-/* Adds a "copy LaTeX" button to every .eq block.
+/* Adds a copy-LaTeX icon button to every .eq block.
    Runs as a deferred script so it executes after the DOM is parsed
    but before MathJax (loaded async from CDN) has typeset the math,
    which means each .eq still contains the raw "$$ ... $$" source. */
 (function () {
+  var ICON_COPY =
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="9" y="9" width="11" height="11" rx="2"></rect>' +
+    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+    '</svg>';
+  var ICON_CHECK =
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<polyline points="5 12 10 17 19 7"></polyline>' +
+    '</svg>';
+  var ICON_X =
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<line x1="6" y1="6" x2="18" y2="18"></line>' +
+    '<line x1="18" y1="6" x2="6" y2="18"></line>' +
+    '</svg>';
+
   function stripDelims(src) {
     var s = src.trim();
     if (s.indexOf('$$') === 0) s = s.slice(2);
@@ -12,20 +30,23 @@
 
   function copyToClipboard(text, btn) {
     var done = function () {
-      var old = btn.getAttribute('data-label') || btn.textContent;
       btn.classList.add('copied');
-      btn.textContent = 'Copied';
+      btn.innerHTML = ICON_CHECK;
+      btn.setAttribute('title', 'Copied');
       setTimeout(function () {
         btn.classList.remove('copied');
-        btn.textContent = old;
+        btn.innerHTML = ICON_COPY;
+        btn.setAttribute('title', 'Copy LaTeX source');
       }, 1200);
     };
     var fail = function () {
       btn.classList.add('failed');
-      btn.textContent = 'Press Ctrl+C';
+      btn.innerHTML = ICON_X;
+      btn.setAttribute('title', 'Copy failed — press Ctrl+C');
       setTimeout(function () {
         btn.classList.remove('failed');
-        btn.textContent = btn.getAttribute('data-label') || 'Copy LaTeX';
+        btn.innerHTML = ICON_COPY;
+        btn.setAttribute('title', 'Copy LaTeX source');
       }, 1500);
     };
     if (navigator.clipboard && window.isSecureContext) {
@@ -66,8 +87,7 @@
     btn.className = 'eq-copy-btn';
     btn.setAttribute('aria-label', 'Copy LaTeX source');
     btn.setAttribute('title', 'Copy LaTeX source');
-    btn.setAttribute('data-label', 'Copy LaTeX');
-    btn.textContent = 'Copy LaTeX';
+    btn.innerHTML = ICON_COPY;
     btn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
