@@ -295,3 +295,17 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 34px 0; }
 .explain p + p { margin-top: 10px; }
 .explain h4.mini { margin:14px 0 6px; color: var(--accent-2); font-size: 14.5px; text-transform: uppercase; letter-spacing: .08em; }
 .explain ul + h4.mini, .explain ol + h4.mini, .explain p + h4.mini { margin-top: 18px; }
+
+/* Floating zoom-level indicator (shown briefly while zooming with Ctrl/Cmd +/-).
+   The zoom itself is applied to <html> and persisted in localStorage by zoom.js. */
+.zoom-badge {
+  position: fixed; right: 16px; bottom: 16px; z-index: 200;
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(27,35,54,.92); color: var(--ink);
+  border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; opacity: 0; transform: translateY(6px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.zoom-badge.show { opacity: 1; transform: translateY(0); }

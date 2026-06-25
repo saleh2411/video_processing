@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2 · Optical Flow</title>
 <link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
 <script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <script defer src="eq-copy.js"></script>
@@ -326,30 +327,97 @@
     <p>What brings this expression to minimum is the eigenvector $(u,v)$ of H corresponding to the smallest
     eigenvalue.</p>
     <p>The entire algorithm can be summarized with the following steps:</p>
-    <p>1. $(I_x~~I_y) = \text{grad}(I)$<br>
-    2. $I_{xx} = I_x * I_x, I_{xy} = I_x * I_y, I_{yy} = I_y * I_y$<br>
-    3. $S_{xx} = \text{conv}(I_{xx}, g), S_{xy} = \text{conv}(I_{xy}, g), S_{yy} = \text{conv}(I_{yy}, g), g = \text{ones}(5,5)$<br>
-    4. We can calcutate the image response R in a couple of methods:<br>
-    a. smallest eigenvector: $R = \frac{1}{2}(S_{xx} - S_{yy}) - \sqrt{4 S_{xy} S_{xy} + (S_{xx} - S_{yy})^2} = \lambda_{min}$<br>
-    b. $R = \frac{\lambda_{min} \lambda_{max}}{\lambda_{min} + \lambda_{max}} = \frac{\text{determinant}(H)}{\text{trace}(H)}$<br>
-    c. $R = S_{xx} * S_{yy} - S_{xy} * S_{xy} - \alpha(S_{xx} + S_{yy})^2 = \lambda_{min}\lambda_{max} - \alpha(\lambda_{min} + \lambda_{max})^2$<br>
-    Where $\alpha = 0.04 \sim 0.06$<br>
-    5. $R(R < \theta) = 0$<br>
-    6. Return maximum R in each tile.</p>
+    <div class="eq">$$ \text{1.}\quad (I_x~~I_y) = \text{grad}(I) $$</div>
+    <div class="eq">$$ \text{2.}\quad I_{xx} = I_x * I_x, \quad I_{xy} = I_x * I_y, \quad I_{yy} = I_y * I_y $$</div>
+    <div class="eq">$$ \text{3.}\quad S_{xx} = \text{conv}(I_{xx}, g), \quad S_{xy} = \text{conv}(I_{xy}, g), \quad S_{yy} = \text{conv}(I_{yy}, g), \quad g = \text{ones}(5,5) $$</div>
+    <p>4. We can calcutate the image response R in a couple of methods:</p>
+    <div class="eq">$$ \text{a. smallest eigenvector:}\quad R = \frac{1}{2}(S_{xx} - S_{yy}) - \sqrt{4 S_{xy} S_{xy} + (S_{xx} - S_{yy})^2} = \lambda_{min} $$</div>
+    <div class="eq">$$ \text{b.}\quad R = \frac{\lambda_{min} \lambda_{max}}{\lambda_{min} + \lambda_{max}} = \frac{\text{determinant}(H)}{\text{trace}(H)} $$</div>
+    <div class="eq">$$ \text{c.}\quad R = S_{xx} * S_{yy} - S_{xy} * S_{xy} - \alpha(S_{xx} + S_{yy})^2 = \lambda_{min}\lambda_{max} - \alpha(\lambda_{min} + \lambda_{max})^2 $$</div>
+    <p>Where $\alpha = 0.04 \sim 0.06$.</p>
+    <div class="eq">$$ \text{5.}\quad R(R \lt \theta) = 0 $$</div>
+    <p>6. Return maximum R in each tile.</p>
   </div>
 
   <div class="explain">
     <span class="explain-label">Plain-English explanation</span>
-    <p>Not every pixel is trackable. A pixel inside a wall of uniform colour has no distinguishing features. We want
-    <strong>corners</strong> — points with strong intensity change in BOTH x and y.</p>
-    <p>The rank of $B^TB$ tells us exactly which kind of point we have:</p>
+
+    <p>Not every pixel is trackable. A pixel inside a wall of uniform colour has no distinguishing features — if you
+    nudge a window over it, nothing changes, so you can't tell where it went in the next frame. We want
+    <strong>corners</strong>: points with strong intensity change in BOTH the $x$ and $y$ directions.</p>
+
+    <p><strong>The rank test (the intuition).</strong> The same matrix $B^TB$ from Lucas–Kanade tells us which kind of
+    point we are looking at:</p>
     <ul>
-      <li><strong>Rank 0:</strong> flat patch — useless.</li>
-      <li><strong>Rank 1:</strong> edge — aperture problem kills you.</li>
-      <li><strong>Rank 2:</strong> corner — perfect for tracking.</li>
+      <li><strong>Rank 0:</strong> flat patch — every direction looks the same. Useless.</li>
+      <li><strong>Rank 1:</strong> edge — changes across the edge but not along it. The aperture problem kills you.</li>
+      <li><strong>Rank 2:</strong> corner — changes in every direction. Perfect for tracking.</li>
     </ul>
-    <p>Harris produces a single "cornerness" score $R$ that is large when both eigenvalues of $H$ are large.
-    Pipeline: gradients → squared → blur → compute R → threshold → keep one max per tile.</p>
+
+    <p><strong>Where $H$ comes from (the error function).</strong> Take a small window and ask: "if I slide it by
+    $(u,v)$, how much does the image inside change?" That is exactly the error function</p>
+    <div class="eq">$$ E(u,v) = \sum_{(x,y)\in W} [\,I(x+u,\,y+v) - I(x,y)\,]^2 . $$</div>
+    <p>A <em>good</em> keypoint is one where $E$ is large no matter which direction you slide. Replacing the shifted
+    image with its first-order Taylor expansion $I(x+u,\,y+v)\approx I + uI_x + vI_y$ collapses $E$ into a clean
+    quadratic form:</p>
+    <div class="eq">$$ E(u,v) = (u~~v)\,H\,\begin{pmatrix}u\\v\end{pmatrix}, \qquad
+       H = \sum_{(x,y)\in W}\begin{pmatrix} I_x^2 & I_xI_y \\ I_yI_x & I_y^2 \end{pmatrix}. $$</div>
+    <p>$H$ is the <strong>structure tensor</strong> (also called the second-moment matrix) — it summarizes the gradient
+    behaviour of the whole window in one $2\times2$ matrix. It is the same $B^TB$ as before; Harris just reuses it.</p>
+
+    <p><strong>What the eigenvalues mean.</strong> $H$ is symmetric, so it has two eigenvalues
+    $\lambda_{max}\ge\lambda_{min}\ge 0$ with perpendicular eigenvectors. They tell you how much the patch changes
+    along its two principal directions:</p>
+    <ul>
+      <li>Both $\lambda$ large → $E$ grows in <em>every</em> direction → <strong>corner</strong>.</li>
+      <li>One large, one ≈ 0 → changes only across the edge → <strong>edge</strong>.</li>
+      <li>Both ≈ 0 → nothing changes → <strong>flat</strong>.</li>
+    </ul>
+    <p>The number that decides "corner or not" is therefore <strong>$\lambda_{min}$</strong> — the change in the
+    <em>weakest</em> direction. If even the easiest direction to slide still changes a lot, the point is locked down
+    in 2-D. (That is also what the line "the minimum is the eigenvector of $H$ with the smallest eigenvalue" means:
+    $\lambda_{min}$ is the direction in which the patch is least distinctive.)</p>
+
+    <p><strong>The algorithm, step by step</strong> (what each value is, and why):</p>
+    <ol>
+      <li><strong>$(I_x, I_y) = \text{grad}(I)$</strong> — image derivatives in $x$ and $y$. These are the raw
+      "where does intensity change" signals; everything else is built from them.</li>
+      <li><strong>Element-wise gradient products</strong> ($I_{xx}=I_x\!\cdot\! I_x$, and likewise $I_{xy},I_{yy}$) —
+      here $\cdot$ is <em>element-wise</em> multiplication (per pixel), not convolution. These three products are
+      exactly the entries of the per-pixel gradient outer product $\nabla I\,\nabla I^T$ before summing.</li>
+      <li><strong>Sum each product over the window</strong> ($S_{xx}=\text{conv}(I_{xx},g)$, and likewise
+      $S_{xy},S_{yy}$, with $g=\text{ones}(5,5)$) — <em>this convolution IS the $\textstyle\sum_W$</em>. A box filter
+      of ones just adds up each product over a $5\times5$ window. So $S_{xx},S_{xy},S_{yy}$ are the three entries of
+      $H$, computed at every pixel simultaneously. (A Gaussian $g$ instead of ones gives a smoother,
+      rotation-friendlier weighting — same idea.)</li>
+      <li><strong>Cornerness response $R$.</strong> Reduce $H$ to one "how corner-like is this pixel" number. Three
+      common recipes, all functions of the eigenvalues (recall $\det H=\lambda_{min}\lambda_{max}=S_{xx}S_{yy}-S_{xy}^2$
+      and $\operatorname{tr} H=\lambda_{min}+\lambda_{max}=S_{xx}+S_{yy}$):
+        <ul>
+          <li><strong>(a) Shi–Tomasi:</strong> $R=\lambda_{min}$, the closed form for the smaller eigenvalue of the
+          $2\times2$ $H$. Most direct ("is the weakest direction strong?") but needs a square root.</li>
+          <li><strong>(b) Noble / harmonic measure:</strong>
+          $R=\frac{\det H}{\operatorname{tr} H}$, i.e. $\lambda_{min}\lambda_{max}$ over
+          $\lambda_{min}+\lambda_{max}$. Large only when <em>both</em> eigenvalues are large; no tuning parameter,
+          no square root.</li>
+          <li><strong>(c) Harris:</strong> $R=\det H-\alpha\,(\operatorname{tr} H)^2$, with
+          $\alpha\approx0.04$–$0.06$. The
+          $\det$ term rewards two strong eigenvalues; the $\alpha\,\operatorname{tr}^2$ term <em>penalizes</em> edges
+          (where one eigenvalue is huge and the other tiny). Cheapest of all — no eigen-decomposition, no square root —
+          which is why it became the default.</li>
+        </ul>
+      </li>
+      <li><strong>$R(R&lt;\theta)=0$</strong> — threshold. Zero out weak responses so only confident corners survive
+      and noise in flat regions is discarded.</li>
+      <li><strong>Return the maximum $R$ in each tile</strong> — non-maximum suppression. Split the image into tiles
+      and keep one strongest corner per tile, so keypoints spread evenly across the frame instead of clumping on the
+      single strongest corner.</li>
+    </ol>
+
+    <p><strong>Why this is the right detector for tracking.</strong> Corners are precisely the pixels where LK's
+    $2\times2$ system is rank-2 and therefore invertible. Harris finds exactly the points where LK will <em>not</em>
+    suffer the aperture problem — the two methods share the same matrix $H=B^TB$: Harris uses it to <em>select</em>
+    points, LK uses it to <em>solve</em> for their motion.</p>
   </div>
 
   <div class="demo">
