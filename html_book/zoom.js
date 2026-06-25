@@ -1,36 +1,64 @@
 /* Persistent page zoom.
-   Browsers don't remember their native zoom for local file:// pages, so each
-   chapter opens back at 100%. This replaces the native zoom shortcuts with a
-   CSS `zoom` we control and store in localStorage, then re-apply on every page
-   load — so the zoom level follows you as you jump between chapters.
+   A web page can't read or change the browser's *native* zoom, so this provides
+   its own zoom: it overrides the Ctrl/Cmd +/- shortcuts and scales the page with
+   the CSS `zoom` property, then carries the chosen level from page to page.
+
+   Persistence is the tricky part on local file:// pages. Safari (and others to
+   varying degrees) treats every file:// URL as a SEPARATE origin, so
+   localStorage is NOT shared between chapters — the zoom would reset on each
+   navigation. To survive that we primarily use window.name, which is preserved
+   across same-tab navigations in every browser regardless of origin or scheme.
+   localStorage is kept as a secondary store (works across tabs and when the
+   book is served over http/https).
 
    Loaded as a plain (non-defer) script in <head> so the saved zoom is applied
    before the body paints, avoiding a flash of unscaled content. */
 (function () {
-  var KEY = 'vpbook-zoom';
+  var KEY = 'vpbook-zoom';                  // localStorage key
+  var TAG = 'vpzoom';                        // window.name marker: "vpzoom=1.2;"
   var MIN = 0.5, MAX = 3, STEP = 0.1;
   var root = document.documentElement;
 
   function clamp(v) {
-    v = Math.round(v * 100) / 100;          // kill float drift (e.g. 1.0000001)
+    v = Math.round(v * 100) / 100;           // kill float drift (e.g. 1.0000001)
     return Math.min(MAX, Math.max(MIN, v));
   }
-  function read() {
+
+  // --- window.name store (survives same-tab navigation, even across file://) ---
+  function readName() {
+    try {
+      var m = new RegExp('\\b' + TAG + '=([0-9.]+)').exec(window.name || '');
+      return m ? parseFloat(m[1]) : NaN;
+    } catch (e) { return NaN; }
+  }
+  function writeName(v) {
+    try {
+      var rest = (window.name || '').replace(new RegExp(TAG + '=[0-9.]+;?'), '');
+      window.name = TAG + '=' + v + ';' + rest;
+    } catch (e) {}
+  }
+
+  // --- localStorage store (cross-tab / when served over http) ---
+  function readStore() {
     try {
       var v = parseFloat(localStorage.getItem(KEY));
-      return isFinite(v) && v > 0 ? clamp(v) : 1;
-    } catch (e) { return 1; }
+      return isFinite(v) ? v : NaN;
+    } catch (e) { return NaN; }
   }
-  function save(v) {
+  function writeStore(v) {
     try { localStorage.setItem(KEY, String(v)); } catch (e) {}
   }
 
-  var zoom = read();
-  root.style.zoom = zoom;                    // apply immediately, pre-paint
+  // Prefer window.name (most reliable across pages), then localStorage, else 100%.
+  var initial = readName();
+  if (!(isFinite(initial) && initial > 0)) initial = readStore();
+  var zoom = isFinite(initial) && initial > 0 ? clamp(initial) : 1;
+  root.style.zoom = zoom;                     // apply immediately, pre-paint
+  writeName(zoom);                            // make sure it's seeded for next page
 
   var badge;
   function showBadge() {
-    if (!document.body) return;              // body not parsed yet (initial load)
+    if (!document.body) return;               // body not parsed yet (initial load)
     if (!badge) {
       badge = document.createElement('div');
       badge.className = 'zoom-badge';
@@ -45,7 +73,8 @@
   function set(v) {
     zoom = clamp(v);
     root.style.zoom = zoom;
-    save(zoom);
+    writeName(zoom);
+    writeStore(zoom);
     showBadge();
   }
 
