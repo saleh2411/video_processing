@@ -1,0 +1,134 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\title{
+    \normalsize IDs: 213851579, 213310485 \\[1em] 
+    \huge Video Processing -- HW3 \\
+    \large Particle Filter Tracking -- Part A
+}
+
+\author{}
+
+\date{Course 0512.4263 \quad 2025/2026}
+
+\begin{document}
+
+\maketitle
+
+% ========================================================================
+\section*{Part A -- Open Questions}
+% ========================================================================
+
+% ------------------------------------------------------------------------
+\subsection*{Q1.}
+% ------------------------------------------------------------------------
+\noindent\textit{We saw that $\text{posterior} \propto \text{prior} \times \text{likelihood}$. Explain the formula
+and how it relates to the Kalman/Particle filter. Start from explaining what is the posterior,
+prior and likelihood.}
+
+\medskip
+\noindent\textbf{Answer.}
+
+By Bayes' rule, $\text{posterior} = (\text{likelihood} \times \text{prior}) / \text{evidence}$. The evidence $p(z)$ does
+not depend on the state, so it is only a normalizing constant and we drop it, giving
+$\text{posterior} \propto \text{prior} \times \text{likelihood}$.
+
+\begin{itemize}[nosep]
+    \item \textbf{Prior} $p(x_t \mid z_{1:t-1})$: the belief about the state before seeing the
+    new frame. We get it by pushing the previous estimate through the motion model (the
+    predict step).
+    \item \textbf{Likelihood} $p(z_t \mid x_t)$: how well a candidate state fits the new
+    measurement. In our tracker this is the histogram similarity between the candidate's
+    patch and the reference template $q$.
+    \item \textbf{Posterior} $p(x_t \mid z_{1:t})$: the belief after using the new frame. It is
+    large for states that the prior expected and the likelihood supports.
+\end{itemize}
+
+Both filters compute this. Kalman assumes every distribution is Gaussian and updates the mean
+and covariance analytically. The particle filter drops that assumption: the prior is the set of
+predicted particles, the likelihood becomes each particle's weight, and the posterior is the
+weighted (then resampled) particle set, so it can take any shape instead of only a Gaussian.
+
+\vspace{0.5cm}
+
+% ------------------------------------------------------------------------
+\subsection*{Q2.}
+% ------------------------------------------------------------------------
+\noindent\textit{For the measurement step in the particle filter, we used the histogram of the
+two patches (the patch around the new particle and the original patch of the object).}
+
+\medskip
+\noindent\textit{a. Why do we use the histogram to score the patches? what are the pros and cons
+of using this method?}
+
+\medskip
+\noindent\textbf{Answer.}
+
+A histogram captures the colour distribution of the patch and deliberately ignores where each pixel sits.
+
+\begin{itemize}[nosep]
+    \item \textbf{Pros:} robust to small shifts, rotation, pose/shape change and partial occlusion (a person is non-rigid, so this matters); cheap to compute and compare; gives a compact, normalized appearance signature.
+    \item \textbf{Cons:} throws away all spatial / structural information --- two different objects with the same colours look identical; sensitive to illumination and colour changes; background pixels that fall inside the box pollute the histogram; quantizing to 4 bits loses fine colour detail.
+\end{itemize}
+
+\vspace{0.5cm}
+
+\noindent\textit{b. We took the patches and computed the histogram and their distances. Why
+didn't we use the SSD (sum square difference) between the patches (in the image space)?}
+
+\medskip
+\noindent\textbf{Answer.}
+% TODO: write your answer here.
+
+  SSD compares pixels position-by-position, so it assumes the two patches are perfectly aligned. A one-pixel shift, a small rotation, a scale change or any deformation makes SSD explode — even for the same object.
+\vspace{0.5cm}
+
+\noindent\textit{c. Can you think of another method to compare the patches? What are the pros
+and cons of the new method?}
+
+\medskip
+\noindent\textit{You can describe an example if it helps you.}
+
+\medskip
+\noindent\textbf{Answer.}
+% TODO: write your answer here.
+
+  As we seen in Q2.a, one of the cons for using
+\vspace{0.5cm}
+
+% ------------------------------------------------------------------------
+\subsection*{Q3.}
+% ------------------------------------------------------------------------
+\noindent\textit{Will particle filter work when the tracked object changes its scale (like a
+person walking towards and away from the camera)? What about the viewpoint of the object (like
+a person dancing)?}
+
+\medskip
+\noindent\textbf{Answer.}
+% TODO: write your answer here.
+
+\vspace{0.5cm}
+
+% ------------------------------------------------------------------------
+\subsection*{Q4.}
+% ------------------------------------------------------------------------
+\noindent\textit{Can you think about a way to know when to update the template? Think of a
+scenario where we track a person. We keep a patch of the object's appearance in the first frame,
+and then compare each new patch to it. One of the problems is that, as time passes, the original
+patch no longer represents the object (light, viewpoint, \ldots). Can you think of a way to
+determine when to update the patch of the object? And how to determine the new patch (based on
+the previous frame/ based on the last two frames/\ldots)?}
+
+\medskip
+\noindent\textbf{Answer.}
+% TODO: write your answer here.
+
+\vspace{0.5cm}
+
+\end{document}

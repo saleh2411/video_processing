@@ -1,0 +1,9 @@
+{
+    "[TAU, TIME] naive LK implementation": 320.91179895401,
+    "[TAU, TIME] FASTER LK implementation": 191.03276801109314,
+    "[TAU, TIME] FASTER, WITHOUT BORDERS LK implementation ": 191.6419379711151,
+    "[TAU, MSE] original video ": 60.2267868043959,
+    "[TAU, MSE] naive implementation ": 25.41118981659066,
+    "[TAU, MSE] FASTER implementation ": 37.520460157126834,
+    "[TAU, MSE] FASTER, WITHOUT BORDERS LK implementation ": 31.911725837843985
+}

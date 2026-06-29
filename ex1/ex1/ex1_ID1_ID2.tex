@@ -1,0 +1,99 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\title{
+    \normalsize IDs: 213851579, 213310485 \\[1em] % This puts IDs at the top
+    \huge Video Processing -- HW1 \\ 
+    \large Harris Corner Detection and Intro to Video Processing
+}
+
+% Leave author empty or use it for names if needed
+\author{} 
+
+\date{Course 0512.4263 \quad 2025/2026}
+
+\begin{document}
+
+% ========================================================================
+% REQUIRED: first line of the PDF must contain the submitters' IDs.
+% ========================================================================
+
+\maketitle
+
+% ========================================================================
+\section*{Section 2 / Part 2.1 -- Harris Corner Detector: Open Questions}
+% ========================================================================
+
+\subsection*{Q1. Is the Harris corner detector invariant to translation?}
+\textbf{Answer:} Yes.
+
+\medskip
+\noindent\textbf{Explanation.}
+Every step of the detector (gradients, pointwise products, convolution with $g$, the response $R$, NMS, and threshold) is shift-invariant: it depends only on relative pixel positions. So shifting the image by $(dx,dy)$ shifts the corner map by the same $(dx,dy)$, and the same physical points are detected.
+
+
+
+\subsection*{Q2. Is the Harris corner detector invariant to rotation?}
+\textbf{Answer:} Yes.
+
+\medskip
+\noindent\textbf{Explanation.}
+The Harris response depends only on the eigenvalues of
+\[
+    M = \begin{bmatrix} S_{xx} & S_{xy} \\ S_{xy} & S_{yy} \end{bmatrix},
+\]
+since $R = \lambda_1 \lambda_2 - k(\lambda_1 + \lambda_2)^2$.
+Rotating the image transforms $M$ into $R_\theta M R_\theta^{T}$, which has the same eigenvalues. So $R$ is unchanged (just evaluated at the rotated pixel location), and the same points are detected as corners.
+
+
+
+\subsection*{Q3. Is the Harris corner detector invariant to constant illumination
+($I_{out} = a \cdot I_{in} + b$)?}
+\textbf{Answer:} No.
+
+\medskip
+\noindent\textbf{Explanation.}
+The bias $b$ cancels in the gradients, so it has no effect. The gain $a$ scales the gradients by $a$, hence $S_{xx}, S_{yy}, S_{xy}$ by $a^2$ and the response by $R' = a^4 R$. NMS picks the same local maxima, but the fixed threshold passes a different set of pixels, so the binary corner map changes. Invariant to $b$, not invariant to $a$ $\Rightarrow$ not fully invariant.
+\newpage
+% ========================================================================
+\section*{Section 3 -- Q3: Sobel Operator}
+% ========================================================================
+
+\noindent\textit{Describe the Sobel operator and explain how it may be used to
+obtain the edge map of each frame of the video.}
+
+\medskip
+\noindent\textbf{Definition.}
+% Write the definition here. Include the two 3x3 kernels:
+\[
+G_x =
+\begin{bmatrix}
+-1 & 0 & +1 \\
+-2 & 0 & +2 \\
+-1 & 0 & +1
+\end{bmatrix},
+\qquad
+G_y =
+\begin{bmatrix}
+-1 & -2 & -1 \\
+\phantom{-}0 & \phantom{-}0 & \phantom{-}0 \\
++1 & +2 & +1
+\end{bmatrix}.
+\]
+
+\noindent\textbf{Gradient magnitude / direction.}
+\[
+|G| = \sqrt{G_x^{\,2} + G_y^{\,2}}, \qquad
+\theta = \operatorname{atan2}(G_y,\, G_x).
+\]
+
+\medskip
+By applying the sobel operator on a frame of the video, we get a 2-dimensional map of the gradient at each point, compute the magnitude $|G|$ and threshold. Pixels with $|G|$ above the threshold are marked as edges; the rest are background. Repeating this on every frame produces an edge-map video.
+
+\end{document}

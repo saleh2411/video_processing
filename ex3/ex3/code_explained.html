@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HW3 — Particle Filter Code, Explained Line by Line</title>
+<script>
+window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, svg:{fontCache:'global'} };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+  :root{
+    --bg:#0a0f1c; --panel:#101728; --panel2:#0d1322; --ink:#dfe6f2; --mut:#8b97ad;
+    --line:#1d2740; --acc:#41d8c9; --acc2:#6ea8ff; --warn:#ffb454; --good:#7ee787;
+    --red:#ff6b6b; --code:#0c1426;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.65 "Segoe UI",system-ui,-apple-system,sans-serif;}
+  .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;
+    background:#0b1120ee;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+    padding:10px 22px;font-size:13px;color:var(--mut)}
+  .topbar b{color:var(--ink)}
+  .spacer{flex:1}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px 90px}
+  .hero{padding:38px 0 14px;border-bottom:1px solid var(--line);margin-bottom:26px}
+  .eyebrow{color:var(--acc);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  h1{font-size:30px;margin:.25em 0 .2em;line-height:1.15}
+  h2{font-size:22px;margin:1.7em 0 .5em;padding-top:.4em;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:1.3em 0 .4em;color:var(--acc)}
+  .lede{color:var(--mut);font-size:16px;max-width:70ch}
+  p{max-width:74ch}
+  code{font-family:"JetBrains Mono",Consolas,monospace;font-size:.9em;
+    background:#16203a;color:#cfe3ff;padding:.05em .35em;border-radius:4px}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;overflow:auto;margin:.7em 0}
+  pre code{background:none;color:#d5e3ff;padding:0;font-size:13px;line-height:1.7}
+  .cmt{color:#5f88c9}
+  .kw{color:#c792ea}.fn{color:#82e0c8}.num{color:#ffcb8b}.str{color:#9fe88d}
+  .term{color:var(--acc);font-weight:600}
+  ul,ol{max-width:74ch}
+  li{margin:.25em 0}
+  table{border-collapse:collapse;width:100%;margin:.7em 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#152038;color:#cfe0ff;font-weight:600}
+  td code{white-space:nowrap}
+  .ln{color:var(--warn);font-weight:700;white-space:nowrap}
+  .callout{border-radius:10px;padding:12px 16px;margin:1em 0;border:1px solid var(--line)}
+  .note{background:#0e1a2c;border-color:#27456e}
+  .key{background:#0e2220;border-color:#1d5a52}
+  .warnbox{background:#241a0c;border-color:#6e5227}
+  .lbl{display:inline-block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    font-weight:700;margin-right:8px;color:var(--acc)}
+  .warnbox .lbl{color:var(--warn)}
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:14px 0}
+  .stage{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px}
+  .stage .s-h{font-weight:700;color:var(--acc);font-size:13px;margin-bottom:4px}
+  .stage .s-b{font-size:13px;color:var(--mut)}
+  .arrow{align-self:center;color:var(--mut);font-size:20px}
+  .toc{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:18px 0}
+  .toc a{color:var(--acc2);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .toc ol{margin:.3em 0;columns:2;max-width:none}
+  .map{font-family:"JetBrains Mono",monospace;font-size:13px}
+  .pill{display:inline-block;background:#16203a;border:1px solid var(--line);border-radius:20px;
+    padding:1px 10px;font-size:12px;color:var(--acc);margin:0 3px}
+  .res{display:flex;gap:6px;flex-wrap:wrap}
+  .res code{background:#0e1a2c}
+  hr.sep{border:none;border-top:1px solid var(--line);margin:30px 0}
+  a.codelink{color:var(--acc2)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>HW3</b> · Particle Filter Tracking</span>
+  <span class="spacer"></span>
+  <span class="crumb">Code walkthrough · <code>particle_filter.py</code></span>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Video Processing 0512.4263</div>
+    <h1>The Code You Wrote, Line by Line</h1>
+    <p class="lede">Every function you filled in <code>particle_filter.py</code>, explained one line at a time:
+    what it does, why it is there, and how it fits the Condensation (particle filter) loop. Read top to bottom
+    once and the whole tracker should click.</p>
+  </header>
+
+  <div class="toc">
+    <span class="lbl">On this page</span>
+    <ol>
+      <li><a href="#big">The big picture: one frame, three steps</a></li>
+      <li><a href="#state">The state vector (what a particle is)</a></li>
+      <li><a href="#predict">1 · predict_particles</a></li>
+      <li><a href="#hist">2 · compute_normalized_histogram</a></li>
+      <li><a href="#sample">3 · sample_particles</a></li>
+      <li><a href="#bhatt">4 · bhattacharyya_distance</a></li>
+      <li><a href="#weights">5 · compute_weights_and_cdf</a></li>
+      <li><a href="#main">6 · main() — gluing it together</a></li>
+      <li><a href="#show">7 · show_particles (how the boxes are drawn)</a></li>
+      <li><a href="#results">8 · What your results prove</a></li>
+    </ol>
+  </div>
+
+  <!-- ================= BIG PICTURE ================= -->
+  <h2 id="big">1 · The big picture: one frame, three steps</h2>
+  <p>A particle filter keeps a cloud of <span class="term">N = 100</span> guesses ("particles") about where the
+  object is. Each new frame, the cloud goes through the same three steps. Knowing these three names is enough to
+  read every function below.</p>
+
+  <div class="pipe">
+    <div class="stage"><div class="s-h">① SELECT (resample)</div>
+      <div class="s-b">Keep the guesses that matched well last frame, drop the rest. Heavy particles get copied
+      many times. → <code>sample_particles</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="s-h">② PREDICT (drift + diffuse)</div>
+      <div class="s-b">Move each surviving guess by its velocity, then jitter it with random noise so the cloud
+      spreads and explores. → <code>predict_particles</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="s-h">③ MEASURE (weight)</div>
+      <div class="s-b">Score every guess against the reference appearance of the object, normalize, build a CDF for
+      next round. → <code>compute_weights_and_cdf</code> (uses the histogram + Bhattacharyya)</div></div>
+  </div>
+
+  <p>That is the whole loop. The other functions are tools the three steps call: the
+  <strong>histogram</strong> describes a patch's colour, and the <strong>Bhattacharyya</strong> score says how
+  close two histograms are.</p>
+
+  <div class="callout note"><span class="lbl">Bayes view</span>
+    Step ② builds the <strong>prior</strong> (where the object could be, from motion alone). Step ③ is the
+    <strong>likelihood</strong> (how well each spot matches what the object looks like). Multiplying them, which is
+    what the weights do, gives the <strong>posterior</strong>: the updated belief. Same
+    $\text{posterior}\propto\text{prior}\times\text{likelihood}$ from Part A, Q1.</div>
+
+  <!-- ================= STATE ================= -->
+  <h2 id="state">2 · The state vector — what one particle actually is</h2>
+  <p>Every particle is a column of 6 numbers. The full set of particles is a <code>6 × N</code> array
+  (6 rows, 100 columns). The rows mean:</p>
+
+  <table>
+    <tr><th>Row</th><th>Symbol</th><th>Meaning</th><th>Touched by motion?</th></tr>
+    <tr><td><code>0</code></td><td>$x_c$</td><td>box centre, x (column in image)</td><td>yes — moves by $v_x$</td></tr>
+    <tr><td><code>1</code></td><td>$y_c$</td><td>box centre, y (row in image)</td><td>yes — moves by $v_y$</td></tr>
+    <tr><td><code>2</code></td><td>$\tfrac{w}{2}$</td><td>half width (16)</td><td><b>no — stays fixed</b></td></tr>
+    <tr><td><code>3</code></td><td>$\tfrac{h}{2}$</td><td>half height (43)</td><td><b>no — stays fixed</b></td></tr>
+    <tr><td><code>4</code></td><td>$v_x$</td><td>velocity in x</td><td>yes — jittered by noise</td></tr>
+    <tr><td><code>5</code></td><td>$v_y$</td><td>velocity in y</td><td>yes — jittered by noise</td></tr>
+  </table>
+
+  <p>The starting guess is <code>s_initial = [297, 139, 16, 43, 0, 0]</code>: centre at (297,139), a 32×86 box,
+  zero initial velocity. Rows 2 and 3 are never modified anywhere in the code, which is exactly why the box keeps
+  its 32×86 size for the whole video (see §8, and it is the reason behind your Q3 answer).</p>
+
+  <!-- ================= PREDICT ================= -->
+  <h2 id="predict">3 · <code>predict_particles</code> — the PREDICT step</h2>
+  <p>Takes the current particles and pushes them one frame into the future: deterministic <em>drift</em> by
+  velocity, then random <em>diffusion</em> so the cloud spreads out and can follow the object.</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">predict_particles</span>(s_prior):
+    s_prior = s_prior.astype(<span class="kw">float</span>)            <span class="cmt"># 1</span>
+    state_drifted = s_prior.copy()               <span class="cmt"># 2</span>
+    n = state_drifted.shape[<span class="num">1</span>]                 <span class="cmt"># 3</span>
+    state_drifted[<span class="num">0</span>, :] += state_drifted[<span class="num">4</span>, :]  <span class="cmt"># 4  x_c += v_x</span>
+    state_drifted[<span class="num">1</span>, :] += state_drifted[<span class="num">5</span>, :]  <span class="cmt"># 5  y_c += v_y</span>
+    state_drifted[<span class="num">0</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">4</span>, n))  <span class="cmt"># 6</span>
+    state_drifted[<span class="num">1</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">4</span>, n))  <span class="cmt"># 7</span>
+    state_drifted[<span class="num">4</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">1</span>, n))  <span class="cmt"># 8</span>
+    state_drifted[<span class="num">5</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">1</span>, n))  <span class="cmt"># 9</span>
+    state_drifted = state_drifted.astype(<span class="kw">int</span>)     <span class="cmt"># 10</span>
+    <span class="kw">return</span> state_drifted</code></pre>
+
+  <table>
+    <tr><th>Line</th><th>What it does and why</th></tr>
+    <tr><td class="ln">1</td><td>Cast to <code>float</code> first. The noise and rounding below need real arithmetic; if the array were integer, intermediate maths could truncate badly.</td></tr>
+    <tr><td class="ln">2</td><td><code>.copy()</code> so we never overwrite the caller's array. We return a <em>new</em> drifted state.</td></tr>
+    <tr><td class="ln">3</td><td><code>shape[1]</code> = number of columns = number of particles <code>N</code>. We need <code>n</code> to ask NumPy for <code>n</code> noise samples at once.</td></tr>
+    <tr><td class="ln">4–5</td><td><span class="term">Drift (the motion model).</span> Move each centre by its own velocity. This is the deterministic part $A\,s$: constant-velocity prediction. <code>[0,:]</code> means "row 0, all columns", so all 100 particles move at once (vectorised).</td></tr>
+    <tr><td class="ln">6–7</td><td><span class="term">Diffuse the position.</span> Add Gaussian noise, mean 0, standard deviation 4 px, one sample per particle. This spread is what lets different particles cover slightly different spots, so the cloud can search around the predicted centre. <code>np.round</code> keeps them whole-pixel.</td></tr>
+    <tr><td class="ln">8–9</td><td><span class="term">Diffuse the velocity.</span> Same idea but smaller noise (σ = 1) on $v_x, v_y$. This lets the assumed speed slowly change over time, so the tracker can adapt if the person speeds up or turns, instead of being locked to one velocity forever.</td></tr>
+    <tr><td class="ln">10</td><td>Cast back to <code>int</code>: centre coordinates are used to index pixels later, and you cannot index an image at row 88.3.</td></tr>
+  </table>
+
+  <div class="callout note"><span class="lbl">Why two noise sizes</span>
+    Position noise (4) is bigger than velocity noise (1) on purpose. Position is what we actually compare against
+    the image, so it needs room to explore; velocity is a slow-changing helper, so it drifts gently. Rows 2 and 3
+    (the box half-sizes) appear nowhere here, so the box size is frozen.</div>
+
+  <!-- ================= HISTOGRAM ================= -->
+  <h2 id="hist">4 · <code>compute_normalized_histogram</code> — describing a patch by its colours</h2>
+  <p>Given the image and one particle's box, crop that box and summarise it as a <span class="term">colour
+  histogram</span>: a list of 4096 numbers saying "what fraction of the patch is roughly this colour." It throws
+  away <em>where</em> each pixel is and keeps only <em>which</em> colours appear, which is what makes the match
+  robust to small shifts and pose changes (your Q2a answer).</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">compute_normalized_histogram</span>(image, state):
+    state = np.floor(state).astype(<span class="kw">int</span>)            <span class="cmt"># 1</span>
+    hist = np.zeros((<span class="num">16</span>, <span class="num">16</span>, <span class="num">16</span>))               <span class="cmt"># 2</span>
+    xc, yc, half_w, half_h = state[<span class="num">0</span>], state[<span class="num">1</span>], state[<span class="num">2</span>], state[<span class="num">3</span>]  <span class="cmt"># 3</span>
+    h_img, w_img = image.shape[<span class="num">0</span>], image.shape[<span class="num">1</span>]  <span class="cmt"># 4</span>
+    x_min, x_max = max(<span class="num">0</span>, xc-half_w), min(w_img, xc+half_w)  <span class="cmt"># 5</span>
+    y_min, y_max = max(<span class="num">0</span>, yc-half_h), min(h_img, yc+half_h)  <span class="cmt"># 6</span>
+    patch = image[y_min:y_max, x_min:x_max, :]    <span class="cmt"># 7</span>
+    hist = np.reshape(hist, <span class="num">16</span>*<span class="num">16</span>*<span class="num">16</span>)          <span class="cmt"># 8</span>
+    <span class="kw">if</span> patch.size == <span class="num">0</span>:                          <span class="cmt"># 9</span>
+        <span class="kw">return</span> np.reshape(hist, <span class="num">16</span>*<span class="num">16</span>*<span class="num">16</span>)      <span class="cmt"># 10</span>
+    q_patch = (patch // <span class="num">16</span>).astype(<span class="kw">int</span>)         <span class="cmt"># 11</span>
+    idx = (q_patch[:,:,<span class="num">0</span>]*<span class="num">256</span> + q_patch[:,:,<span class="num">1</span>]*<span class="num">16</span> + q_patch[:,:,<span class="num">2</span>]).ravel()  <span class="cmt"># 12</span>
+    hist = np.bincount(idx, minlength=<span class="num">16</span>*<span class="num">16</span>*<span class="num">16</span>).astype(<span class="kw">float</span>)  <span class="cmt"># 13</span>
+    hist = hist / sum(hist)                       <span class="cmt"># 14</span>
+    <span class="kw">return</span> hist</code></pre>
+
+  <table>
+    <tr><th>Line</th><th>What it does and why</th></tr>
+    <tr><td class="ln">1</td><td>Round the state down to whole integers. The values arrive as floats (weighted sums, noise) and we are about to use them as pixel indices.</td></tr>
+    <tr><td class="ln">2</td><td>Allocate an empty <code>16×16×16</code> cube — one bin for every combination of (quantised R, G, B). It is reshaped to a flat 4096 vector on line 8; the cube shape is just there to make the size obvious.</td></tr>
+    <tr><td class="ln">3</td><td>Unpack the four numbers we need: centre and the two half-sizes. Velocity (rows 4–5) is irrelevant to appearance, so it is ignored here.</td></tr>
+    <tr><td class="ln">4</td><td>Image size. <span class="term">Watch the order:</span> <code>shape[0]</code> is the number of rows = <em>height</em> (y), <code>shape[1]</code> is columns = <em>width</em> (x). Mixing these up is the classic bug.</td></tr>
+    <tr><td class="ln">5–6</td><td><span class="term">Clip the box to the image.</span> A particle near the edge could have <code>xc-half_w</code> negative or past the border. <code>max(0,…)</code> and <code>min(w_img,…)</code> keep the crop inside the picture so the next line cannot crash or wrap around.</td></tr>
+    <tr><td class="ln">7</td><td>Crop the patch. Note the index order is <code>[y, x]</code> (rows first), matching line 4. The <code>:</code> keeps all three colour channels.</td></tr>
+    <tr><td class="ln">8</td><td>Flatten the empty histogram to length 4096 so it is a plain vector from here on.</td></tr>
+    <tr><td class="ln">9–10</td><td>Safety net: if the particle drifted fully off-screen the crop is empty (<code>size == 0</code>). Return the all-zero histogram instead of dividing by zero on line 14. A zero histogram scores ~0 similarity, so that runaway particle simply gets no weight and dies at the next resample.</td></tr>
+    <tr><td class="ln">11</td><td><span class="term">Quantise the colours.</span> Pixel values are 0–255 (8-bit). Integer-divide by 16 to squeeze them into 0–15 (4-bit). 16 levels per channel → <code>16³ = 4096</code> bins. This is coarse on purpose: it lumps near-identical colours together so lighting wobble does not split one colour across many bins.</td></tr>
+    <tr><td class="ln">12</td><td><span class="term">Flatten 3 colour numbers into 1 bin index.</span> Treat (R,G,B) quantised as digits of a base-16 number: $R\cdot16^2 + G\cdot16^1 + B = R\cdot256 + G\cdot16 + B$. Every colour maps to a unique slot in 0…4095. <code>.ravel()</code> turns the 2-D grid of indices into one long list, one entry per pixel.</td></tr>
+    <tr><td class="ln">13</td><td><code>np.bincount</code> counts how many pixels landed in each bin. <code>minlength</code> forces the result to be exactly 4096 long even if some high bins are empty, so every patch's histogram has the same length and they can be compared.</td></tr>
+    <tr><td class="ln">14</td><td><span class="term">Normalise.</span> Divide by the pixel count so the histogram sums to 1. Now it is a probability distribution, independent of how big the (clipped) patch was. Essential: two patches of different sizes are now comparable, and the Bhattacharyya score below assumes inputs sum to 1.</td></tr>
+  </table>
+
+  <div class="callout note"><span class="lbl">Worth knowing</span>
+    OpenCV's <code>cv2.imread</code> loads colours as <strong>B, G, R</strong>, not R, G, B. It does not matter here:
+    the reference <code>q</code> and every candidate <code>p</code> are built by this exact same function, so they
+    use the same channel order and the comparison stays fair.</div>
+
+  <!-- ================= SAMPLE ================= -->
+  <h2 id="sample">5 · <code>sample_particles</code> — the SELECT step (resampling)</h2>
+  <p>Given last frame's particles and their cumulative weights (CDF), draw a fresh set of 100 particles where
+  high-weight ones are copied often and low-weight ones disappear. This is how the cloud concentrates on the
+  object.</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">sample_particles</span>(previous_state, cdf):
+    S_next = np.zeros(previous_state.shape)   <span class="cmt"># 1</span>
+    n = previous_state.shape[<span class="num">1</span>]            <span class="cmt"># 2</span>
+    <span class="kw">for</span> i <span class="kw">in</span> range(n):                     <span class="cmt"># 3</span>
+        r = np.random.uniform(<span class="num">0</span>, <span class="num">1</span>)         <span class="cmt"># 4</span>
+        j = np.argmax(cdf >= r)            <span class="cmt"># 5</span>
+        S_next[:, i] = previous_state[:, j]  <span class="cmt"># 6</span>
+    <span class="kw">return</span> S_next</code></pre>
+
+  <table>
+    <tr><th>Line</th><th>What it does and why</th></tr>
+    <tr><td class="ln">1</td><td>Empty <code>6 × N</code> output, same shape as the input. We will fill it column by column.</td></tr>
+    <tr><td class="ln">2</td><td><code>n = N</code>, the number of particles to draw.</td></tr>
+    <tr><td class="ln">3</td><td>Draw exactly <code>N</code> new particles, one per loop turn. The new cloud is the same size as the old one.</td></tr>
+    <tr><td class="ln">4</td><td>Pick a random height <code>r</code> in [0,1] on the cumulative-weight axis. Think of stacking all weights into a 0→1 bar; <code>r</code> is a random point on that bar.</td></tr>
+    <tr><td class="ln">5</td><td><span class="term">The heart of resampling.</span> <code>cdf >= r</code> is a True/False array; <code>argmax</code> returns the index of the <em>first</em> True (argmax stops at the first maximum). So <code>j</code> is the first particle whose cumulative weight passes <code>r</code>. A heavy particle owns a wide slice of the 0→1 bar, so random <code>r</code> lands in its slice often → it gets chosen often.</td></tr>
+    <tr><td class="ln">6</td><td>Copy that whole particle (all 6 numbers — centre, size, velocity) into output column <code>i</code>. Copying the velocity too means a good guess keeps its motion estimate.</td></tr>
+  </table>
+
+  <div class="callout key"><span class="lbl">Intuition</span>
+    Resampling is natural selection for guesses. Survivors are duplicated, failures vanish. Right after this step
+    many particles are identical copies; the <em>diffusion</em> noise in <code>predict_particles</code> then nudges
+    each copy to a slightly different place, so the cloud spreads back out around the promising spot.</div>
+
+  <!-- ================= BHATTACHARYYA ================= -->
+  <h2 id="bhatt">6 · <code>bhattacharyya_distance</code> — how close are two histograms?</h2>
+  <p>Compares a candidate histogram <code>p</code> with the reference <code>q</code> and returns a number that is
+  <strong>large when they are similar</strong>. Despite the name "distance," it is built to act as a similarity
+  <em>weight</em>.</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">bhattacharyya_distance</span>(p, q):
+    bc = np.sum(np.sqrt(p * q))      <span class="cmt"># 1  Bhattacharyya coefficient</span>
+    distance = np.exp(<span class="num">20</span> * bc)        <span class="cmt"># 2  turn similarity into a weight</span>
+    <span class="kw">return</span> distance</code></pre>
+
+  <div class="callout note"><span class="lbl">The maths</span>
+    <p style="margin:.2em 0">The <strong>Bhattacharyya coefficient</strong> measures the overlap of two distributions:</p>
+    $$ BC(p,q)=\sum_{i=1}^{4096}\sqrt{p_i\,q_i},\qquad BC\in[0,1]. $$
+    <p style="margin:.2em 0">$BC=1$ when the histograms are identical (every bin lines up), $BC=0$ when they share
+    no colours at all. The element-wise $\sqrt{p_i q_i}$ is big only where <em>both</em> histograms have mass in
+    the same bin.</p>
+  </div>
+
+  <table>
+    <tr><th>Line</th><th>What it does and why</th></tr>
+    <tr><td class="ln">1</td><td><code>p*q</code> multiplies the two histograms bin by bin, <code>sqrt</code> takes the root of each, <code>sum</code> adds them up. That is exactly $BC=\sum\sqrt{p_i q_i}$, a number in [0,1] where 1 = perfect colour match.</td></tr>
+    <tr><td class="ln">2</td><td><span class="term">Map similarity to a usable weight.</span> $e^{20\,BC}$ sends $BC\in[0,1]$ to $[1,\,e^{20}]$. The factor 20 is a sharpness knob: it blows the gap between a good match ($BC$ near 1) and a mediocre one wide open, so the best particles dominate the weights and the cloud locks on tightly. A bad match stays near 1, a great match shoots up to ~$e^{20}$.</td></tr>
+  </table>
+
+  <div class="callout warnbox"><span class="lbl">Name vs behaviour</span>
+    The true Bhattacharyya <em>distance</em> is $-\ln(BC)$ and is <em>small</em> for similar patches. This function
+    returns the opposite: a <em>large-for-similar</em> weight. That is what the filter wants, because the weight
+    must be biggest where the match is best. So read this as "similarity weight," not "distance."</div>
+
+  <!-- ================= WEIGHTS ================= -->
+  <h2 id="weights">7 · <code>compute_weights_and_cdf</code> — the MEASURE step</h2>
+  <p>The helper you added to wire everything together. For every particle: build its histogram, score it against
+  the reference, then normalise all scores into weights and stack them into a CDF for the next resample.</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">compute_weights_and_cdf</span>(image, S, q, N):
+    W = np.zeros(N)                                  <span class="cmt"># 1</span>
+    <span class="kw">for</span> i <span class="kw">in</span> range(N):                              <span class="cmt"># 2</span>
+        p = compute_normalized_histogram(image, S[:, i])  <span class="cmt"># 3</span>
+        W[i] = bhattacharyya_distance(p, q)          <span class="cmt"># 4</span>
+    W = W / np.sum(W)                                <span class="cmt"># 5</span>
+    C = np.cumsum(W)                                 <span class="cmt"># 6</span>
+    <span class="kw">return</span> W, C</code></pre>
+
+  <table>
+    <tr><th>Line</th><th>What it does and why</th></tr>
+    <tr><td class="ln">1</td><td>An array to hold one weight per particle.</td></tr>
+    <tr><td class="ln">2–4</td><td>Loop over all <code>N</code> particles. For particle <code>i</code>: crop its box and build its colour histogram <code>p</code> (line 3), then score it against the reference <code>q</code> with the Bhattacharyya weight (line 4). This is the <span class="term">likelihood</span> $P(z_t\mid x_t)$ evaluated at each particle.</td></tr>
+    <tr><td class="ln">5</td><td><span class="term">Normalise</span> so the weights sum to 1. Now <code>W</code> is a proper distribution over particles: <code>W[i]</code> is the probability that particle <code>i</code> is the object. Normalising also cancels the arbitrary scale from the $e^{20\cdot}$ step.</td></tr>
+    <tr><td class="ln">6</td><td><span class="term">Cumulative sum</span> → the CDF. <code>C[j]=W[0]+…+W[j]</code>, rising from near 0 up to exactly 1.0. This is precisely the 0→1 bar that <code>sample_particles</code> throws its random <code>r</code> at. Building it here means next frame's resampling is ready to go.</td></tr>
+  </table>
+
+  <!-- ================= MAIN ================= -->
+  <h2 id="main">8 · <code>main()</code> — the loop that runs it all</h2>
+  <p>Setup, then the per-frame loop. The two lines you filled are the <code>compute_weights_and_cdf</code> calls,
+  but here is how every piece connects.</p>
+
+  <h3>Setup (before the loop)</h3>
+<pre><code>state_at_first_frame = np.matlib.repmat(s_initial, N, <span class="num">1</span>).T   <span class="cmt"># A</span>
+S = predict_particles(state_at_first_frame)                <span class="cmt"># B</span>
+image = cv2.imread(os.path.join(IMAGE_DIR_PATH, <span class="str">"001.png"</span>))   <span class="cmt"># C</span>
+q = compute_normalized_histogram(image, s_initial)         <span class="cmt"># D</span>
+W, C = compute_weights_and_cdf(image, S, q, N)             <span class="cmt"># E  ← you wrote this</span></code></pre>
+
+  <ul>
+    <li><span class="ln">A</span> <code>repmat</code> tiles the single starting state into 100 identical columns, then <code>.T</code> transposes to the <code>6 × N</code> layout the rest of the code expects. All 100 particles start as exact copies of <code>s_initial</code>.</li>
+    <li><span class="ln">B</span> Run them through predict once so the noise <em>scatters</em> the 100 identical copies into a real cloud. Without this they would all sit on the same pixel.</li>
+    <li><span class="ln">C</span> Load frame 1.</li>
+    <li><span class="ln">D</span> Build the <span class="term">reference histogram</span> <code>q</code> from the true starting box on frame 1. This <code>q</code> is the object's "appearance fingerprint" and stays fixed for the whole run — every later patch is compared against it. (Updating <code>q</code> over time is exactly what Q4 was about.)</li>
+    <li><span class="ln">E</span> Score the initial cloud so the first frame of the loop has weights and a CDF to resample from.</li>
+  </ul>
+
+  <h3>The per-frame loop</h3>
+<pre><code><span class="kw">for</span> image_name <span class="kw">in</span> image_name_list[<span class="num">1</span>:]:        <span class="cmt"># every frame after the first</span>
+    S_prev = S                                <span class="cmt"># F</span>
+    current_image = cv2.imread(image_path)    <span class="cmt"># G</span>
+    S_next_tag = sample_particles(S_prev, C)  <span class="cmt"># H  ① SELECT</span>
+    S = predict_particles(S_next_tag)         <span class="cmt"># I  ② PREDICT</span>
+    W, C = compute_weights_and_cdf(current_image, S, q, N)  <span class="cmt"># J  ③ MEASURE ← you wrote this</span>
+    images_processed += <span class="num">1</span>
+    <span class="kw">if</span> <span class="num">0</span> == images_processed % <span class="num">10</span>:           <span class="cmt"># K  save every 10th frame</span>
+        ... show_particles(...)</code></pre>
+
+  <ul>
+    <li><span class="ln">F</span> Remember the current cloud as <code>S_prev</code> before overwriting <code>S</code>.</li>
+    <li><span class="ln">G</span> Load the new frame — the new measurement.</li>
+    <li><span class="ln">H</span> <span class="term">① SELECT.</span> Resample using last frame's CDF <code>C</code>: keep the winners.</li>
+    <li><span class="ln">I</span> <span class="term">② PREDICT.</span> Drift + diffuse the survivors into this frame.</li>
+    <li><span class="ln">J</span> <span class="term">③ MEASURE.</span> Re-score against <code>q</code> on the new image, producing fresh <code>W</code> and <code>C</code> for the next turn. This is the line you filled — it closes the loop.</li>
+    <li><span class="ln">K</span> Every 10th frame, draw the boxes and save a PNG (next section). At the end, both result dictionaries are dumped to JSON.</li>
+  </ul>
+
+  <div class="callout key"><span class="lbl">The order matters</span>
+    SELECT → PREDICT → MEASURE, every frame. Resample on the <em>old</em> weights, move, then measure to get
+    <em>new</em> weights. That ordering is the Condensation algorithm.</div>
+
+  <!-- ================= SHOW ================= -->
+  <h2 id="show">9 · <code>show_particles</code> — turning particles into the boxes you see</h2>
+  <p>This was given, but it is what produces the result images, so it is worth understanding. It draws two boxes
+  per frame.</p>
+
+  <h3>Green box — the weighted average (stable estimate)</h3>
+<pre><code>half_w_avg = np.sum(state[<span class="num">2</span>, :] * W)     <span class="cmt"># weighted mean half-width</span>
+half_h_avg = np.sum(state[<span class="num">3</span>, :] * W)     <span class="cmt"># weighted mean half-height</span>
+x_avg = np.sum(state[<span class="num">0</span>, :] * W) - half_w_avg  <span class="cmt"># weighted mean centre, then centre→corner</span>
+y_avg = np.sum(state[<span class="num">1</span>, :] * W) - half_h_avg</code></pre>
+  <p><code>np.sum(state[k,:] * W)</code> is a weighted average: each particle's value times its weight, summed.
+  Because the weights sum to 1, this is the mean position of the whole cloud, pulled toward the heavy particles.
+  It is smooth and stable but can sit between two candidates if the cloud splits. The <code>- half_w_avg</code> /
+  <code>- half_h_avg</code> converts the <em>centre</em> into the <em>bottom-left corner</em>, because
+  <code>patches.Rectangle</code> wants a corner plus width and height (<code>w = 2·half_w</code>).</p>
+
+  <h3>Red box — the single best particle (sharp estimate)</h3>
+<pre><code>i_max = np.argmax(W)                       <span class="cmt"># index of the heaviest particle</span>
+w_max = <span class="num">2</span> * state[<span class="num">2</span>, i_max]
+x_max = state[<span class="num">0</span>, i_max] - state[<span class="num">2</span>, i_max]   <span class="cmt"># its centre → corner</span></code></pre>
+  <p>This just picks the one particle with the highest weight and draws its box. It is sharper and reacts faster,
+  but it can jitter frame to frame if two spots compete. Green vs red is the classic
+  <strong>weighted-average vs max-posterior</strong> trade-off from the lecture notes.</p>
+
+  <p>The function also records both boxes as <code>[x, y, w, h]</code> into two dictionaries keyed by frame
+  number, which <code>main</code> writes out as <code>frame_index_to_avg_state.json</code> and
+  <code>frame_index_to_max_state.json</code>.</p>
+
+  <!-- ================= RESULTS ================= -->
+  <h2 id="results">10 · What your results actually show</h2>
+  <p>Your run produced 11 saved frames (10, 20, … 110) plus the two JSON files. Reading them back confirms the
+  tracker behaves exactly as the code predicts.</p>
+
+  <h3>The box follows the person</h3>
+  <p>From <code>frame_index_to_max_state.json</code>, the centre <code>(x, y)</code> of the best box over time:</p>
+  <div class="res map">
+    <code>f10 (266,84)</code> <code>f40 (284,96)</code> <code>f60 (307,106)</code>
+    <code>f80 (327,108)</code> <code>f100 (312,84)</code> <code>f110 (269,57)</code>
+  </div>
+  <p style="margin-top:.6em">The centre slides right and down, then comes back left, tracing the person walking
+  across the bridge and back. The estimate is moving with the object — the filter is locked on.</p>
+
+  <h3>The box never changes size — and that is expected</h3>
+  <p>Look at the width and height columns in either JSON: they are <code>32</code> and <code>86</code> on
+  <em>every</em> single frame.</p>
+  <div class="res map"><code>w = 32</code> <code>h = 86</code> <span style="color:var(--mut)">— constant for all 112 frames</span></div>
+  <p>That is the direct, visible consequence of <code>predict_particles</code> never touching rows 2 and 3. The
+  half-sizes start at 16 and 43 and stay there, so <code>w = 2·16 = 32</code> and <code>h = 2·43 = 86</code>
+  forever. This is precisely the point of your <strong>Part A, Q3</strong> answer: in this formulation the box is
+  fixed, so the filter cannot follow a change in scale unless you add size (and size-noise) to the state.</p>
+
+  <div class="callout warnbox"><span class="lbl">Cleanup note</span>
+    Your <code>results/</code> folder also contains an older run saved under IDs
+    <code>…_987654321</code> (a leftover placeholder). Your real submission images are the
+    <code>HW3_213851579_213310485-*.png</code> set. Delete the <code>987654321</code> images before zipping so the
+    grader only sees your run.</div>
+
+  <hr class="sep">
+  <p class="lede" style="font-size:15px">Read once more and notice the symmetry: <code>predict_particles</code> is
+  the prior, <code>compute_weights_and_cdf</code> (via histogram + Bhattacharyya) is the likelihood, and the
+  weighted cloud is the posterior. Five short functions, and you have a working tracker.</p>
+
+</div>
+</body>
+</html>

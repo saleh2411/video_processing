@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HW3 – Particle Filter Tracking · Full Solution Guide</title>
+<style>
+  :root{
+    --bg:#0f1320; --panel:#171c2c; --panel2:#1d2436; --text:#e7ecf5; --muted:#9aa6bd;
+    --accent:#6ea8ff; --accent2:#7ee0c0; --green:#37d27a; --red:#ff6b6b; --yellow:#ffce5a;
+    --code-bg:#0b0e18; --border:#2a3350;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65;font-size:16px;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px 120px;}
+  header.top{padding:46px 22px 30px;background:linear-gradient(160deg,#1a2238,#0f1320);
+    border-bottom:1px solid var(--border);}
+  header.top .inner{max-width:1000px;margin:0 auto;}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:15px}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+    color:var(--accent2);padding:3px 10px;border-radius:999px;font-size:12.5px;margin:8px 8px 0 0}
+  h2{font-size:23px;margin:46px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--border);
+    color:#fff}
+  h3{font-size:18.5px;margin:30px 0 8px;color:var(--accent)}
+  h4{font-size:16px;margin:20px 0 6px;color:var(--accent2)}
+  p{margin:10px 0}
+  code{font-family:"JetBrains Mono",Consolas,"Courier New",monospace;font-size:13.5px;
+    background:#222a40;padding:1.5px 6px;border-radius:5px;color:#ffd9a0}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13.2px;line-height:1.55}
+  pre code{background:none;padding:0;color:#d7e0f5}
+  .kw{color:#ff79c6}.fn{color:#8be9fd}.str{color:#f1fa8c}.num{color:#bd93f9}.cm{color:#6b7a99;font-style:italic}
+  .toc{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 24px;margin:26px 0}
+  .toc h3{margin-top:0;color:#fff}
+  .toc ol{margin:6px 0;padding-left:22px}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .callout{border-left:4px solid var(--accent);background:var(--panel);padding:12px 18px;
+    border-radius:0 10px 10px 0;margin:16px 0}
+  .callout.tip{border-color:var(--green)}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.danger{border-color:var(--red)}
+  .callout .tag{font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;
+    display:block;margin-bottom:4px}
+  .tip .tag{color:var(--green)} .warn .tag{color:var(--yellow)} .danger .tag{color:var(--red)}
+  .callout.tip .tag::before{content:"✓ "} .callout.warn .tag::before{content:"⚠ "}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#fff}
+  tr:nth-child(even) td{background:#141a29}
+  .math{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 16px;margin:12px 0;font-size:16px;text-align:center;color:#fff;
+    font-family:"Cambria Math",Georgia,serif}
+  .green-txt{color:var(--green);font-weight:600}
+  .red-txt{color:var(--red);font-weight:600}
+  ul,ol{padding-left:24px}
+  li{margin:5px 0}
+  .step-num{display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;
+    background:var(--accent);color:#06101f;border-radius:50%;font-weight:700;font-size:13px;margin-right:8px}
+  .filebar{font-family:monospace;font-size:12.5px;color:var(--muted);
+    background:#0b0e18;border:1px solid var(--border);border-bottom:none;
+    border-radius:8px 8px 0 0;padding:6px 14px;margin-top:14px}
+  .filebar + pre{margin-top:0;border-radius:0 0 8px 8px}
+  hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+  .q{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 20px 16px;margin:18px 0}
+  .q .qhead{color:var(--yellow);font-weight:700;margin-top:14px}
+  a.anchor{color:inherit;text-decoration:none}
+  .small{font-size:13px;color:var(--muted)}
+  kbd{background:#2a3350;border:1px solid #3a4566;border-radius:4px;padding:1px 6px;font-size:12px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="inner">
+    <h1>HW3 — Particle Filter Tracking</h1>
+    <div class="sub">0512.4263 Video Processing · 2025/2026 · Complete step-by-step solution guide</div>
+    <div>
+      <span class="pill">Part A: 4 theory answers</span>
+      <span class="pill">Part B: 5 functions + main</span>
+      <span class="pill">N = 100 particles</span>
+      <span class="pill">112 frames</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#big">The big picture — what a particle filter does</a></li>
+    <li><a href="#setup">Environment setup</a></li>
+    <li><a href="#partA">Part A — Theory answers (go into the PDF)</a></li>
+    <li><a href="#state">Part B — The state vector &amp; the algorithm loop</a></li>
+    <li><a href="#funcs">Part B — Implementing every function (with code)</a>
+      <ol type="a">
+        <li><a href="#f-hist">compute_normalized_histogram</a></li>
+        <li><a href="#f-bhat">bhattacharyya_distance</a></li>
+        <li><a href="#f-predict">predict_particles</a></li>
+        <li><a href="#f-sample">sample_particles</a></li>
+        <li><a href="#f-show">show_particles</a></li>
+      </ol>
+    </li>
+    <li><a href="#main">Part B — Filling in <code>main()</code> (weights + CDF)</a></li>
+    <li><a href="#run">Running it &amp; expected output</a></li>
+    <li><a href="#tune">Tuning &amp; troubleshooting</a></li>
+    <li><a href="#submit">Submission checklist</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================= -->
+<h2 id="big"><a class="anchor" href="#big">1 · The big picture — what a particle filter does</a></h2>
+
+<p>We are tracking one object (a walking person) across 112 frames. We do <b>not</b> know exactly where it is in each new frame, so instead of committing to a single guess we keep <b>100 guesses</b> ("particles"). Each particle is a complete hypothesis: a box at some position, with some size and some velocity.</p>
+
+<p>Every frame we repeat a 4-beat cycle:</p>
+
+<table>
+  <tr><th>Beat</th><th>Name</th><th>What happens</th><th>Code</th></tr>
+  <tr><td>1</td><td><b>Resample</b> (drift / select)</td><td>Throw away weak hypotheses, duplicate strong ones. Particles that matched the object well last frame are copied more often.</td><td><code>sample_particles</code></td></tr>
+  <tr><td>2</td><td><b>Predict</b> (diffuse)</td><td>Move each surviving particle by its velocity and shake it with random noise, so the 100 guesses spread out and explore where the object might have moved.</td><td><code>predict_particles</code></td></tr>
+  <tr><td>3</td><td><b>Measure</b> (weight)</td><td>For each particle, cut out its box from the new image, build a colour histogram, and compare it to the reference histogram <code>q</code> of the object. Good match → big weight.</td><td><code>compute_normalized_histogram</code> + <code>bhattacharyya_distance</code></td></tr>
+  <tr><td>4</td><td><b>Show</b></td><td>Draw the weighted-average box (<span class="green-txt">green</span>) and the single best box (<span class="red-txt">red</span>).</td><td><code>show_particles</code></td></tr>
+</table>
+
+<p>The set of weighted particles <i>is</i> the probability distribution of "where is the object". It can be any shape (two bumps if there are two candidates, etc.) — that is exactly the advantage over the Kalman filter, which is forced to be a single Gaussian.</p>
+
+<div class="callout tip"><span class="tag">Mental model</span>
+Think of 100 scouts searching for a lost hiker. Each step: keep the scouts who are near promising clues (resample), let every scout wander a bit further (predict), score each scout by how much the ground looks like the hiker's last known appearance (measure), then report the average scout position and the most confident scout (show).</div>
+
+<!-- ============================================================= -->
+<h2 id="setup"><a class="anchor" href="#setup">2 · Environment setup</a></h2>
+
+<p>Create and activate the conda environment (Python 3.11), then install the pinned packages:</p>
+<pre><code><span class="cm"># in a terminal, inside the ex3 folder (the one that holds particle_filter.py + Images/)</span>
+conda create -n vp python=3.11 -y
+conda activate vp
+pip install -r requirements.txt</code></pre>
+
+<p>The folder you run from must contain:</p>
+<ul>
+  <li><code>particle_filter.py</code> — the file you edit and submit.</li>
+  <li><code>Images/</code> — frames <code>001.png</code> … <code>112.png</code>.</li>
+  <li><code>results/</code> — created automatically; the output PNGs + JSON land here.</li>
+</ul>
+
+<div class="callout warn"><span class="tag">First line of business</span>
+Open <code>particle_filter.py</code> and change the two IDs at the top:
+<pre><code>ID1 = <span class="str">"213851579"</span>   <span class="cm"># &lt;-- your ID</span>
+ID2 = <span class="str">"213310485"</span>   <span class="cm"># &lt;-- your partner's ID</span></code></pre>
+(Those two numbers are the pair used on your ex1 files — verify they are really yours before submitting.)</div>
+
+<!-- ============================================================= -->
+<h2 id="partA"><a class="anchor" href="#partA">3 · Part A — Theory answers</a></h2>
+<p class="small">Put these in a PDF. Keep them short; there is more than one correct answer. Below is a full model answer for each, which you can trim down.</p>
+
+<div class="q">
+<p class="qhead">Q1. Explain <i>posterior ∝ prior × likelihood</i> and how it relates to Kalman / Particle filter.</p>
+
+<p>This is <b>Bayes' rule</b> with the constant evidence term dropped (that is why it is "∝" and not "="). We are estimating a hidden <b>state</b> <code>x</code> (the object's box/position) from <b>measurements</b> <code>z</code> (the image).</p>
+<ul>
+  <li><b>Prior</b> — <code>p(xₜ | z₁:ₜ₋₁)</code>: what we believe about the state <i>before</i> looking at the current frame. We get it by taking last frame's result and pushing it through the motion model (the predict step). "What we expect."</li>
+  <li><b>Likelihood</b> — <code>p(zₜ | xₜ)</code>: how well a candidate state explains the current image. In our tracker this is the histogram similarity between the candidate's patch and the reference <code>q</code> (the Bhattacharyya weight). "How well the evidence fits a guess."</li>
+  <li><b>Posterior</b> — <code>p(xₜ | z₁:ₜ)</code>: the updated belief <i>after</i> folding in the current frame. It is proportional to prior × likelihood.</li>
+</ul>
+<p><b>Kalman:</b> every density is Gaussian. Predict moves the mean/covariance through a linear model (prior); update fuses the measurement (likelihood) and gives a Gaussian posterior in closed form.</p>
+<p><b>Particle filter:</b> the prior is represented by the sampled+predicted particles; the likelihood is the weight we attach to each particle; the posterior is the resulting <b>weighted particle cloud</b> (then we resample). Same Bayes equation, but the distributions can be any shape, not only Gaussian.</p>
+</div>
+
+<div class="q">
+<p class="qhead">Q2a. Why score patches with a histogram? Pros / cons.</p>
+<p>A histogram captures the <b>colour distribution</b> of the patch and deliberately ignores <i>where</i> each pixel sits.</p>
+<p><b>Pros:</b> robust to small shifts, rotation, pose/shape change and partial occlusion (a person is non-rigid, so this matters); cheap to compute and compare; gives a compact, normalized appearance signature.</p>
+<p><b>Cons:</b> throws away all spatial / structural information — two different objects with the same colours look identical; sensitive to illumination and colour changes; background pixels that fall inside the box pollute the histogram; quantizing to 4 bits loses fine colour detail.</p>
+</div>
+
+<div class="q">
+<p class="qhead">Q2b. Why not SSD (sum of squared differences) between the patches in image space?</p>
+<p>SSD compares pixels <b>position-by-position</b>, so it assumes the two patches are perfectly aligned. A one-pixel shift, a small rotation, a scale change or any deformation makes SSD explode — even for the <i>same</i> object. A walking/dancing person changes shape every frame, so SSD would give a large "distance" almost everywhere and the tracker would lose lock. SSD is also very sensitive to lighting. The histogram is alignment-free and tolerant to exactly these effects, which is why we prefer it. (SSD is only good for a rigid, already-aligned template.)</p>
+</div>
+
+<div class="q">
+<p class="qhead">Q2c. Another way to compare patches? Pros / cons.</p>
+<p>Several options — pick one and discuss:</p>
+<ul>
+  <li><b>Spatially-binned colour histogram</b> (split the box into, say, 2×2 cells and build one histogram per cell). <i>Pros:</i> keeps some spatial layout, so it discriminates better than a single global histogram. <i>Cons:</i> a little less tolerant to deformation; more bins to compare.</li>
+  <li><b>HOG / edge-orientation histogram.</b> <i>Pros:</i> captures shape and is robust to colour and illumination changes. <i>Cons:</i> heavier to compute, sensitive to large pose changes.</li>
+  <li><b>Deep CNN embedding + cosine distance.</b> <i>Pros:</i> very robust to appearance, lighting and viewpoint. <i>Cons:</i> needs a trained network, heavier, less interpretable.</li>
+  <li><b>Same histogram but a different distance</b> (χ², KL, Earth-Mover's Distance). EMD tolerates small colour shifts because it accounts for distance <i>between</i> bins; cost: slower.</li>
+</ul>
+<p><i>Example:</i> if the person wears a red shirt and blue jeans, a 2×2 spatial histogram remembers "red on top, blue on bottom", so it won't be fooled by a flipped, blue-on-top object the way a global histogram would.</p>
+</div>
+
+<div class="q">
+<p class="qhead">Q3. Does it work under scale change? Under viewpoint change?</p>
+<p><b>Scale</b> (person walking toward/away): the <b>basic</b> filter here keeps width and height <i>fixed</i>, so the box will <b>not</b> grow or shrink with the object. As the real object changes size the fixed box starts covering background or only part of the object, the histogram match degrades, and tracking gets worse. <i>Fix:</i> add scale to the state — let <code>Width/2</code> and <code>Height/2</code> drift with their own noise (or search over a few scales) — then it can follow scale.</p>
+<p><b>Viewpoint</b> (person dancing): the colour histogram ignores spatial layout, so it is fairly viewpoint-<i>invariant</i> — as long as the visible <b>colours</b> stay roughly the same it keeps tracking. But a big appearance change (front vs. back, different colours coming into view) still degrades the match. So: partially robust; combine with template updating (Q4) for the hard cases.</p>
+</div>
+
+<div class="q">
+<p class="qhead">Q4. When and how to update the template?</p>
+<p><b>When:</b> watch the similarity score of the best particle (its Bhattacharyya coefficient / weight). While it stays high the reference <code>q</code> still describes the object, so leave it. When it drifts <i>down</i> but the tracker is still confidently locked, the appearance has changed → update. Crucially, only update while the score is still good enough — updating during a low-confidence frame or an occlusion makes the template "learn" the background and the tracker drifts away. (A simple periodic "update every k frames if confidence is OK" also works.)</p>
+<p><b>How (the new patch):</b> take the patch under the current <b>best</b> (max-weight) particle. To avoid jumping on one noisy frame, blend rather than replace — an exponential running update:</p>
+<div class="math">q<sub>new</sub> = (1 − α)·q<sub>old</sub> + α·q<sub>current</sub>,&nbsp;&nbsp; with a small α (e.g. 0.05–0.1)</div>
+<p>This mixes the long-term appearance with the latest one, smooths noise, and resists a single bad frame. (Averaging the last two frames is the same idea with a short memory.) The trade-off is always <b>adaptivity vs. drift</b>: update too eagerly and you follow the wrong thing; never update and you fail under lighting/viewpoint change.</p>
+</div>
+
+<!-- ============================================================= -->
+<h2 id="state"><a class="anchor" href="#state">4 · Part B — The state vector &amp; the algorithm loop</a></h2>
+
+<h3>The state vector (6 numbers per particle)</h3>
+<p>Each particle is a column of the <code>6 × 100</code> matrix <code>S</code>:</p>
+<table>
+  <tr><th>Row</th><th>Symbol</th><th>Meaning</th><th>Init value</th></tr>
+  <tr><td>0</td><td>X<sub>c</sub></td><td>box centre x</td><td>297</td></tr>
+  <tr><td>1</td><td>Y<sub>c</sub></td><td>box centre y</td><td>139</td></tr>
+  <tr><td>2</td><td>Width/2</td><td><b>half</b> width</td><td>16</td></tr>
+  <tr><td>3</td><td>Height/2</td><td><b>half</b> height</td><td>43</td></tr>
+  <tr><td>4</td><td>V<sub>x</sub></td><td>x velocity</td><td>0</td></tr>
+  <tr><td>5</td><td>V<sub>y</sub></td><td>y velocity</td><td>0</td></tr>
+</table>
+
+<div class="callout danger"><span class="tag">The #1 bug trap</span>
+Rows 2 and 3 are <b>half</b>-width and <b>half</b>-height. So the full box is <code>2·s[2]</code> wide and <code>2·s[3]</code> tall, and its top-left corner is <code>(s[0] − s[2], s[1] − s[3])</code>. Mixing up "half vs. full" or "centre vs. corner" is the most common mistake — it shows up as a box that is the wrong size or shifted. Keep it straight everywhere (histogram crop AND drawing).</div>
+
+<h3>What the supplied <code>main()</code> already does</h3>
+<p>Read the loop once before coding so you know what each function must return:</p>
+<div class="filebar">particle_filter.py · main() (already written for you)</div>
+<pre><code><span class="kw">def</span> <span class="fn">main</span>():
+    state_at_first_frame = np.matlib.repmat(s_initial, N, <span class="num">1</span>).T   <span class="cm"># (6,100), all columns = s_initial</span>
+    S = <span class="fn">predict_particles</span>(state_at_first_frame)             <span class="cm"># spread into a cloud</span>
+
+    image = cv2.imread(os.path.join(IMAGE_DIR_PATH, <span class="str">"001.png"</span>))
+    q = <span class="fn">compute_normalized_histogram</span>(image, s_initial)       <span class="cm"># reference histogram</span>
+
+    <span class="cm"># &lt;-- YOU FILL: compute W and C here (first frame)</span>
+
+    images_processed = <span class="num">1</span>
+    image_name_list = sorted(os.listdir(IMAGE_DIR_PATH))
+    <span class="kw">for</span> image_name <span class="kw">in</span> image_name_list[<span class="num">1</span>:]:        <span class="cm"># frames 002..112</span>
+        S_prev = S
+        current_image = cv2.imread(os.path.join(IMAGE_DIR_PATH, image_name))
+
+        S_next_tag = <span class="fn">sample_particles</span>(S_prev, C)    <span class="cm"># beat 1: resample using CDF</span>
+        S = <span class="fn">predict_particles</span>(S_next_tag)          <span class="cm"># beat 2: drift + noise</span>
+
+        <span class="cm"># &lt;-- YOU FILL: recompute W and C here (current frame)</span>
+
+        images_processed += <span class="num">1</span>
+        <span class="kw">if</span> <span class="num">0</span> == images_processed % <span class="num">10</span>:           <span class="cm"># beat 4: draw every 10th frame</span>
+            ... = <span class="fn">show_particles</span>(current_image, S, W, images_processed, ID, ...)</code></pre>
+
+<p>So you owe <code>main()</code> two identical blocks (first-frame and in-loop) that turn the particle set <code>S</code> into weights <code>W</code> and a CDF <code>C</code>. Everything else is the five functions.</p>
+
+<!-- ============================================================= -->
+<h2 id="funcs"><a class="anchor" href="#funcs">5 · Part B — Implementing every function</a></h2>
+
+<!-- ---- HISTOGRAM ---- -->
+<h3 id="f-hist"><a class="anchor" href="#f-hist">5a · compute_normalized_histogram(image, state)</a></h3>
+<p><b>Goal:</b> crop the box described by <code>state</code> out of <code>image</code>, quantize its colours to 4 bits per channel, and return a normalized <code>4096</code>-length histogram of RGB combinations.</p>
+
+<h4>Why 4096?</h4>
+<p>8-bit colour has 256 levels per channel. We quantize to 4 bits → 16 levels per channel (divide by 16, floor). Three channels → <code>16 × 16 × 16 = 4096</code> possible colour "bins". Bin index for a pixel is <code>(R·16 + G)·16 + B</code> after quantization. We count how many pixels fall in each bin, then divide by the total so the vector sums to 1.</p>
+
+<div class="filebar">particle_filter.py · replace the body of compute_normalized_histogram</div>
+<pre><code><span class="kw">def</span> <span class="fn">compute_normalized_histogram</span>(image: np.ndarray, state: np.ndarray) -&gt; np.ndarray:
+    state = np.floor(state).astype(<span class="kw">int</span>)
+    xc, yc, half_w, half_h = state[<span class="num">0</span>], state[<span class="num">1</span>], state[<span class="num">2</span>], state[<span class="num">3</span>]
+
+    h_img, w_img = image.shape[<span class="num">0</span>], image.shape[<span class="num">1</span>]
+    <span class="cm"># clip the rectangle to the image so we never index outside it</span>
+    x_min, x_max = <span class="fn">max</span>(<span class="num">0</span>, xc - half_w), <span class="fn">min</span>(w_img, xc + half_w)
+    y_min, y_max = <span class="fn">max</span>(<span class="num">0</span>, yc - half_h), <span class="fn">min</span>(h_img, yc + half_h)
+
+    patch = image[y_min:y_max, x_min:x_max, :]          <span class="cm"># rows=y, cols=x</span>
+
+    hist = np.zeros((<span class="num">16</span>, <span class="num">16</span>, <span class="num">16</span>))
+    <span class="kw">if</span> patch.size == <span class="num">0</span>:                                  <span class="cm"># particle fully off-screen</span>
+        <span class="kw">return</span> np.reshape(hist, <span class="num">16</span> * <span class="num">16</span> * <span class="num">16</span>)
+
+    q_patch = (patch // <span class="num">16</span>).astype(<span class="kw">int</span>)                 <span class="cm"># 0..255  ->  0..15</span>
+
+    <span class="cm"># --- fast, vectorized counting (recommended: 100 particles x 112 frames) ---</span>
+    idx = (q_patch[:, :, <span class="num">0</span>] * <span class="num">256</span> + q_patch[:, :, <span class="num">1</span>] * <span class="num">16</span> + q_patch[:, :, <span class="num">2</span>]).ravel()
+    hist = np.bincount(idx, minlength=<span class="num">16</span> * <span class="num">16</span> * <span class="num">16</span>).astype(<span class="kw">float</span>)
+
+    hist = hist / np.sum(hist)                          <span class="cm"># normalize: sum == 1</span>
+    <span class="kw">return</span> hist</code></pre>
+
+<div class="callout tip"><span class="tag">Same result, easier to read</span>
+If the vectorized version feels like magic, this nested loop is identical (just slower). Use it to understand, then switch to the fast one:
+<pre><code><span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(q_patch.shape[<span class="num">0</span>]):
+    <span class="kw">for</span> j <span class="kw">in</span> <span class="fn">range</span>(q_patch.shape[<span class="num">1</span>]):
+        r, g, b = q_patch[i, j, <span class="num">0</span>], q_patch[i, j, <span class="num">1</span>], q_patch[i, j, <span class="num">2</span>]
+        hist[r, g, b] += <span class="num">1</span>
+hist = np.reshape(hist, <span class="num">16</span> * <span class="num">16</span> * <span class="num">16</span>)
+hist = hist / np.sum(hist)</code></pre></div>
+
+<div class="callout warn"><span class="tag">Two things to get right</span>
+<b>(1)</b> Image axes: OpenCV gives <code>(H, W, 3)</code>, so the patch is <code>image[y_min:y_max, x_min:x_max]</code> — y first, x second. <b>(2)</b> Channel order: <code>cv2.imread</code> returns <b>BGR</b>, not RGB. That is fine here because <code>p</code> and <code>q</code> both come from this same function, so they are compared consistently. Only the <i>display</i> needs flipping (handled in <code>show_particles</code>).</div>
+
+<!-- ---- BHATTACHARYYA ---- -->
+<h3 id="f-bhat"><a class="anchor" href="#f-bhat">5b · bhattacharyya_distance(p, q)</a></h3>
+<p><b>Goal:</b> turn two histograms into one similarity number — the particle's weight. The PDF gives the exact formula:</p>
+<div class="math">w = dist(p, q) = exp&#8201;( 20 · Σ<sub>i=1..4096</sub> √(p<sub>i</sub> · q<sub>i</sub>) )</div>
+<p>The inner sum <code>Σ√(pᵢqᵢ)</code> is the <b>Bhattacharyya coefficient</b>, between 0 (no overlap) and 1 (identical). Identical patches → coefficient 1 → weight <code>e²⁰ ≈ 4.85·10⁸</code> (huge). Totally different → coefficient 0 → weight <code>e⁰ = 1</code> (smallest). So bigger = more similar, which is exactly what we want for a weight. The <code>20</code> sharpens the contrast between good and bad matches.</p>
+
+<div class="filebar">particle_filter.py · replace the body of bhattacharyya_distance</div>
+<pre><code><span class="kw">def</span> <span class="fn">bhattacharyya_distance</span>(p: np.ndarray, q: np.ndarray) -&gt; <span class="kw">float</span>:
+    bc = np.sum(np.sqrt(p * q))      <span class="cm"># Bhattacharyya coefficient in [0, 1]</span>
+    distance = np.exp(<span class="num">20</span> * bc)        <span class="cm"># PDF formula -> larger = more similar</span>
+    <span class="kw">return</span> distance</code></pre>
+
+<div class="callout warn"><span class="tag">Don't "fix" the name</span>
+Despite the name <code>..._distance</code>, this returns a <b>similarity</b> (high = close). That is intentional — it is the unnormalized weight. Implement the formula exactly as written; do not take a negative log or <code>1 − …</code>.</div>
+
+<!-- ---- PREDICT ---- -->
+<h3 id="f-predict"><a class="anchor" href="#f-predict">5c · predict_particles(s_prior)</a></h3>
+<p><b>Goal:</b> push every particle forward in time (apply the motion model <code>A</code>) and add white noise so the cloud explores. Input/output shape is <code>(6, N)</code>.</p>
+<p>Motion model from the PDF — add velocity to position, keep size, keep velocity:</p>
+<div class="math">S<sub>t</sub> = [ X<sub>c</sub>+V<sub>x</sub>, &nbsp; Y<sub>c</sub>+V<sub>y</sub>, &nbsp; W/2, &nbsp; H/2, &nbsp; V<sub>x</sub>, &nbsp; V<sub>y</sub> ]<sup>T</sup> + noise</div>
+
+<div class="filebar">particle_filter.py · replace the body of predict_particles</div>
+<pre><code><span class="kw">def</span> <span class="fn">predict_particles</span>(s_prior: np.ndarray) -&gt; np.ndarray:
+    s_prior = s_prior.astype(<span class="kw">float</span>)
+    state_drifted = s_prior.copy()
+    n = state_drifted.shape[<span class="num">1</span>]                 <span class="cm"># number of particles</span>
+
+    <span class="cm"># --- dynamic model A: move centre by its velocity ---</span>
+    state_drifted[<span class="num">0</span>, :] += state_drifted[<span class="num">4</span>, :]    <span class="cm"># x  += Vx</span>
+    state_drifted[<span class="num">1</span>, :] += state_drifted[<span class="num">5</span>, :]    <span class="cm"># y  += Vy</span>
+    <span class="cm"># rows 2,3 (half width/height) stay fixed -- PDF hint</span>
+
+    <span class="cm"># --- white additive Gaussian noise (diffusion); tune the std values ---</span>
+    state_drifted[<span class="num">0</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">4</span>, n))   <span class="cm"># x</span>
+    state_drifted[<span class="num">1</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">4</span>, n))   <span class="cm"># y</span>
+    state_drifted[<span class="num">4</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">1</span>, n))   <span class="cm"># Vx</span>
+    state_drifted[<span class="num">5</span>, :] += np.round(np.random.normal(<span class="num">0</span>, <span class="num">1</span>, n))   <span class="cm"># Vy</span>
+
+    state_drifted = state_drifted.astype(<span class="kw">int</span>)
+    <span class="kw">return</span> state_drifted</code></pre>
+
+<div class="callout tip"><span class="tag">Why this also builds the initial cloud</span>
+<code>main()</code> calls <code>predict_particles</code> once on <code>state_at_first_frame</code> (100 identical copies of <code>s_initial</code>, velocity 0). The position noise scatters those copies into a cloud around (297,139) — that is the "create S by adding random noise to s_initial" step. One function, two jobs.</div>
+
+<div class="callout warn"><span class="tag">Noise = the main tuning knob</span>
+Position std ~3–5 px and velocity std ~1–2 work for this sequence. Too small → the cloud can't keep up when the person speeds up (tracker lags / loses lock). Too large → the cloud smears out and the box jitters. The size rows (2,3) are kept noise-free on purpose so the box doesn't breathe.</div>
+
+<!-- ---- SAMPLE ---- -->
+<h3 id="f-sample"><a class="anchor" href="#f-sample">5d · sample_particles(previous_state, cdf)</a></h3>
+<p><b>Goal:</b> resample — draw <code>N</code> new particles from the old ones, with probability proportional to their weights, using the CDF. High-weight particles get copied many times; low-weight ones die out. This is the "survival of the fittest" beat.</p>
+<p>Algorithm (PDF Step B), repeated N times: draw <code>r ∈ [0,1)</code> uniform, find the smallest index <code>j</code> with <code>cdf[j] ≥ r</code>, copy that whole column.</p>
+
+<div class="filebar">particle_filter.py · replace the body of sample_particles</div>
+<pre><code><span class="kw">def</span> <span class="fn">sample_particles</span>(previous_state: np.ndarray, cdf: np.ndarray) -&gt; np.ndarray:
+    S_next = np.zeros(previous_state.shape)
+    n = previous_state.shape[<span class="num">1</span>]
+    <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(n):
+        r = np.random.uniform(<span class="num">0</span>, <span class="num">1</span>)
+        j = np.argmax(cdf &gt;= r)              <span class="cm"># first index where cdf crosses r</span>
+        S_next[:, i] = previous_state[:, j]  <span class="cm"># copy the whole 6-vector</span>
+    <span class="kw">return</span> S_next</code></pre>
+
+<div class="callout tip"><span class="tag">Why <code>np.argmax(cdf &gt;= r)</code> works</span>
+<code>cdf &gt;= r</code> is a boolean array like <code>[F,F,T,T,T]</code>. <code>np.argmax</code> returns the index of the <i>first</i> <code>True</code> — exactly "the smallest j such that cdf[j] ≥ r". Because the CDF is increasing and ends at 1, larger weight bins occupy a wider slice of <code>[0,1]</code>, so they get picked more often. That is the whole trick.</div>
+
+<!-- ---- SHOW ---- -->
+<h3 id="f-show"><a class="anchor" href="#f-show">5e · show_particles(...)</a></h3>
+<p><b>Goal:</b> draw two boxes on the frame — the <span class="green-txt">weighted-average</span> particle in green and the <span class="red-txt">max-weight</span> particle in red — save the figure, and record both boxes in the dictionaries.</p>
+<p>Remember the half/full and centre/corner conversion. <code>patches.Rectangle((x,y), w, h)</code> wants the <b>top-left corner</b> and the <b>full</b> width/height:</p>
+<div class="math">corner = (X<sub>c</sub> − W/2,&nbsp; Y<sub>c</sub> − H/2),&nbsp;&nbsp; full size = (2·(W/2),&nbsp; 2·(H/2))</div>
+
+<div class="filebar">particle_filter.py · fill the two marked spots in show_particles</div>
+<pre><code><span class="kw">def</span> <span class="fn">show_particles</span>(image, state, W, frame_index, ID,
+                   frame_index_to_mean_state, frame_index_to_max_state):
+    fig, ax = plt.subplots(<span class="num">1</span>)
+    image = image[:, :, ::-<span class="num">1</span>]                 <span class="cm"># BGR -> RGB just for display</span>
+    plt.imshow(image)
+    plt.title(ID + <span class="str">" - Frame mumber = "</span> + <span class="fn">str</span>(frame_index))
+
+    W = W / np.sum(W)                       <span class="cm"># be safe: weights sum to 1</span>
+
+    <span class="cm"># ---------- AVERAGE (weighted) box -> GREEN ----------</span>
+    half_w_avg = np.sum(state[<span class="num">2</span>, :] * W)
+    half_h_avg = np.sum(state[<span class="num">3</span>, :] * W)
+    w_avg = <span class="num">2</span> * half_w_avg
+    h_avg = <span class="num">2</span> * half_h_avg
+    x_avg = np.sum(state[<span class="num">0</span>, :] * W) - half_w_avg   <span class="cm"># centre -> top-left corner</span>
+    y_avg = np.sum(state[<span class="num">1</span>, :] * W) - half_h_avg
+
+    rect = patches.Rectangle((x_avg, y_avg), w_avg, h_avg,
+                             linewidth=<span class="num">1</span>, edgecolor=<span class="str">'g'</span>, facecolor=<span class="str">'none'</span>)
+    ax.add_patch(rect)
+
+    <span class="cm"># ---------- MAX-weight box -> RED ----------</span>
+    i_max = np.argmax(W)
+    w_max = <span class="num">2</span> * state[<span class="num">2</span>, i_max]
+    h_max = <span class="num">2</span> * state[<span class="num">3</span>, i_max]
+    x_max = state[<span class="num">0</span>, i_max] - state[<span class="num">2</span>, i_max]
+    y_max = state[<span class="num">1</span>, i_max] - state[<span class="num">3</span>, i_max]
+
+    rect = patches.Rectangle((x_max, y_max), w_max, h_max,
+                             linewidth=<span class="num">1</span>, edgecolor=<span class="str">'r'</span>, facecolor=<span class="str">'none'</span>)
+    ax.add_patch(rect)
+    plt.show(block=<span class="kw">False</span>)                    <span class="cm"># non-blocking, as required</span>
+
+    fig.savefig(os.path.join(RESULTS, ID + <span class="str">"-"</span> + <span class="fn">str</span>(frame_index) + <span class="str">".png"</span>))
+    frame_index_to_mean_state[frame_index] = [<span class="fn">float</span>(x) <span class="kw">for</span> x <span class="kw">in</span> [x_avg, y_avg, w_avg, h_avg]]
+    frame_index_to_max_state[frame_index]  = [<span class="fn">float</span>(x) <span class="kw">for</span> x <span class="kw">in</span> [x_max, y_max, w_max, h_max]]
+    <span class="kw">return</span> frame_index_to_mean_state, frame_index_to_max_state</code></pre>
+
+<div class="callout tip"><span class="tag">Average vs. max</span>
+The <span class="green-txt">green</span> "average" box is the <b>expected state</b> — a weighted mean over all 100 particles (smooth, stable). The <span class="red-txt">red</span> "max" box is the single most-confident particle (sharper but jumpier). Plotting both is required and also a great sanity check: when they sit on top of each other, the cloud has converged on the object.</div>
+
+<!-- ============================================================= -->
+<h2 id="main"><a class="anchor" href="#main">6 · Filling in <code>main()</code> — weights + CDF</a></h2>
+<p>Two spots in <code>main()</code> are marked <code>"""INSERT YOUR CODE HERE."""</code>. Both do the same thing: score every particle against the reference <code>q</code>, normalize the weights, and build the CDF. Define one tiny helper and call it in both places.</p>
+
+<div class="filebar">particle_filter.py · add this helper near the top (after the imports)</div>
+<pre><code><span class="kw">def</span> <span class="fn">compute_weights_and_cdf</span>(image, S, q, N):
+    <span class="str">"""Score each particle's patch against the reference histogram q."""</span>
+    W = np.zeros(N)
+    <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(N):
+        p = <span class="fn">compute_normalized_histogram</span>(image, S[:, i])
+        W[i] = <span class="fn">bhattacharyya_distance</span>(p, q)
+    W = W / np.sum(W)            <span class="cm"># normalize: sum(W) == 1   (PDF step 5)</span>
+    C = np.cumsum(W)             <span class="cm"># CDF: C[j] = sum of W[0..j]  (PDF step 6)</span>
+    <span class="kw">return</span> W, C</code></pre>
+
+<div class="filebar">particle_filter.py · first marked spot (after q = compute_normalized_histogram(...))</div>
+<pre><code>    W, C = <span class="fn">compute_weights_and_cdf</span>(image, S, q, N)</code></pre>
+
+<div class="filebar">particle_filter.py · second marked spot (inside the for-loop, after S = predict_particles(...))</div>
+<pre><code>        W, C = <span class="fn">compute_weights_and_cdf</span>(current_image, S, q, N)</code></pre>
+
+<div class="callout warn"><span class="tag">Key point: <code>q</code> never changes</span>
+The reference histogram <code>q</code> is computed once, in frame 1, from the true initial box. Every particle in every later frame is compared against that same <code>q</code>. (Updating <code>q</code> over time is precisely the optional improvement discussed in Part&nbsp;A Q4 — the base assignment keeps it fixed.) Also note <code>np.cumsum(W)</code> is exactly the CDF the PDF defines, and its last entry is 1.</div>
+
+<!-- ============================================================= -->
+<h2 id="run"><a class="anchor" href="#run">7 · Running it &amp; expected output</a></h2>
+<pre><code>conda activate vp
+python particle_filter.py</code></pre>
+<p>What you should see / get:</p>
+<ul>
+  <li>Figure windows pop up every 10th frame (frames 10, 20, …, 110) and do <b>not</b> freeze the run (thanks to <code>block=False</code>).</li>
+  <li>Title on each: <code>HW3_&lt;ID1&gt;_&lt;ID2&gt; - Frame mumber = NN</code>.</li>
+  <li>A <span class="green-txt">green</span> (average) and <span class="red-txt">red</span> (best) box hugging the walking person, tracking them across the scene.</li>
+  <li><code>results/</code> fills with <code>HW3_..-10.png … HW3_..-110.png</code> plus <code>frame_index_to_avg_state.json</code> and <code>frame_index_to_max_state.json</code>.</li>
+</ul>
+<div class="callout tip"><span class="tag">Fast feedback while developing</span>
+112 frames × 100 particles is a bit slow with the loop-based histogram — use the vectorized <code>np.bincount</code> version. To iterate quickly, temporarily change <code>if 0 == images_processed % 10</code> to <code>% 2</code> so you see more frames, or print the max weight each frame to watch the tracker lock on. Put it back to <code>% 10</code> before submitting.</div>
+
+<!-- ============================================================= -->
+<h2 id="tune"><a class="anchor" href="#tune">8 · Tuning &amp; troubleshooting</a></h2>
+<table>
+  <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+  <tr><td>Box is the wrong size / offset by half a box</td><td>half vs. full or centre vs. corner mix-up</td><td>Full = <code>2·s[2]</code>, <code>2·s[3]</code>; corner = <code>(s[0]−s[2], s[1]−s[3])</code></td></tr>
+  <tr><td>Tracker lags behind when the person speeds up</td><td>position/velocity noise too small</td><td>Raise position std to ~5, velocity std to ~2 in <code>predict_particles</code></td></tr>
+  <tr><td>Box jitters wildly / cloud never converges</td><td>noise too large, or weights not sharp</td><td>Lower the std; confirm the <code>20·</code> factor is in <code>bhattacharyya_distance</code></td></tr>
+  <tr><td><code>nan</code> in weights</td><td>empty patch → divide-by-zero in histogram</td><td>Keep the <code>if patch.size == 0</code> guard and the clipping</td></tr>
+  <tr><td>Colours look swapped in the saved figure</td><td>forgot the BGR→RGB flip on display</td><td>Keep <code>image = image[:, :, ::-1]</code> in <code>show_particles</code> only</td></tr>
+  <tr><td><code>ValueError</code> on shapes</td><td>treating rows as columns</td><td><code>S</code> is <code>(6, N)</code>: row = component, <b>column = particle</b></td></tr>
+</table>
+
+<!-- ============================================================= -->
+<h2 id="submit"><a class="anchor" href="#submit">9 · Submission checklist</a></h2>
+<ul>
+  <li><b>PDF</b> with the four Part A answers.</li>
+  <li><b>particle_filter.py</b> — your IDs set at the top; all five functions filled in; both <code>main()</code> spots filled.</li>
+  <li><b>results/</b> directory with the output PNGs and the two JSON files (run the script once to generate them).</li>
+  <li>Zip everything as <code>vp2025_ex3_ID1_ID2.zip</code> (use your real IDs).</li>
+</ul>
+<div class="callout warn"><span class="tag">Before you zip</span>
+The graders run your exact <code>particle_filter.py</code>. Do a clean run in the <code>vp</code> env from the ex3 folder and confirm it finishes without errors and produces the <code>results/</code> contents. Don't leave debug <code>% 2</code> or stray prints in the final file.</div>
+
+<p class="small" style="margin-top:40px">Implements the five required functions (<code>bhattacharyya_distance</code>, <code>predict_particles</code>, <code>compute_normalized_histogram</code>, <code>sample_particles</code>, <code>show_particles</code>) plus the <code>main()</code> weight/CDF blocks, exactly matching the HW3 spec.</p>
+
+</div>
+</body>
+</html>
