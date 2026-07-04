@@ -1,0 +1,202 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\newcommand{\dP}{\Delta P}
+
+% boxed "key result" environment
+\definecolor{boxbg}{RGB}{240,245,255}
+\definecolor{boxrule}{RGB}{70,110,200}
+\newmdenv[
+  backgroundcolor=boxbg,
+  linecolor=boxrule,
+  linewidth=1pt,
+  roundcorner=4pt,
+  skipabove=8pt,
+  skipbelow=8pt,
+  innertopmargin=8pt,
+  innerbottommargin=8pt
+]{keybox}
+
+\title{\textbf{Lucas--Kanade Incremental Alignment}\\[2pt]
+\large A step-by-step reading of PDF page 12}
+\author{Video Processing 0512-4263 --- explanatory note}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\noindent
+PDF page 12 is the \emph{tail end} of the Lucas--Kanade (LK) incremental
+alignment derivation, and it reads as confusing because the page drops you into
+the middle of an argument that began on pages 10--11. Below is the whole chain,
+from the goal to the final least-squares update, with every quantity named.
+
+\section*{The goal (page 10)}
+
+You have two images. You want a single warp $W(X;P)$ --- e.g.\ translation
+(2 parameters) or affine (6 parameters) --- that makes warped image-2 look like
+image-1:
+\[
+  P^* = \arg\min_P \sum_X \big[\,I_2(W(X;P)) - I_1(X)\,\big]^2 .
+\]
+
+\textbf{The problem.} The parameters $P$ sit \emph{inside} the warp $W$, so this
+is non-linear: you would have to search a 6-dimensional space directly.
+Expensive.
+
+\section*{The trick: solve for a small update (page 11)}
+
+Do not solve for $P$ all at once. Start from a guess (the identity warp), and on
+each iteration find a small correction $\dP$, then update $P \leftarrow P + \dP$.
+The key move is a first-order \textbf{Taylor approximation} of the warped image:
+\[
+  I_2\big(W(X;P+\dP)\big)\;\approx\;
+  \underbrace{I_2(W(X;P))}_{\text{warp at current }P}
+  \;+\;
+  \underbrace{\nabla I_2 \,\frac{\partial W}{\partial P}}_{\text{brightness change per parameter}}\,\dP .
+\]
+Now $\dP$ appears \textbf{linearly} (outside the warp). That is the entire point:
+a hard non-linear problem becomes an easy linear one.
+
+The two factors in that middle term are
+\begin{itemize}[topsep=2pt,itemsep=1pt]
+  \item $\nabla I_2 = (I_x\;\; I_y)$ --- the image gradient ($1\times 2$);
+  \item $\dfrac{\partial W}{\partial P}$ --- the Jacobian of the warp: how the
+        warped coordinates move when you nudge each parameter. For affine it is
+        $2\times 6$; for translation it is the $2\times 2$ identity.
+\end{itemize}
+Multiplying them gives a \textbf{row vector, one per pixel}. For affine:
+\[
+  \nabla I_2 \,\frac{\partial W}{\partial P}
+  = (\,I_x x \;\; I_x y \;\; I_x \;\; I_y x \;\; I_y y \;\; I_y\,).
+\]
+
+\section*{What page 12 actually does}
+
+\paragraph{Step 1 --- what is $B$? Stack every pixel.}
+This is the part the page glosses over. Look at one pixel first. For pixel
+number $i$, the row vector $\nabla I_2\,\frac{\partial W}{\partial P}$ from the
+previous step is a single row of 6 numbers (for affine):
+\[
+  \text{pixel } i:\qquad
+  b_i = \big(\, I_x^{(i)} x_i \;\; I_x^{(i)} y_i \;\; I_x^{(i)} \;\;
+               I_y^{(i)} x_i \;\; I_y^{(i)} y_i \;\; I_y^{(i)} \,\big),
+\]
+where $I_x^{(i)}, I_y^{(i)}$ are the gradients at that pixel and $(x_i,y_i)$ are
+its coordinates. \textbf{One pixel gives one row.}
+
+Now take \emph{every} pixel in the window --- there are $N$ of them --- and stack
+those rows on top of each other. \emph{That} is $B$:
+\[
+  \underbrace{B}_{\text{the matrix}}
+  =
+  \begin{pmatrix}
+    \text{---}\; b_1 \;\text{---} \\
+    \text{---}\; b_2 \;\text{---} \\
+    \vdots \\
+    \text{---}\; b_N \;\text{---}
+  \end{pmatrix}
+  =
+  \begin{pmatrix}
+    I_x^{(1)} x_1 & I_x^{(1)} y_1 & I_x^{(1)} & I_y^{(1)} x_1 & I_y^{(1)} y_1 & I_y^{(1)} \\
+    I_x^{(2)} x_2 & I_x^{(2)} y_2 & I_x^{(2)} & I_y^{(2)} x_2 & I_y^{(2)} y_2 & I_y^{(2)} \\
+    \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+    I_x^{(N)} x_N & I_x^{(N)} y_N & I_x^{(N)} & I_y^{(N)} x_N & I_y^{(N)} y_N & I_y^{(N)}
+  \end{pmatrix}.
+\]
+So $B$ is simply a table: \textbf{one row per pixel, one column per parameter.}
+That is the ``$N\times 6$'' the page opens with --- $N$ rows (pixels), 6 columns
+(affine parameters). For translation each row has only 2 numbers
+$\big(I_x^{(i)}\;\; I_y^{(i)}\big)$, so $B$ is $N\times 2$.
+
+In short: $B$ is the matrix that, when multiplied by the update $\dP$
+($6\times 1$), reproduces the per-pixel linear term
+$\nabla I_2\,\frac{\partial W}{\partial P}\,\dP$ for all $N$ pixels at once.
+
+\paragraph{Step 2 --- name the residual $I_t$ (the partner of $B$).}
+For the same $N$ pixels, define
+\[
+  I_t =
+  \begin{pmatrix}
+    I_2(W(X_1;P)) - I_1(X_1) \\
+    I_2(W(X_2;P)) - I_1(X_2) \\
+    \vdots \\
+    I_2(W(X_N;P)) - I_1(X_N)
+  \end{pmatrix}.
+\]
+This is just ``warped image-2 minus image-1'' evaluated at the \emph{current}
+guess --- the leftover error you are trying to kill. It is an $N\times 1$ column
+vector (one number per pixel), lined up row-for-row with $B$.
+
+\paragraph{Dimensions at a glance.}
+$B$ is $N\times 6$, \; $\dP$ is $6\times 1$, \; $I_t$ is $N\times 1$. So
+$B\dP$ is $N\times 1$ and matches $I_t$ pixel-by-pixel --- which is exactly what
+makes the next step a clean least-squares problem.
+
+\paragraph{Step 3 --- rewrite the objective compactly.}
+Substituting the Taylor approximation into the goal, each pixel's bracket becomes
+$I_t + B\dP$, so the whole sum of squares is a vector dotted with itself:
+\[
+  \dP^* = \arg\min_{\dP}\,(I_t + B\dP)^T (I_t + B\dP).
+\]
+This is plain \textbf{linear least squares}, with $\dP$ the only unknown.
+
+\paragraph{Step 4 --- solve it (the normal equations).}
+Expand, differentiate with respect to $\dP$, and set to zero:
+\[
+  \frac{d}{d\dP}\Big[\,I_t^T I_t + 2\,\dP^T B^T I_t + \dP^T B^T B\,\dP\,\Big]
+  = 2 B^T I_t + 2 B^T B\,\dP = 0 ,
+\]
+\begin{keybox}
+\[
+  \dP^* = -\,(B^T B)^{-1} B^T I_t .
+\]
+\end{keybox}
+That is the standard least-squares formula --- nothing optical-flow-specific
+yet: it just solves $B\,\dP \approx -I_t$ in the least-squares sense.
+
+\paragraph{Step 5 --- iterate.}
+Update $P \leftarrow P + \dP^*$, re-warp image-2, recompute $I_t$ and $B$, and
+solve again. Each pass shrinks the residual and moves you closer to $P^*$.
+
+\section*{The translation special case}
+
+Plug $\dfrac{\partial W}{\partial P} = I_{2\times 2}$ in, so $B = (I_x\;\; I_y)$
+of size $N\times 2$. Then $B^T B$ and $B^T I_t$ expand into the famous
+$2\times 2$ system:
+\[
+  \dP^* = -\begin{pmatrix} I_x^T I_x & I_x^T I_y \\[2pt]
+                           I_y^T I_x & I_y^T I_y \end{pmatrix}^{-1}
+            \begin{pmatrix} I_x^T I_t \\[2pt] I_y^T I_t \end{pmatrix}.
+\]
+The $2\times 2$ matrix on the left is the \textbf{structure tensor} (sums of
+products of gradients over the window). Here $\dP = (u,v)$ is the motion.
+
+\section*{Why the ``crossing point'' picture}
+
+Each pixel contributes one brightness-constancy equation
+\[
+  u I_x + v I_y + I_t = 0 .
+\]
+With two unknowns $(u,v)$, \textbf{one pixel is one straight line} in the $(u,v)$
+plane --- not enough to pin down a point. This is the \emph{aperture problem}.
+Many pixels give many lines; if they all share the same true motion, the lines
+\textbf{all cross at one point}, which is the answer. Real data has noise, so the
+lines do not cross perfectly --- and least squares (Step~4) picks the point
+closest to all of them.
+
+\bigskip
+\begin{keybox}
+\textbf{Page 12 in one sentence.} Take the linearized per-pixel equations, stack
+them into $B$ and $I_t$, solve the least-squares system
+$\dP^* = -(B^T B)^{-1} B^T I_t$ for the update, add it to $P$, and repeat.
+\end{keybox}
+
+\end{document}
