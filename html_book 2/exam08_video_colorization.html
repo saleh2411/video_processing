@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Video Colorization</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Video Colorization</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch09_video_colorization.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Video Colorization</h1>
+    <p class="lede">Geodesic distance, isophotes, the point-to-set distance map, Dijkstra, and propagating scribbles
+    through time. Answers stay hidden until you press <strong>Check</strong>; press <strong>💡 Hint</strong> for the
+    exact course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch09_video_colorization.html" data-chapter-label="Chapter 9 · Video Colorization"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam07_intrinsic_images.html"><span class="dir">‹ Previous exam</span><span class="ttl">Intrinsic Images</span></a>
+    <a class="next" href="exam09_video_matting.html"><span class="dir">Next exam ›</span><span class="ttl">Video Matting</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">The geodesic distance between two points on an isophote:</div>
+    <ul class="q-options">
+      <li>Can be bigger than zero</li>
+      <li>May not be unique</li>
+      <li>Is zero</li>
+      <li>Depends on the direction of the path between them</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>The length of a path is $\;L(p) = \int_p |\langle \dot{p}(s), \nabla Y \rangle|\, dl(s)$. The cost is higher
+        when the path aligns with the gradient direction. <strong>In the particular case where the path remains
+        entirely within a homogeneous region, the cost is zero.</strong></p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>An isophote is a curve of <em>constant</em> luminance, so it runs perpendicular to the gradient (along the
+        tangent). Along it, $\langle \dot p, \nabla Y\rangle = 0$, so the integrated length — and hence the geodesic
+        distance between any two points on the same isophote — is <strong>zero</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">The distance map of a set $\Omega$:</div>
+    <ul class="q-options">
+      <li>maps every point $x$ to an arbitrary point in the set $\Omega$</li>
+      <li>maps every point $x$ to the closest point in the set $\Omega$</li>
+      <li>maps every point $x$ to the point-to-set distance $d(x, \Omega)$</li>
+      <li>maps every point $x$ to some path to the set $\Omega$</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>The <strong>point-to-set distance</strong> is $\;d_L(x, \Omega_k) = \min_{y \in \Omega_k} d_L(x, y)$, and we
+        use it to build a <strong>distance map</strong>:</p>
+        <div class="eq">$$ D_k(x) = d_L(x, \Omega_k) $$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>A distance map assigns to <em>every</em> pixel a single number — its geodesic distance to the set. Inside
+        the set the value is zero; it grows with distance. (It stores the distance, not a point or a path.)</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">What is the problem with naively extending image colorization to video?</div>
+    <ul class="q-options">
+      <li>Significant increase in computational complexity</li>
+      <li>The geodesic distance is no longer defined</li>
+      <li>Dijkstra's algorithm doesn't work with 6-neighbor connectivity</li>
+      <li>Non-causal propagation of color information in time</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Colorization in video (PDF)</span>
+        <p>In video the gradient gains a time component and each pixel has 6 neighbours instead of 4, so colour flows
+        along the time axis in <em>both</em> directions. "In case we want to avoid this phenomenon, we can simply make
+        the t-axis one-directional instead of bi-directional … by making edges in the backward direction have large
+        weights (infinity)."</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Naively, colour propagates through the space+time graph in <em>both</em> time directions — a scribble in a
+        later frame can colour <em>earlier</em> frames. That backward-in-time flow is <strong>non-causal</strong>. The
+        fix is to make the time axis one-directional (ban backward edges).</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Which statement is <strong>false</strong>?</div>
+    <ul class="q-options">
+      <li>An isophote is a curve along which the luma changes the most</li>
+      <li>An isophote is a curve perpendicular to the luma gradient</li>
+      <li>An isophote is a curve of constant luma</li>
+      <li>An isophote is a level set of the luma function</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>An isophote is a <strong>curve of constant luminance</strong> — a level set of the luma function — and
+        therefore runs <em>perpendicular</em> to the gradient (statements 2, 3, 4 are all true). Along it the luma
+        does <strong>not</strong> change; the direction of <em>maximum</em> luma change is the gradient, which is
+        perpendicular to the isophote. So "changes the most" is the false statement.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Consider approximating the Euclidean distance between the bottom-left corner of the image and the
+      top-right corner, assuming it is an image of constant color. True or False? Increasing the resolution of the
+      image reduces the approximation error (assume a 4-connected graph representation).</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — the staircase problem</span>
+        <p>On a <strong>4-connected</strong> grid you can only step horizontally or vertically, so any path from corner
+        to corner is a "staircase" of length $\Delta x + \Delta y$ (the Manhattan distance) — never the straight
+        diagonal $\sqrt{\Delta x^2 + \Delta y^2}$. Refining the grid makes the staircase finer, but its total length
+        stays $\Delta x + \Delta y$: the error $\Delta x + \Delta y - \sqrt{\Delta x^2+\Delta y^2}$ does
+        <strong>not</strong> shrink. So the statement is False — you need more connectivity (8-connected or more), not
+        higher resolution.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Dijkstra's algorithm computes:</div>
+    <ul class="q-options">
+      <li>Distance map to the source set in $O(n)$</li>
+      <li>Distance map to the source set in $O(n \log n)$</li>
+      <li>Shortest path from every point to the source set in $O(n)$</li>
+      <li>Shortest path from every point to the source set in $O(n^2)$</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Dijkstra (PDF)</span>
+        <p>The number of pixels is $O(|\Omega|) = N$. Done naively step 1 is $O(N^2)$, but a priority-queue data
+        structure makes it $O(\log N)$ per step. <strong>In summary, the complexity is $O(N \log N)$</strong>, which
+        is great.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Dijkstra grows a wavefront from the source (scribble) set, always expanding the smallest-distance pixel
+        with a priority queue, and fills in the full <strong>distance map</strong> $D_k(x)$ for every pixel in
+        $O(N \log N)$.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">A scribble is a set of points in the image domain:</div>
+    <ul class="q-options">
+      <li>With constant luminance</li>
+      <li>With unknown chroma</li>
+      <li>Where the luminance is given</li>
+      <li>Where the chroma is given</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Inputs (PDF)</span>
+        <p>Inputs include the luminance channel $Y$ (known everywhere) and a set of <strong>scribbles</strong>
+        $\Omega_k \subset \Omega \times [0,T]$ and their corresponding colour $c_k$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The luminance $Y$ is already known at every pixel (it's the B&amp;W video). What the user supplies with a
+        scribble is the missing <strong>chroma</strong> (colour) for a region — "here's blue sky," "here's a red
+        shirt." The algorithm propagates that chroma to the rest.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">The distance between a point $\mathbf{x}$ and a set $Y$ is defined as:</div>
+    <ul class="q-options">
+      <li>The minimum over $y \in Y$ of $d(x, y)$</li>
+      <li>The integral of $d(x, y)$ over $y \in Y$</li>
+      <li>The maximum over $y \in Y$ of $d(x, y)$</li>
+      <li>The ratio of $\min d(x, y)$ and $\max d(x, y)$ over $y \in Y$</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>The point-to-set distance (distance between a point and a region) is:</p>
+        <div class="eq">$$ d_L(x, \Omega_k) = \min_{y \in \Omega_k} d_L(x, y) $$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The distance from a point to a set is the distance to its <strong>nearest</strong> member — i.e. the
+        minimum of $d(x,y)$ over all $y$ in the set.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Video Texture</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Video Texture</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch05_texture_synthesis.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Video Texture</h1>
+    <p class="lede">Dynamic textures as a hidden linear state-space, the ARMA model, SVD identification, and how it
+    relates to the Kalman filter. Answers stay hidden until you press <strong>Check</strong>; press
+    <strong>💡 Hint</strong> for the exact course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch05_texture_synthesis.html" data-chapter-label="Chapter 5 · Texture Synthesis"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam04_kalman_particle.html"><span class="dir">‹ Previous exam</span><span class="ttl">Kalman &amp; Particle Filters</span></a>
+    <a class="next" href="exam06_background_subtraction.html"><span class="dir">Next exam ›</span><span class="ttl">Background Subtraction</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">In the video-texture method presented using PowerPoint: why does it use a distance measure between
+      two short <em>sequences</em> of frames, and not just two single frames?</div>
+    <ul class="q-options">
+      <li>To allow the algorithm to match both appearance and motion</li>
+      <li>To make the algorithm run faster</li>
+      <li>Improve the robustness of the algorithm to illumination changes</li>
+      <li>None of the other answers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="callout note">
+        <span class="lbl">Explanation</span>
+        <p>The PowerPoint method (video textures) makes a new clip by <em>re-ordering the original frames</em>, jumping
+        between similar moments. A single frame only tells you what the scene <strong>looks like</strong> (appearance).
+        But a jump also has to preserve <strong>motion</strong>: if a pendulum is swinging left in frame A, you can
+        only cut to a frame where it is <em>also</em> swinging left, or the motion snaps. Comparing a short
+        <em>window</em> of frames captures the velocity, so the distance measures both appearance <em>and</em> motion —
+        giving seamless transitions.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">The goal of Dynamic Texture Synthesis is to:</div>
+    <ul class="q-options">
+      <li>(A) find a low-dimensional representation of texture</li>
+      <li>(B) find the state transition in the low-dimensional space</li>
+      <li>Both (A) &amp; (B) are correct</li>
+      <li>None of the above</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The method assumes a texture frame is the visible output of a hidden <strong>low-dimensional state</strong>
+        $x_t$ (~50 numbers), recovered with SVD — that's goal (A). Then it fits a linear
+        <strong>auto-regression</strong> $x_{t+1} = A x_t + \epsilon$ that describes how the state moves over time —
+        that's goal (B), the state transition. You need <em>both</em> to generate new frames.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">An Auto-Regressive (AR) model predicts:</div>
+    <ul class="q-options">
+      <li>All the answers are correct</li>
+      <li>The current measurement from a uniform distribution</li>
+      <li>The current measurement from the future $p$ measurements</li>
+      <li>The current measurement from the last $p$ measurements</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 42–44)</span>
+        <p><strong>Auto Regressive:</strong> $\;x_t = C + \sum_{i=1}^P p_i\, x_{t-i} + \epsilon_t$</p>
+        <p>Where $C$ is constant, $p_i$ are the parameters and $\epsilon_t$ is the noise.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>"Auto-regressive" = regress the signal on <em>its own past</em>. The current value $x_t$ is a weighted sum
+        of the previous $p$ values (plus noise) — never the future.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">In Dynamic Texture Synthesis:</div>
+    <ul class="q-options">
+      <li>The input is a long video; the output is a short video</li>
+      <li>None of the above</li>
+      <li>The input is a Kalman model; the output is a short video</li>
+      <li>The input is a short video; the output is an infinite video</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p><strong>Goal:</strong> after seeing a <em>short</em> clip of e.g. a flame, learn $A$ and $C$, then pick any
+        starting state and push it forward forever with random noise — multiplying each new state by $C$ produces
+        <strong>endless novel frames</strong>. Short clip in, infinite texture out.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">We discussed two video-texture methods in class. Method I — derived on the board; Method II — shown
+      in a PowerPoint presentation. Which statement is correct?</div>
+    <ul class="q-options">
+      <li>Both methods synthesize new frames</li>
+      <li>Both methods show original images in a different order</li>
+      <li>Method I synthesizes images, Method II shows original images in a different order</li>
+      <li>Method I is random, Method II is deterministic</li>
+    </ul>
+    <div class="q-hint">
+      <div class="callout note">
+        <span class="lbl">Explanation</span>
+        <p><strong>Method I</strong> (the board derivation) is the state-space dynamic-texture model: it learns
+        $x_{t+1}=Ax_t+\epsilon,\; y_t=Cx_t+w$ and <em>synthesizes brand-new frames</em> that never existed in the
+        source. <strong>Method II</strong> (the PowerPoint "video textures") keeps the original frames and just
+        <em>replays them in a cleverly chosen different order</em>, jumping between similar moments to loop forever.
+        So: I synthesizes, II re-orders.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">The proposed ARMA model (for the Gaussian case):</div>
+    <ul class="q-options">
+      <li>Has a closed-form solution but the solution is not unique</li>
+      <li>Has a closed-form and unique solution</li>
+      <li>None of the above</li>
+      <li>Does not have a closed-form solution</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 42–44)</span>
+        <p><strong>There is not a single solution to this</strong>, because if $A, B, C$ are a solution, then for any
+        invertible matrix $T$ we could replace $A = TAT^{-1}$, $Q = TQT^{-1}$, $C = CT^{-1}$, $x_0 = T x_0$ and get an
+        equivalent solution. We use SVD decomposition to solve the problem, and add the constraint $C^T C = I$ to
+        choose one candidate from the set of solutions.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Identifiability — why the solution isn't unique</span>
+        <p>SVD gives a <strong>closed-form</strong> answer, but you can absorb any invertible $T$ into the state
+        without changing the observed frames — a whole family of equivalent solutions. The constraint $C^T C = I$
+        just picks one canonical representative.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Dynamic Texture Synthesis is the "inverse" of:</div>
+    <ul class="q-options">
+      <li>Kalman Filter</li>
+      <li>None of the above</li>
+      <li>Dynamic Programming</li>
+      <li>Taylor approximation</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 41)</span>
+        <p>In order to process a signal in time, we have learned we can use the Kalman filter. However, Kalman won't be
+        given to us and we will instead try to <strong>estimate its parameters</strong>. Kalman assumes we have the
+        measurements and the states; here $A$ and $x_t$ are not given, and we aim to estimate them from the
+        observations $y_t$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Kalman: you're <em>given</em> the model ($A, C$) and you estimate the hidden state. Texture synthesis flips
+        it: you're given the observations and you estimate the model ($A, C$) — this is <strong>system
+        identification</strong>, the inverse of the Kalman problem.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">In the proposed model, the matrix $A$:</div>
+    <ul class="q-options">
+      <li>None of the above</li>
+      <li>models the mapping from image space to texture space</li>
+      <li>models the mapping from texture space to image space</li>
+      <li>models the evolution of texture</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 41)</span>
+        <p>The model is $\;x(t+1) = A x(t) + B v(t), \quad y(t) = C x(t) + w(t)$. The first equation represents the
+        <strong>motion model in the state space</strong>, while the second equation describes the transformation from
+        the state to the observed image.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>$A$ takes the current hidden state to the next one — it is the state-transition / motion model, i.e. how the
+        texture <strong>evolves over time</strong>. (The matrix $C$ is the one that maps state → image.)</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

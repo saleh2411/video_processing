@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>12 · Intrinsic Images from Sequences</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>12</b> · Intrinsic Images from Sequences</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">‹ Prev</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Chapter 12 · Paper reproduction</div>
+    <h1>Deriving Intrinsic Images from Image Sequences</h1>
+    <p class="lede">A full walk-through of Yair Weiss' classic ICCV&nbsp;2001 paper. Every block of the original
+    paper is quoted verbatim in a teal box, followed by a from-zero explanation and, wherever possible, a live
+    demo you can play with. The big idea: if you have many photos of the same scene under changing light, a
+    simple <em>median</em> can peel the shadows off and leave the true paint of the objects behind.</p>
+  </header>
+
+  <div class="callout note"><span class="lbl">How to read this chapter</span>
+  This chapter reproduces the paper <em>“Deriving intrinsic images from image sequences”</em> (Yair Weiss,
+  Proc. ICCV 2001). Teal blocks are the paper’s own words — including its original typos — kept exactly as
+  printed. Blue blocks explain each part assuming zero background. Amber blocks are interactive: drag the
+  sliders and watch the math move. The paper’s original figures are embedded as images (on light cards), and
+  several are <em>also</em> re-created as live interactive demos you can play with.</div>
+
+  <h2>Title &amp; Abstract</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 1)</span>
+    <p><strong>In: Proc ICCV (2001)</strong></p>
+    <p style="font-size:1.15em"><strong>Deriving intrinsic images from image sequences</strong></p>
+    <p>Yair Weiss<br>Computer Science Division<br>UC Berkeley<br>Berkeley, CA 94720-1776<br>yweiss@cs.berkeley.edu</p>
+    <p><strong>Abstract</strong></p>
+    <p>Intrinsic images are a useful midlevel description of scenes proposed by Barrow and Tenenbaum [1]. An
+    image is decomposed into two images: a reflectance image and an illumination image. Finding such a
+    decomposition remains a difficult problem in computer vision. Here we focus on a slightly easier problem:
+    given a sequence of $T$ images where the reflectance is constant and the illumination changes, can we recover
+    $T$ illumination images and a single reflectance image? We show that this problem is still ill-posed and
+    suggest approaching it as a maximum-likelihood estimation problem. Following recent work on the statistics
+    of natural images, we use a prior that assumes that illumination images will give rise to sparse filter
+    outputs. We show that this leads to a simple, novel algorithm for recovering reflectance images. We
+    illustrate the algorithm's performance on real and synthetic image sequences.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>What is an “intrinsic image”?</strong> Any photo you take is really two things multiplied
+    together:</p>
+    <ul>
+      <li><span class="term">Reflectance</span> — the actual <em>paint / material</em> of every surface: how
+      much light it bounces back. A red apple has “red” reflectance whether it’s noon or midnight.</li>
+      <li><span class="term">Illumination</span> — how much <em>light</em> lands on each spot: sunlight,
+      shadows, the lamp overhead. This changes all the time.</li>
+    </ul>
+    <p>Your camera only records the <strong>product</strong> of the two (light × paint). Splitting a single
+    photo back into “paint” and “light” is called finding the <strong>intrinsic images</strong>, and it’s
+    genuinely hard — there are always two unknowns (paint, light) for every one number the camera measured.</p>
+    <p><strong>The easier problem this paper solves.</strong> Instead of one photo, take <em>many</em> photos of
+    the <em>same fixed scene</em> while the <em>lighting changes</em> (think of a webcam pointed at a plaza all
+    day). The paint never moves; only the shadows do. Weiss shows that even this is technically “ill-posed”
+    (under-determined), but with one gentle statistical assumption it becomes a one-line recipe: at each pixel,
+    look at how it changes across all the frames, and take the <strong>median</strong>. That single trick
+    strips the shadows away.</p>
+    <p><strong>Words to keep:</strong> <em>ill-posed</em> = more unknowns than equations, so infinitely many
+    answers fit. <em>Maximum-likelihood (ML)</em> = pick the answer that makes the observed data most probable.
+    <em>Sparse filter outputs</em> = when you measure how neighbouring pixels differ, the answer is “zero”
+    almost everywhere (explained in Figure&nbsp;3 below).</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Intrinsic decomposition — Input = Reflectance × Illumination</h4><span class="tag">drag the shadow</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag the light/shadow. Watch the left panel (what the camera sees)
+      change, while the <strong>middle panel (reflectance / paint) never moves</strong>. That fixed middle image
+      is the prize we want to recover.</p>
+      <canvas id="cvDecomp" width="900" height="230"></canvas>
+      <div class="controls">
+        <div class="control"><label>shadow position <span class="val" id="vShadow">50%</span></label><input id="shadowPos" type="range" min="0" max="100" value="50"></div>
+        <div class="control"><label>shadow darkness <span class="val" id="vDark">65%</span></label><input id="shadowDark" type="range" min="10" max="90" value="65"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>1 &nbsp; Introduction</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 1)</span>
+    <p>Barrow and Tenenbaum (1978) introduced the term “intrinsic images” to refer to a midlevel decomposition
+    of the sort depicted in figure 1. The observed image is a product of two images: an illumination image and
+    a reflectance image. We call this a midlevel description because it falls short of a full, 3D description of
+    the scene: the intrinsic images are viewpoint dependent and the physical causes of changes in illumination
+    at different points are not made explicit (e.g. the cast shadow versus the attached shadows in figure 1c).</p>
+    <p>Barrow and Tenenbaum argued that such a midlevel description, despite not making explicit all the
+    physical causes of image features, can be extremely useful for supporting a range of visual inferences. For
+    example, the task of segmentation may be poorly defined on the input image and many segmentation algorithms
+    make use of arbitrary thresholds in order to avoid being fooled by illumination changes. On the intrinsic,
+    reflectance image, on the other hand, even primitive segmentation algorithms would correctly segment the
+    cylinder as a single segment in figure 1b. Similarly, view-based template matching and shape-from-shading
+    would be significantly less brittle if they could work on the intrinsic image representation rather than on
+    the input image.</p>
+    <div class="paperfig"><span class="figtag">Figure 1 — from the paper</span>
+      <img src="fig/fig1_decomposition.png" alt="Figure 1: intrinsic image decomposition — input = reflectance × illumination"></div>
+    <p class="muted" style="font-style:italic">Figure 1: The intrinsic image decomposition [1]. (a) Input =
+    (b) reflectance × (c) illumination — a shaded cylinder standing on a checkered floor.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Who started this?</strong> Barrow &amp; Tenenbaum, back in 1978, said: don’t jump straight from a
+    photo to a full 3-D model of the world — that’s too hard. Stop at a useful halfway point (“midlevel”): split
+    the photo into <em>paint</em> and <em>light</em>. It’s only “halfway” because it still depends on where you
+    stand (viewpoint) and it doesn’t explain <em>why</em> the light is the way it is.</p>
+    <p><strong>Two kinds of shadow</strong> (worth knowing): an <em>attached shadow</em> is the dark side of an
+    object simply because it faces away from the light (the far side of the cylinder). A <em>cast shadow</em> is
+    the dark patch an object throws onto <em>another</em> surface (the cylinder’s shadow on the floor). Both are
+    “illumination,” not “paint.”</p>
+    <p><strong>Why bother splitting?</strong> Loads of vision tasks get much easier on the paint-only image:</p>
+    <ul>
+      <li><strong>Segmentation</strong> (cutting the picture into objects): on a raw photo a shadow edge looks
+      just like a real object edge, so algorithms need fiddly thresholds. On the reflectance image the cylinder
+      is one clean patch — no shadow to trip over.</li>
+      <li><strong>Recognition / matching</strong> and <strong>shape-from-shading</strong> stop breaking every
+      time the sun moves, because you’ve removed the lighting that was confusing them.</li>
+    </ul>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 1–2)</span>
+    <p>Recovering two intrinsic images from a single input image remains a difficult problem for computer vision
+    systems. This is a classic ill-posed problem: the number of unknowns is twice the number of equations.
+    Denoting by $I(x,y)$ the input image and by $R(x,y)$ the reflectance image and $L(x,y)$ the illumination
+    image, the three images are related by:</p>
+    <div class="eq">$$ I(x,y) = L(x,y)\,R(x,y) \tag{1} $$</div>
+    <p>Obviously, one can always set $L(x,y) = 1$ and satisfy the equations by setting $R(x,y) = I(x,y)$.
+    Despite this difficulty, some progress has been made towards achieving this decomposition. Land and
+    McCann's Retinex algorithm [7] could successfully decompose scenes in which the reflectance image was
+    piecewise constant. This algorithm has been continuously extended over the years (e.g. [4]). More recently,
+    Freeman and Viola [3] have used a wavelet prior to classify images into one of two classes: all reflectance
+    or all illumination.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Why one photo is impossible.</strong> Equation (1) says every pixel is <em>light × paint</em>.
+    But the camera hands you only the product. That’s one equation with two unknowns per pixel — like being
+    told “two numbers multiply to 12” and asked which two. It could be 3×4, or 2×6, or 12×1… Mathematicians call
+    this <strong>ill-posed</strong>: infinitely many answers all fit perfectly.</p>
+    <p><strong>The laziest answer.</strong> You could declare “there’s no lighting at all” ($L=1$ everywhere) and
+    blame every pixel entirely on paint ($R=I$). It fits equation (1) exactly — and it’s useless, because it
+    keeps every shadow baked into the “paint.” To do better you need an extra assumption about what real light
+    or real paint tends to look like.</p>
+    <p><strong>Earlier attempts.</strong> <em>Retinex</em> (Land &amp; McCann) assumed paint comes in flat
+    patches (“piecewise constant”) so any smooth gradient must be lighting. <em>Freeman &amp; Viola</em> trained
+    a model to guess whether a given edge was caused by paint or by light. Both are clever but limited.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Why one photo is ambiguous — “what two numbers make this gray?”</h4><span class="tag">drag R</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The camera measured one gray value $I$. Slide the reflectance $R$:
+      the illumination automatically becomes $L = I/R$. <strong>Every setting reproduces the exact same input</strong> —
+      that’s the ambiguity. Nothing in a single pixel tells you which split is “right.”</p>
+      <canvas id="cvAmbig" width="900" height="200"></canvas>
+      <div class="controls">
+        <div class="control"><label>reflectance R (paint) <span class="val" id="vR">0.50</span></label><input id="ambR" type="range" min="35" max="100" value="50"></div>
+      </div>
+      <div class="readout" id="ambigRO"></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 1)</span>
+    <p>In this paper we focus on a slightly easier version of the problem. Given a sequence of $T$ images
+    $\{I(x,y,t)\}_{t=1}^{T}$ in which the reflectance is constant over time and only the illumination changes,
+    can we then solve for a single reflectance image $R(x,y)$ and $T$ illumination images
+    $\{L(x,y,t)\}_{t=1}^{T}$ ? Our work was motivated by the ubiquity of image sequences of this form on the
+    world wide web: “webcam” pictures from outdoor scenes as in figure 2. The camera is stationary and the scene
+    is mostly stationary: the predominant change in the sequence are changes in illumination.</p>
+    <p>While this problem seems easier, it is still completely ill-posed: at every pixel there are $T$ equations
+    and $T + 1$ unknowns. Again, one can simply set $L(x,y) = 1$ and $R(x,y,t) = I(x,y,t)$ and fully satisfy the
+    equations. Obviously, some additional constraints are needed.</p>
+    <div class="paperfig"><span class="figtag">Figure 2 — from the paper</span>
+      <img src="fig/fig2_webcam.jpg" alt="Figure 2: three webcam frames of an outdoor scene under different lighting"></div>
+    <p class="muted" style="font-style:italic">Figure 2: Images from a “webcam” at
+    www.berkeley.edu/webcams/sproul.html. Most of the changes are changes in illumination. Can we use such image
+    sequences to derive intrinsic images?</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>The clever set-up.</strong> Bolt a camera down and grab $T$ frames of the same scene as the light
+    keeps changing — exactly what an outdoor <em>webcam</em> does over a day. Because the camera and objects
+    never move, the paint image $R(x,y)$ is the <em>same in every frame</em>. Only the lighting
+    $L(x,y,t)$ changes with time $t$.</p>
+    <p><strong>Count the unknowns.</strong> At one pixel you now have $T$ measurements (one per frame). But you
+    still have $T$ unknown light values (one per frame) <em>plus</em> 1 unknown paint value = $T+1$ unknowns.
+    Always one more unknown than equations — so it’s <em>still</em> ill-posed, and the lazy “$L=1$, paint =
+    everything” answer still sneaks in. Having many frames helped, but not quite enough by itself. We need one
+    more nudge (coming in Section 2).</p>
+    <p><strong>Intuition to hold onto:</strong> across the frames, the <em>paint stays put</em> and the
+    <em>shadows slide around</em>. The paint is the part that’s <em>consistent over time</em>; the lighting is
+    the part that <em>flickers</em>. That single observation is the seed of the whole method.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 1–2)</span>
+    <p>One version of this problem that has received much attention is the case when $L(x,y,t)$ are attached
+    shadows of a single, convex, lambertian surface: $L(x,y,t) = \vec{N}(x,y)\cdot \vec{S}(t)$, with $N(x,y)$ the
+    surface normal at $x,y$ and $\vec{S}$ a vector in the direction of the light source. This is the photometric
+    stereo problem with unknown light-source, and can be solved using SVD techniques up to a Generalized Bas
+    Relief ambiguity [12, 6].</p>
+    <p>Farid and Adelson addressed a special case of this problem [2]. They assumed that $L(x,y,t) = \alpha(t)
+    L(x,y)$, i.e. that all illumination images are related by a scalar. They used independent component analysis
+    to solve for $L(x,y)$ and $R(x,y)$.</p>
+    <p>A similar problem has recently been addressed by Szeliski, Avidan and Anandan [11]. They dealt with
+    additive transparency sequences so that $I(x,y,t) = R(x,y) + L(x - t v_x, y - t v_y, t)$. Of course, if we
+    exponentiate both sides we get equation 1 with an additional constraint that the illumination images are
+    warped images of a single illumination image. They showed that since $L(x,y,t)$ is bounded below (i.e. that
+    $L(x,y,t)$ is positive), setting $\hat{R}(x,y) = \min_t I(x,y,t)$ can give a good estimate for the
+    reflectance. They used the min filter as an initialization for a second estimation procedure that estimated
+    the motion of $L(x,y)$ and improved the estimate.</p>
+    <p>In this paper we take a different approach. We formulate the problem as a maximum-likelihood estimation
+    problem based on the assumption that derivative-like filter outputs applied to $L$ will tend to be sparse. We
+    derive the ML estimator under this assumption and show that it gives a simple, novel algorithm for recovering
+    reflectance. We illustrate the algorithm's performance on real and synthetic image sequences.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p>This paragraph is a tour of <strong>other people’s tricks</strong> for adding the “missing constraint,”
+    each buying tractability by assuming something specific about the light:</p>
+    <ul>
+      <li><strong>Photometric stereo</strong> ($L = \vec N\cdot\vec S$): assume one smooth blob lit by a single
+      moving lamp. Then lighting = (surface tilt) · (light direction). Solvable with linear algebra (SVD), but
+      only up to a leftover distortion called the <em>Generalized Bas-Relief ambiguity</em> — you recover the
+      shape only up to a shear/stretch you can’t pin down.</li>
+      <li><strong>Farid &amp; Adelson</strong> ($L(x,y,t)=\alpha(t)L(x,y)$): assume the lighting pattern is
+      always the <em>same shape</em>, just dimmed or brightened by a single knob $\alpha(t)$ each frame. Then a
+      technique called ICA can separate paint from light.</li>
+      <li><strong>Szeliski, Avidan &amp; Anandan</strong> — reflections/transparency, where images
+      <em>add</em> instead of multiply. Their neat shortcut: since light only ever <em>adds</em> brightness,
+      the true paint at a pixel is its <em>darkest</em> value over time, so take the per-pixel <strong>minimum</strong>
+      ($\hat R = \min_t I$). Good when every pixel is dark at <em>some</em> frame — but fragile when a spot is
+      never fully unlit (we’ll see this fail later).</li>
+    </ul>
+    <p><strong>Weiss’ own move (the punchline of the intro):</strong> don’t assume any of those specific light
+    models. Instead assume only a <em>generic statistical</em> fact about lighting — that “edge detector”
+    responses to the lighting image are mostly zero (<em>sparse</em>). Then find the paint image that is
+    <em>most likely</em> given the data. That single idea produces the median recipe.</p>
+  </div>
+
+  <h2>2 &nbsp; ML estimator assuming sparseness</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 2)</span>
+    <p>For convenience, we work here in the log domain. Denote by $i(x,y), r(x,y), l(x,y,t)$ the logarithms of
+    the input, reflectance and illumination images. We are given: $i(x,y,t) = r(x,y) + l(x,y,t)$ and wish to
+    recover $r(x,y)$ and $l(x,y,t)$.</p>
+    <p>To make the problem solvable, we want to assume a distribution over $l(x,y,t)$. Our first thought was to
+    make a similar assumption to that made in the Retinex work: that illumination images are lower contrast than
+    reflectance images. We found, however, that while this may hold true in the Mondrian world studied by Land
+    and McCann, it is rarely true for the outdoor scenes of the type shown in figure 2. Edges due to illumination
+    often have as high a contrast as those due to reflectance changes.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>The log trick.</strong> Multiplication is awkward; addition is easy. So take the logarithm of
+    every pixel. Because $\log(a\times b)=\log a+\log b$, equation (1) turns from a <em>product</em>
+    $I = L\cdot R$ into a clean <em>sum</em>:</p>
+    <div class="eq">$$ i(x,y,t) = r(x,y) + l(x,y,t) $$</div>
+    <p>Lower-case $i, r, l$ just mean “log of $I, R, L$.” Now the observed frame is <em>paint plus light</em>,
+    and the whole problem becomes linear (sums are far friendlier to statistics and filters).</p>
+    <p><strong>What assumption to add?</strong> The old Retinex idea was “lighting is gentle / low-contrast, so
+    any sharp edge must be paint.” Weiss tested this on real outdoor webcams and found it <em>false</em>: the
+    edge of a hard cast shadow can be just as sharp and high-contrast as the edge between two differently
+    painted surfaces. (“Mondrian world” = the artificial scenes of flat colored rectangles, like a Mondrian
+    painting, that Retinex was designed for.) So a better, more honest assumption is needed.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 2–3)</span>
+    <p>We use a weaker, more generic prior that is motivated by recent work on the statistics of natural images.
+    A remarkably robust property of natural images that has received much attention lately is the fact that when
+    derivative filters are applied to natural images, the filter outputs tend to be sparse [8, 10]. Figure 3
+    illustrates this fact: the image of the face and the outdoor scene have similar histograms that are peaked at
+    zero and fall off much faster than a Gaussian. This property is robust enough that it continues to hold if we
+    apply a pixelwise log function to each image (the histograms shown are actually for the log images). These
+    prototypical histograms can be well fit by a Laplacian distribution $P(x) = \frac{1}{Z}e^{-\alpha|x|}$
+    (although better fits are obtained with richer models). Figure 3e shows a Laplacian distribution.</p>
+    <p>We will therefore assume that when derivative filters are applied to $l(x,y,t)$ the resulting filter
+    outputs are sparse: more exactly, we will assume the filter outputs are independent over space and time and
+    have a Laplacian density. Assume we have $N$ filters $\{f_n\}$ we denote the filter outputs by
+    $o_n(x,y,t) = i \star f_n$. We use $r_n$ to denote the reflectance image filtered by the $n$th filter
+    $r_n = r \star f_n$.</p>
+    <div class="paperfig"><span class="figtag">Figure 3 — from the paper</span>
+      <img src="fig/fig3_sparse_hist.png" alt="Figure 3: images and their derivative-filter histograms, peaked at zero, next to a Laplacian"></div>
+    <p class="muted" style="font-style:italic">Figure 3: We use a prior motivated by recent work on the
+    statistics of natural scenes. Derivative filter outputs tend to be sparse for a wide range of images. a-b
+    images : c-d histograms of horizontal derivative filter outputs. e A Laplcian distribution. Note the similar
+    shape to the observed histograms.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>What is a “derivative filter”?</strong> It’s a tiny edge detector: at each pixel it computes the
+    <em>difference</em> between neighbours, e.g. (pixel on the right) − (pixel here). Where the image is smooth,
+    neighbours are nearly equal, so the difference is ≈ 0. Only at an <em>edge</em> does it spit out a big
+    number.</p>
+    <p><strong>What does “sparse” mean?</strong> If you make a histogram of all those differences across a real
+    photo, you get a giant spike at zero (most places are flat) and only a few large values (the edges). That
+    tall-spike-with-long-thin-tails shape is called a <strong>Laplacian</strong> distribution,
+    $P(x)=\tfrac1Z e^{-\alpha|x|}$. Compare it to a bell-curve (Gaussian): the Laplacian is far pointier at 0 and
+    has heavier tails. This “sparse edges” fact holds for almost every natural image — faces, streets, forests
+    — which is exactly why it makes a trustworthy, generic assumption.</p>
+    <p><strong>The key assumption, stated plainly:</strong> run those edge filters on the <em>lighting</em> image
+    $l$, and the outputs are sparse too — <em>mostly zero</em>. In words: <em>lighting is smooth almost
+    everywhere, with only occasional sharp shadow edges.</em> Notation to keep: $\star$ means “filter / convolve
+    with,” $o_n = i\star f_n$ is filter $n$ applied to the observed frame, and $r_n = r\star f_n$ is that same
+    filter applied to the (unknown) paint image.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Figure 3 live — sparse filter outputs &amp; the Laplacian</h4><span class="tag">drag α</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: the two bell shapes. Teal = Laplacian $\frac1Z e^{-\alpha|x|}$
+      (pointy, heavy tails) vs. blue = Gaussian (round). Right: a stream of edge-filter outputs drawn from that
+      Laplacian — notice how <strong>most bars are tiny (≈0)</strong> and only a few spike. That “mostly zero”
+      look is <em>sparseness</em>.</p>
+      <canvas id="cvLap" width="900" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>α (sharpness / sparseness) <span class="val" id="vAlpha">6.0</span></label><input id="lapA" type="range" min="2" max="16" step="0.5" value="6"></div>
+      </div>
+      <div class="readout" id="lapRO"></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 3)</span>
+    <p><strong>Claim 1:</strong> Assume filter outputs applied to $l(x,y,t)$ are Laplacian distributed and
+    indpendent over space and time. Then the ML estimate of the filtered reflectance image $\hat{r}_n$ are given
+    by:</p>
+    <div class="eq">$$ \hat{r}_n(x,y) = \mathop{\mathrm{median}}\limits_{t}\; o_n(x,y,t) \tag{2} $$</div>
+    <p><strong>Proof:</strong> Assuming Laplacian densities and independence yields the likelihood:</p>
+    <div class="eq">$$ P(o_n \mid r_n) = \frac{1}{Z}\prod_{x,y,t} e^{-\beta\,|o_n(x,y,t) - r_n(x,y)|} \tag{3} $$</div>
+    <div class="eq">$$ \phantom{P(o_n \mid r_n)} = \frac{1}{Z}\, e^{-\beta\sum_{x,y,t} |o_n(x,y,t) - r_n(x,y)|} \tag{4} $$</div>
+    <p>Maximizing the likelihood is equivalent to minimizing the sum of absolute deviations from $o_n(x,y,t)$.
+    The sum of absolute values (or $l_1$ norm) is minimized by the median. $\square$</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>The whole algorithm in one line:</strong> for each edge-filter, at each pixel, take the
+    <strong>median over time</strong> of the filter’s output. That median is your best (maximum-likelihood)
+    estimate of the paint’s filtered value. Equation (2) is the entire method.</p>
+    <p><strong>Why the median?</strong> Follow the logic slowly:</p>
+    <ol>
+      <li>The observed filter output is <em>paint part + lighting part</em>: $o_n = r_n + (l\star f_n)$. The
+      paint part $r_n$ is the same every frame; the lighting part changes and — by our assumption — is
+      <em>usually near zero</em> (sparse), with occasional spikes at shadow edges.</li>
+      <li>“Laplacian” likelihood means the probability shrinks with $e^{-\beta|\text{error}|}$. Multiply the
+      probabilities over all frames (eq 3), and because $e^a e^b=e^{a+b}$ the product becomes one exponential of
+      a <em>sum of absolute errors</em> (eq 4).</li>
+      <li>Making that probability as large as possible = making the sum of <em>absolute</em> differences
+      $\sum|o_n - r_n|$ as <em>small</em> as possible. And the single number that minimises total absolute
+      distance to a set of values is — provably — their <strong>median</strong>.</li>
+    </ol>
+    <p><strong>Contrast with the average.</strong> If we had assumed a Gaussian (bell curve) instead, we’d be
+    minimising <em>squared</em> errors, and the answer would be the <em>mean</em>. The mean gets dragged toward
+    outliers; the median shrugs them off. Since shadow edges are exactly “rare big outliers,” the median is what
+    quietly deletes them.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Why median, not mean or min — drag the outliers</h4><span class="tag">drag dots</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Each dot is one frame’s filter output at a single pixel. Most cluster
+      on the true paint value; a few are “shadow-edge” outliers. Drag any dot and watch the three estimators.
+      The <span style="color:#41d8c9;font-weight:700">median</span> stays glued to the cluster; the
+      <span style="color:#6ea8ff;font-weight:700">mean</span> gets tugged; the
+      <span style="color:#ff6b81;font-weight:700">min</span> chases the lowest dot.</p>
+      <canvas id="cvMed" width="900" height="230"></canvas>
+      <div class="readout" id="medRO"></div>
+      <div class="btnrow"><button class="act" id="medReset">Reset dots</button></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 3–4)</span>
+    <p>Claim 1 gives us the ML estimate for the filtered reflectance images $\hat{r}_n$. To recover $r$, the
+    estimated reflectance function, we solve the overconstrained systems of linear equations:</p>
+    <div class="eq">$$ f_n \star \hat{r} = \hat{r}_n \tag{5} $$</div>
+    <p>It can be shown that the psuedo-inverse solution is given by:</p>
+    <div class="eq">$$ \hat{r} = g \star \left( \sum_n f_n^{\,r} \star \hat{r}_n \right) \tag{6} $$</div>
+    <p>with $f_n^{\,r}$ the reversed filter of $f_n$: $f_n^{\,r}(x,y) = f_n(-x,-y)$ and $g$ a solution to:</p>
+    <div class="eq">$$ g \star \left( \sum_n f_n^{\,r} \star f_n \right) = \delta \tag{7} $$</div>
+    <p>Note that $g$ is indpendent of the image sequence being considered and can be computed in advance.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>We’re one step short.</strong> Equation (2) gave us the <em>edges</em> of the paint image
+    ($\hat r_n$ = each filter’s response), not the paint image itself. Equation (5) states the obvious wish:
+    find a paint image $\hat r$ whose filter responses match the medians we just computed — for every filter at
+    once. That’s <em>more equations than unknowns</em> (“over-constrained”), so we settle for the best least-
+    squares fit.</p>
+    <p><strong>Turning edges back into an image.</strong> Recovering an image from its gradients is a classic
+    move. Equations (6)–(7) are the recipe:</p>
+    <ul>
+      <li>$f_n^{\,r}$ is the filter flipped back-to-front. Filtering with $f_n$ then $f_n^{\,r}$ is the standard
+      way to build the “normal equations” of a least-squares problem.</li>
+      <li>$g$ is a fixed <em>deconvolution</em> filter that undoes the combined blur $\sum_n f_n^{\,r}\star f_n$
+      — the symbol $\delta$ is the “do-nothing” filter (a single 1 surrounded by 0s), so eq (7) literally says
+      “$g$ is the inverse of that blur.” In practice this is one solve in the Fourier domain (a Poisson-style
+      reconstruction).</li>
+      <li><strong>The bonus:</strong> $g$ depends only on <em>which filters you chose</em>, not on the photos.
+      Compute it once, reuse it forever. So the per-sequence work is just: filter, take medians, run this one
+      fixed reconstruction.</li>
+    </ul>
+    <p><strong>And the lighting?</strong> Once you have the paint $\hat r$, every frame’s lighting falls out for
+    free by subtraction: $\;\hat l(x,y,t) = i(x,y,t) - \hat r(x,y)$.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 4)</span>
+    <p>Figure 4 illustrates the algorithm for calculating the ML reflectance function. The three frames in the
+    leftmost column show a circle illuminated with a square cast shadow. The shadow is moving over time. The
+    middle and right columns show the horizontal and vertical filter outputs applied to this sequence. Taking a
+    pixelwise median over time gives the estimated filtered reflectance images in the bottom row. Finally,
+    applying equation 6 gives the ML estimated reflectance function. Once we have an estimate for $r(x,y)$ we can
+    estimate $l(x,y,t) = i(x,y,t) - r(x,y)$.</p>
+    <p>The ML estimate has some similarities to the temporal median filter that is often used in accumulating
+    mosaics from image sequences (e.g. [9]) but has very different performance characteristics. In figure 4
+    taking the temporal median of the three frames in the left column would not give the right reflectance
+    function. A pixel whose intensity is bright in all frames (e.g. pixel P in figure 4a) and a pixel whose
+    intensity is dark in all frames (e.g. pixel Q in figure 4a) must have different medians. Thus, a pixel whose
+    intensity is always dark must be estimated as having a different reflectance that a pixel whose intensity is
+    always light.</p>
+    <p>In the ML estimate, on the other hand, this is not the case. Note that pixels P and Q are estimated as
+    having the same reflectance even though one was always lighter than the other. This is because the ML
+    estimate performs a temporal median on the filtered images, not the original images. In terms of
+    probabilistic modeling, a temporal median filter on images is the ML estimate if we assumed that $l(x,y,t)$
+    is sparse, i.e. that most pixels in $l(x,y,t)$ are close to zero. This is rarely true for natural images. In
+    contrast, here we are assuming that the filter outputs applied to $l(x,y,t)$ are sparse, an assumption that
+    often holds for natural images.</p>
+    <div class="paperfig"><span class="figtag">Figure 4 — from the paper</span>
+      <img src="fig/fig4_algorithm.png" alt="Figure 4: three frames, their horizontal and vertical filter outputs, the temporal medians, and the recovered reflectance"></div>
+    <p class="muted" style="font-style:italic">Figure 4: An illustration of the ML estimation algorithm.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>The picture to hold in your head</strong> (Figure 4): a fixed bright circle, with a dark square
+    shadow that slides across it frame by frame. Run the edge filters on each frame; take the per-pixel median
+    of those filtered frames; reconstruct → the shadow is <em>gone</em> and you’re left with the clean circle.
+    Subtract that from any frame and you get back that frame’s shadow as the lighting image.</p>
+    <p><strong>The crucial subtlety — median of edges, not of pixels.</strong> A naïve idea is “just take the
+    median of the raw brightness at each pixel over time.” That’s the well-known temporal median used to remove
+    passers-by from photos. But it <em>fails</em> here:</p>
+    <ul>
+      <li>Pixel <strong>P</strong> is bright in every frame; pixel <strong>Q</strong> is dark in every frame
+      (say Q sits in a corner that’s <em>always</em> shadowed). Raw temporal median gives P a bright value and Q
+      a dark value — so it thinks they’re painted differently, even if they’re the <em>same</em> material. The
+      permanent shadow got baked into the paint. Bad.</li>
+      <li>Weiss takes the median of the <em>filtered</em> (edge) frames instead. Edges care about
+      <em>differences between neighbours</em>, not absolute brightness, so a constant offset like “this corner
+      is always a bit darker” contributes <em>zero</em> edge and simply cancels. P and Q come out with the same
+      reflectance.
+      </li>
+    </ul>
+    <p><strong>The deep reason:</strong> raw temporal median would be correct only if the <em>lighting itself</em>
+    were mostly zero (pitch dark) — false. Filtered temporal median is correct when the lighting’s
+    <em>edges</em> are mostly zero (smooth light) — true. Same math, applied to the right quantity.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Figure 4 live — the moving shadow &amp; the healing median</h4><span class="tag">play · scrub</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A shadow band sweeps across a fixed scene. As frames accumulate, the
+      <strong>median</strong> panel heals back to the true paint (shadow-free), while the <strong>mean</strong>
+      panel keeps a smeared bruise where the shadow passed. Press play, or drag the slider to add frames one by
+      one.</p>
+      <canvas id="cvSeq" width="900" height="250"></canvas>
+      <div class="controls">
+        <div class="control"><label>frames observed <span class="val" id="vFrames">1 / 11</span></label><input id="seqFrames" type="range" min="1" max="11" value="1"></div>
+        <div class="control"><label>shadow darkness <span class="val" id="vSdark">60%</span></label><input id="seqDark" type="range" min="20" max="90" value="60"></div>
+      </div>
+      <div class="btnrow"><button class="act primary" id="seqPlay">▶ Play</button><button class="act" id="seqReset">Reset</button></div>
+    </div>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 4–5)</span>
+    <p>What if $f_n \star l(x,y,t)$ does not have exactly a Laplacian distribution? The following claim shows
+    that the exact form of the distribution is not important as long as the filter outputs are sparse.</p>
+    <p><strong>Claim 2:</strong> Let $p_\epsilon = P(|f_i \star l(x,y,t)| < \epsilon)$. Then the estimated
+    filtered reflectances are within $\epsilon$ of the true filtered reflectances with probability at least:</p>
+    <div class="eq">$$ \sum_{k=1}^{T/2} \binom{T}{k} (1 - p_\epsilon)^{T-k}\, p_\epsilon^{\,k} \tag{8} $$</div>
+    <p><strong>Proof:</strong> If more than $50\%$ of the samples of $f_n \star l(x,y,t)$ are within $\epsilon$
+    of some value, then by the definition of the median, the median must be within $\epsilon$ of that value. The
+    claim follows from the binomial formula for the sum of $T$ independent events. $\square$</p>
+    <p>Claim 2 does not require that the illumination images have a Laplacian distribution in their filter
+    outputs, rather the more sparse the filter outputs are the quicker the median estimate will converge to the
+    true filtered reflectance function. For example, the lighting image in figure 1c does not have a Laplacian
+    distribution but is very sparse: $85\%$ of the filter outputs have magnitude less than $\epsilon = 1\%$ of
+    the maximal magnitude. Claim 2 guarantees the $|\hat{r}_n - r_n| < \epsilon$ with probability at least
+    $0.93$ given only three frames and with probability at least $0.97$ given five frames.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>“Do I really need a perfect Laplacian?”</strong> No. Claim 2 says the median trick works for
+    <em>any</em> lighting statistics, as long as they’re <em>sparse</em>. Define $p_\epsilon$ = the chance that,
+    at a given pixel and frame, the lighting’s edge value is tiny (within $\epsilon$ of zero). Sparse lighting =
+    $p_\epsilon$ close to 1.</p>
+    <p><strong>Why sparseness guarantees success.</strong> The median lands on the true paint value <em>as long
+    as more than half</em> the frames have near-zero lighting-edge at that pixel — because a majority of “clean”
+    samples forces the median into the clean cluster. So the only way to fail is to be unlucky enough that a
+    <em>majority</em> of frames are shadow-edged at the same spot. With sparse lighting that’s very unlikely, and
+    the probability is given by the <strong>binomial</strong> formula (counting how often the majority is
+    clean).</p>
+    <p><strong>The headline numbers.</strong> Even the hard cast shadow in Figure 1c is 85% sparse
+    ($p_\epsilon=0.85$). Plug into the binomial: with just <strong>3 frames</strong> the paint edges are
+    recovered with probability ≥ 0.93; with <strong>5 frames</strong>, ≥ 0.97. In other words, you don’t need a
+    day-long webcam feed — a handful of frames already nails it. More frames (or sparser lighting) only make it
+    more certain.</p>
+    <p class="muted">Note: equation (8) is reproduced exactly as printed. The quantity it stands for is the
+    probability that a <em>majority</em> of the $T$ frames are “clean” (within $\epsilon$), i.e.
+    $P\big(\text{Binomial}(T,p_\epsilon) > T/2\big)$ — that’s the number the demo below computes, and it
+    reproduces the paper’s 0.93 and 0.97.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Claim 2 live — convergence guarantee vs. #frames</h4><span class="tag">drag sliders</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Set the sparseness $p_\epsilon$ and the number of frames $T$. The big
+      number is the guaranteed success probability (majority of frames clean). Try $p_\epsilon = 0.85$ with
+      $T=3$ and $T=5$ to reproduce the paper’s <strong>0.93</strong> and <strong>0.97</strong>. The bars show
+      how likely each count “$k$ clean frames” is; green = the winning majority region.</p>
+      <canvas id="cvBin" width="900" height="280"></canvas>
+      <div class="controls">
+        <div class="control"><label>sparseness p<sub>ε</sub> <span class="val" id="vPe">0.85</span></label><input id="binP" type="range" min="50" max="99" value="85"></div>
+        <div class="control"><label>frames T <span class="val" id="vT">5</span></label><input id="binT" type="range" min="1" max="25" step="2" value="5"></div>
+      </div>
+      <div class="readout" id="binRO"></div>
+    </div>
+  </div>
+
+  <h2>3 &nbsp; Results — synthetic sequences</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 5)</span>
+    <p>All the results shown in this paper used just two filters: horizontal and vertical derivative filters.</p>
+    <p>Figure 5 show the first and last frames from a sequence in which a square cast shadow is moving over a
+    circle and ellipse. Note that the circle is always in shadow and that the ellipse is always half in shadow.
+    Despite this, the ML reflectance estimate correctly gets rid of the shadows on both. For comparison, figure 5
+    also shows the temporal min filter and temporal mean filter. Both of these approaches suffer from the fact
+    that if a pixel is always in shadow, the estimated reflectance is also darker.</p>
+    <p>Figure 6 shows the first and last frames from a synthetic additive transparency sequence. The image of
+    Reagan is constant for all frames and we added an image of Einstein that is moving diagonally (speed 4 pixels
+    per frame). Figure 6 also shows the recovered Reagan and Einstein images. They are indistinguishable from the
+    original image. For comparison, figure 6 also shows the min and median filters. Again, the min filter assumes
+    that all pixels at some time see a black pixel from the Einstein image. Since that assumption does not hold,
+    the estimate is quite bad.</p>
+    <div class="paperfig"><span class="figtag">Figure 5 — from the paper</span>
+      <img src="fig/fig5_synthetic.png" alt="Figure 5: synthetic moving-shadow sequence — first/last frame, ML illumination, ML reflectance, min filter, mean filter"></div>
+    <p class="muted" style="font-style:italic">Figure 5: A synthetic sequence in which a square cast shadow
+    translates diagonally. Note that the pixels surrounding the diamond are always in shadow, yet their estimated
+    reflectance is the same as that of pixels that were always in light. In the min and mean filters, this is not
+    the case and the estimated reflectances are quite wrong.</p>
+    <div class="paperfig"><span class="figtag">Figure 6 — from the paper</span>
+      <img src="fig/fig6_reagan.jpg" alt="Figure 6: additive transparency — Reagan and moving Einstein images, recovered by ML vs min and median filters"></div>
+    <p class="muted" style="font-style:italic">Figure 6: Results on a synthetic additive transparency sequence.
+    The Einstein image is translated diagonally with speed 4 pixels per frame and added to the Reagan image. The
+    ML estimates are nearly exact while the min and median filters are not.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Only two filters.</strong> The whole paper uses just a horizontal difference and a vertical
+    difference — the simplest edge detectors possible. That’s all the “sparse edges” assumption needs.</p>
+    <p><strong>Figure 5 — the killer test.</strong> A square shadow slides diagonally over a circle and an
+    ellipse. Two nasty cases are built in on purpose:</p>
+    <ul>
+      <li>The circle is <em>always</em> in shadow — never once fully lit.</li>
+      <li>The ellipse is <em>always half</em> in shadow.</li>
+    </ul>
+    <p>The <strong>min filter</strong> and <strong>mean filter</strong> both trip here: if a pixel is never
+    unlit, its minimum is still dark and its mean is still dragged down, so they report the paint as too dark.
+    Weiss’ <strong>median-of-edges</strong> gets it right anyway, because a permanent brightness offset produces
+    <em>no edge</em> and cancels out (the P/Q argument from Figure 4). The always-shadowed circle recovers to the
+    same brightness as the always-lit regions.</p>
+    <p><strong>Figure 6 — transparency / reflections.</strong> A still portrait of Reagan with a moving,
+    semi-transparent Einstein layered on top (like a reflection in glass). The method cleanly separates the two;
+    the min filter fails because it wrongly assumes every pixel goes fully black at some frame.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Figure 5 live — “always in shadow”: median wins, min/mean lose</h4><span class="tag">drag darkness</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The circle here is <strong>always</strong> under the sweeping shadow.
+      Compare the three estimates of its true paint. Median recovers the correct bright disk; min and mean leave
+      it too dark — exactly the failure the paper describes. Turn up the darkness to exaggerate the gap.</p>
+      <canvas id="cvAlways" width="900" height="250"></canvas>
+      <div class="controls">
+        <div class="control"><label>shadow darkness <span class="val" id="vAdark">55%</span></label><input id="alwDark" type="range" min="20" max="85" value="55"></div>
+      </div>
+      <div class="readout" id="alwRO"></div>
+    </div>
+  </div>
+
+  <h2>4 &nbsp; Results — real sequences</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (pages 5)</span>
+    <p>Figure 7 shows two frames from a sequence that is part of the Yale face database B [5]. A strobe light at
+    64 different locations illuminated a person's face, giving 64 images with changing illumination. The images
+    were taken with a camera with a linear response function. Figure 7 also shows the estimated reflectance and
+    illumination images. Note that nearly all the specular highlights are gone although there are still some
+    highlights at the tip of the nose. Although it is hard to measure performance in this task, observers
+    describe the illumination images as “looking like marble statues”, as would be expected from an illumination
+    image of a face.</p>
+    <p>Figure 8 shows two frames from a sequence taken from the “WebCam” at UC Berkeley. We used 35 images taken
+    at different times. Figure 8 also shows the estimated reflectance and illumination images. Note that the cast
+    shadows by the trees and buildings are mostly gone. Note also that we did not have to do anything special to
+    get rid of the people in the images: since we use a generic prior for the lighting images we can easily
+    accomodate changes that are not purely due to lighting. The results are as good as the Yale sequence, and we
+    believe this is partially due to the automatic gain control on the web camera so that the response function
+    is far from linear.</p>
+    <p>Even these results can be good enough for some applications. Figure 9a shows a color scene of Sproul plaza
+    in Berkeley. Suppose a malicius Stanford hacker wanted to insert the Stanford logo on the plaza. Figure 9b
+    shows what happens when $\alpha$ blending is used to composite the logo and the image. The result is
+    noticeably fake. Figure 9c shows the result when $\alpha$ blending is used on the estimated reflectance
+    image, and the image is rerendered with the estimated illumination image. The logo appears to be part of the
+    scene.</p>
+    <div class="paperfig"><span class="figtag">Figure 7 — from the paper</span>
+      <img src="fig/fig7_yale_face.jpg" alt="Figure 7: Yale face database — two frames, ML reflectance, and two ML illumination images"></div>
+    <p class="muted" style="font-style:italic">Figure 7: Results on one face from the Yale Face Database B [5].
+    There were 64 images taken with variable lighting. Note that the recovered reflectance image is almost free
+    of specularities and is free of cast shadows. The ML illumination images are shown with a logarithmic
+    nonlinearity to increase dynamic range.</p>
+    <div class="paperfig"><span class="figtag">Figure 8 — from the paper</span>
+      <img src="fig/fig8_webcam_result.jpg" alt="Figure 8: Berkeley webcam — two frames, ML reflectance free of cast shadows, and two ML illumination images"></div>
+    <p class="muted" style="font-style:italic">Figure 8: Results on a webcam sequence from:
+    www.berkeley.edu/webcams/sproul.html. There were 35 images that varied mostly in illumination. Note that the
+    ML reflectance image is free of cast shadows. The illumination images are shown with a logarithmic
+    nonlinearity to increase dynamic range.</p>
+    <div class="paperfig"><span class="figtag">Figure 9 — from the paper</span>
+      <img src="fig/fig9_manipulation.jpg" alt="Figure 9: compositing the Stanford logo — original, naive alpha blend (fake), and reflectance blend + relight (embedded)"></div>
+    <p class="muted" style="font-style:italic">Figure 9: Intrinsic images are useful for image manipulation. a.
+    The original image of Sproul plaza in Berkeley. b. The Stanford logo is $\alpha$ blended with the image: the
+    result is noticeable fake. c. The Stanford logo is $\alpha$ blended in the reflectance image and then
+    rendered with the derived illumination image.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>Real test 1 — faces (Figure 7).</strong> The Yale Face Database B shines a strobe from 64
+    positions at one face → 64 photos, same face, wildly different lighting. The recovered <em>reflectance</em>
+    is the person’s bare skin/features with the harsh highlights and shadows removed (a couple of stubborn
+    specular glints on the nose tip survive). The recovered <em>lighting</em> images look, as observers put it,
+    like smooth <em>marble statues</em> — which is exactly what “a face’s pure shading” should look like.</p>
+    <p><strong>Real test 2 — the Berkeley webcam (Figure 8).</strong> 35 shots of Sproul Plaza across a day.
+    Cast shadows of trees and buildings vanish from the reflectance image. Neat bonus: <em>people walking
+    through</em> also disappear — the generic “sparse” prior treats a transient person just like a transient
+    shadow, so nothing special is needed to remove them. (Weiss even notes the webcam’s auto-gain makes its
+    response nonlinear, which happens to help.)</p>
+    <p><strong>Why you’d care — realistic compositing (Figure 9).</strong> Want to paste a logo onto the plaza?
+    If you just <em>alpha-blend</em> it onto the raw photo, it sits there flat and obviously fake — it ignores
+    the ground’s shadows. But paste it onto the <em>reflectance</em> image (as if it were real paint on the
+    ground) and then <em>re-apply the scene’s lighting</em>, and the logo picks up the same shadows as
+    everything around it. Suddenly it looks like it was really painted on the plaza. That’s the payoff of
+    separating paint from light.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Figure 9 live — fake paste vs. relit paste</h4><span class="tag">toggle mode</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A ground plane with a soft shadow falling across it. Drop a “logo” on
+      it two ways. <strong>Blend on the photo</strong>: the logo keeps one flat brightness and floats, ignoring
+      the shadow. <strong>Blend on reflectance, then relight</strong>: the logo inherits the scene’s shadow and
+      sinks into the ground.</p>
+      <canvas id="cvComposite" width="900" height="240"></canvas>
+      <div class="controls">
+        <div class="control"><label>logo position <span class="val" id="vLogoX">50%</span></label><input id="logoX" type="range" min="8" max="78" value="42"></div>
+        <div class="control"><label>shadow strength <span class="val" id="vCshadow">60%</span></label><input id="compShadow" type="range" min="10" max="90" value="60"></div>
+      </div>
+      <div class="seg" style="margin-top:14px">
+        <button id="modeFake" class="on">Blend on photo (fake)</button>
+        <button id="modeReal">Blend on reflectance + relight</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>5 &nbsp; Discussion</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 5)</span>
+    <p>Deriving intrinsic images from a single image remains a difficult problem for computer vision systems.
+    Here we have focused on a slightly easier problem: recovering intrinsic images from an image sequence in
+    which the illumination varies but the reflectance is constant. We showed that the problem is still ill-posed
+    and suggested adding a statistical assumption based on recent work in statistics of natural scenes: that
+    derivative filter outputs on the illumination image will tend to be sparse. We showed that this assumption
+    leads to a novel, simple algorithm for reflectance recovery and showed encouraging results on a number of
+    image sequences.</p>
+    <p>Both the camera model and the statistical assumptions we have used can be extended. We assumed a linear
+    response in the camera model and one can derive the ML estimator when the camera is nonlinear. We have also
+    assumed that filter outputs are independent across space and time. It would be interesting to derive ML
+    estimators when the dependency is taken into account. We hope that progress in statistical modeling of
+    illumination images will enable us to tackle the original problem posed by Barrow and Tenenbaum: recovering
+    intrinsic images from a single image.</p>
+    <p><strong>Acknowledgements</strong></p>
+    <p>I thank A. Efros for pointing out the utility of webcams for computer vision. Supported by
+    MURI-ARO-DAAH04-96-1-0341.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Plain-English explanation</span>
+    <p><strong>What was achieved.</strong> The one-photo problem is still hard. But the <em>many-photos-of-a-
+    fixed-scene</em> problem now has a clean, principled solution: assume the lighting has <em>sparse edges</em>,
+    and the maximum-likelihood answer is simply “median the filtered frames, then reconstruct.” Tested on faces
+    and webcams, it strips shadows convincingly.</p>
+    <p><strong>Honest limits &amp; next steps.</strong> Two assumptions were made for convenience and could be
+    relaxed: (1) the camera responds <em>linearly</em> to light — real cameras don’t, and the ML estimator can
+    be re-derived for nonlinear cameras; (2) filter outputs are <em>independent</em> across space and time —
+    they’re actually correlated, and modelling that could sharpen results. The dream goal, still open, is
+    Barrow &amp; Tenenbaum’s original one: pull paint and light apart from a <em>single</em> image.</p>
+    <p class="muted"><strong>Historical note:</strong> this little paper became hugely influential. The
+    “median-of-derivatives → reconstruct” idea is now a textbook baseline for intrinsic-image and shadow-removal
+    methods, and its “sparse gradients of natural images” prior underpins a whole generation of computational-
+    photography algorithms.</p>
+  </div>
+
+  <h2>References</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (page 8) — References</span>
+    <p>[1] H.G. Barrow and J.M. Tenenbaum. Recovering intrinsic scene characteristics from images. In A. Hanson
+    and E. Riseman, editors, Computer Vision Systems. Academic Press, 1978.</p>
+    <p>[2] H. Farid and E.H. Adelson. Separating reflections from images by use of independent components
+    analysis. Journal of the optical society of america, 16(9):2136–2145, 1999.</p>
+    <p>[3] W.T. Freeman and P.A. Viola. Bayesian model of surface perception. In Adv. Neural Information
+    Processing Systems 10. MIT Press, 1998.</p>
+    <p>[4] B. V. Funt, M. S. Drew, and M. Brockington. Recovering shading from color images. In G. Sandini,
+    editor, Proceedings: Second European Conference on Computer Vision, pages 124–132. Springer-Verlag, 1992.</p>
+    <p>[5] A.S. Georghiades, P.N. Belhumeur, and D.J. Kriegman. From few to many: Generative models for
+    recognition under variable pose and illumination. In IEEE Int. Conf. on Automatic Face and Gesture
+    Recognition, pages 277–284, 2000.</p>
+    <p>[6] K. Hayakawa. Photometric stereo under a light source with arbitrary motions. Journal of the optical
+    society of America, 11(11), 1994.</p>
+    <p>[7] E. H. Land and J. J. McCann. Lightness and retinex theory. Journal of the Optical Society of America,
+    61:1–11, 1971.</p>
+    <p>[8] B.A. Olshausen and D. J. Field. Emergence of simple-cell receptive field properties by learning a
+    sparse code for natural images. Nature, 381:607–608, 1996.</p>
+    <p>[9] H.Y. Shum and R. Szeliski. Construction and refinement of panoramic mosaics with global and local
+    alignment. In Proceedings IEEE CVPR, pages 953–958, 1998.</p>
+    <p>[10] E.P. Simoncelli. Statistical models for images:compression restoration and synthesis. In Proc
+    Asilomar Conference on Signals, Systems and Computers, pages 673–678, 1997.</p>
+    <p>[11] R. Szeliksi, S. Avidan, and P. Anandan. Layer extraction from multiple images containing reflections
+    and transparency. In Proceedings IEEE CVPR, 2000.</p>
+    <p>[12] A.L. Yuille, D. Snow, R. Epstein, and P.N. Belhumeur. Determining generative models of objects under
+    varying illumination: shape and albedo from multiple images using SVD and integrability. International
+    Journal of Computer Vision, 35(3):203–222, 1999.</p>
+  </div>
+
+  <div class="rot">
+    <span class="rot-label">Rule of Thumb</span>
+    <ul>
+      <li><strong>The whole method in one sentence:</strong> filter each frame with edge detectors, take the
+      per-pixel <em>median over time</em> of those filtered frames, then reconstruct the image from its median
+      gradients. That’s the reflectance.</li>
+      <li><strong>Median of <em>gradients</em>, never of raw pixels.</strong> Median of raw pixels bakes
+      permanent shadows into the paint (the P/Q trap); median of gradients cancels any constant offset.</li>
+      <li><strong>You need surprisingly few frames.</strong> If lighting is ~85% sparse, 3 frames already give
+      ≥0.93 accuracy, 5 frames ≥0.97. More frames or sparser light → faster convergence.</li>
+      <li><strong>Median beats mean and min</strong> whenever a pixel is <em>never</em> fully lit — the exact
+      case that sinks the simpler filters.</li>
+      <li><strong>Two derivative filters (∂x, ∂y) are enough.</strong> The reconstruction filter $g$ depends
+      only on your filter choice, so precompute it once and reuse it on every sequence.</li>
+      <li><strong>Free lunch:</strong> once you have the paint, every frame’s lighting is just
+      $l = i - r$ (in the log domain). And transient distractions (people, cars) vanish for free, treated as
+      just more sparse “lighting” change.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Summary — intrinsic images from sequences at a glance</span>
+    <table>
+      <tr><th>Concept</th><th>Meaning</th><th>Why it matters here</th></tr>
+      <tr><td>Intrinsic images</td><td>Photo = reflectance (paint) × illumination (light)</td><td>The two things we want to separate</td></tr>
+      <tr><td>Ill-posed</td><td>$T$ equations, $T{+}1$ unknowns per pixel</td><td>Needs an extra assumption to solve</td></tr>
+      <tr><td>Log domain</td><td>$i = r + l$ (product → sum)</td><td>Makes everything linear</td></tr>
+      <tr><td>Sparse prior</td><td>Edge-filter outputs of light ≈ 0 almost everywhere</td><td>The generic assumption that unlocks it</td></tr>
+      <tr><td>Laplacian ⇒ median</td><td>Minimising $l_1$ error ⇒ the median</td><td>Gives the one-line algorithm (eq 2)</td></tr>
+      <tr><td>Reconstruct (eq 6–7)</td><td>Turn median gradients back into an image</td><td>Precomputed filter $g$, reused every time</td></tr>
+      <tr><td>Claim 2</td><td>Binomial guarantee of convergence</td><td>Works even without a perfect Laplacian</td></tr>
+      <tr><td>vs. min / mean</td><td>Both fail on always-shadowed pixels</td><td>Median is robust to those outliers</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>One-line takeaway:</strong> the paint is the part of the scene that stays
+    consistent over time; the shadows are rare outliers — and the <em>median of edge-filtered frames</em> throws
+    the outliers away and keeps the paint.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch11_retargeting_patchmatch.html"><span class="dir">‹ Prev</span><span class="ttl">11 · Re-targeting &amp; PatchMatch</span></a>
+    <a class="next" href="index.html"><span class="dir">Home ›</span><span class="ttl">Back to Contents</span></a>
+  </div>
+</div>
+
+<script>
+/* ============ helper: grayscale ImageData panel ============ */
+function grayPanel(ctx, x, y, w, h, fn){
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  for(let py=0; py<h; py++){
+    for(let px=0; px<w; px++){
+      let v = fn(px/w, py/h);           // fn returns 0..1
+      v = v<0?0:v>1?1:v;
+      const g = (v*255)|0;
+      const k = (py*w+px)*4;
+      d[k]=g; d[k+1]=g; d[k+2]=g; d[k+3]=255;
+    }
+  }
+  ctx.putImageData(img, x, y);
+}
+</script>
+
+<!-- ============ Demo A: intrinsic decomposition ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvDecomp'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const PW=170, PH=170, TOP=40;
+  const posEl=document.getElementById('shadowPos'), darkEl=document.getElementById('shadowDark');
+  // reflectance (paint) — fixed pattern: bright disk + two paint patches on mid bg
+  function R(u,v){
+    let val=0.55;
+    const dx=u-0.5, dy=v-0.46; if(dx*dx+dy*dy < 0.075) val=0.9;           // bright disk
+    if(u>0.12&&u<0.34&&v>0.62&&v<0.86) val=0.28;                          // dark paint square
+    if(u>0.68&&u<0.9 &&v>0.16&&v<0.4 ) val=0.72;                          // light paint square
+    return val;
+  }
+  function L(u,v,pos,dark){
+    let val=0.55+0.45*(1-v);                                             // top brighter than bottom
+    const band=0.18, edge=0.05;
+    const dist=Math.abs(u-pos);
+    let sh=1;
+    if(dist<band) sh=dark; else if(dist<band+edge) sh=dark+(1-dark)*(dist-band)/edge;
+    return val*sh;
+  }
+  function draw(){
+    const pos=+posEl.value/100, dark=1-(+darkEl.value/100);
+    document.getElementById('vShadow').textContent=(+posEl.value)+'%';
+    document.getElementById('vDark').textContent=(+darkEl.value)+'%';
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const x0=40, x1=365, x2=690;
+    grayPanel(ctx,x0,TOP,PW,PH,(u,v)=>R(u,v)*L(u,v,pos,dark));           // input
+    grayPanel(ctx,x1,TOP,PW,PH,(u,v)=>R(u,v));                           // reflectance
+    grayPanel(ctx,x2,TOP,PW,PH,(u,v)=>L(u,v,pos,dark));                  // illumination
+    ctx.fillStyle='#e6ecf7'; ctx.font='14px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('Input (what camera sees)', x0+PW/2, 26);
+    ctx.fillText('Reflectance — never changes', x1+PW/2, 26);
+    ctx.fillText('Illumination (light + shadow)', x2+PW/2, 26);
+    ctx.fillStyle='#ffb454'; ctx.font='22px "Segoe UI"';
+    ctx.fillText('=', x0+PW+22, TOP+PH/2+8);
+    ctx.fillText('×', x1+PW+22, TOP+PH/2+8);
+    ctx.textAlign='left';
+  }
+  posEl.oninput=draw; darkEl.oninput=draw; draw();
+})();
+</script>
+
+<!-- ============ Demo B: ambiguity ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvAmbig'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const I=0.5;                                    // fixed observed value
+  const rEl=document.getElementById('ambR');
+  function sw(x,label,val,color){
+    ctx.fillStyle='#0c1322'; ctx.fillRect(x,40,150,120);
+    const g=(val*255)|0; ctx.fillStyle='rgb('+g+','+g+','+g+')';
+    ctx.fillRect(x+10,50,130,80);
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.strokeRect(x+10,50,130,80);
+    ctx.fillStyle=color; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText(label, x+75, 150);
+    ctx.fillStyle='#e6ecf7'; ctx.font='12px monospace';
+    ctx.fillText('value = '+val.toFixed(2), x+75, 32);
+    ctx.textAlign='left';
+  }
+  function draw(){
+    const r=+rEl.value/100; const l=I/r;
+    document.getElementById('vR').textContent=r.toFixed(2);
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    sw(120,'Reflectance R', r, '#41d8c9');
+    sw(360,'Illumination L = I/R', Math.min(l,1), '#6ea8ff');
+    sw(640,'Product = Input I', r*l, '#ffb454');
+    ctx.fillStyle='#6b7a99'; ctx.font='22px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('×', 330, 100); ctx.fillText('=', 610, 100); ctx.textAlign='left';
+    document.getElementById('ambigRO').innerHTML =
+      'R = <b>'+r.toFixed(2)+'</b>   L = I/R = <b>'+l.toFixed(2)+'</b>   '+
+      'product R×L = <b>'+(r*l).toFixed(2)+'</b> = I (always the same input!)';
+  }
+  rEl.oninput=draw; draw();
+})();
+</script>
+
+<!-- ============ Demo Laplacian ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvLap'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const aEl=document.getElementById('lapA');
+  // deterministic pseudo-random for stable bars
+  let seed=12345; function rnd(){seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;}
+  function draw(){
+    const a=+aEl.value; document.getElementById('vAlpha').textContent=a.toFixed(1);
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    // ---- left: curves ----
+    const LX=40, LY=40, LW=380, LH=200;
+    ctx.strokeStyle='#243049'; ctx.strokeRect(LX,LY,LW,LH);
+    ctx.strokeStyle='#2c3650'; ctx.beginPath(); ctx.moveTo(LX+LW/2,LY); ctx.lineTo(LX+LW/2,LY+LH); ctx.stroke();
+    // Gaussian matched-ish variance (Laplacian var = 2/a^2 -> sigma)
+    const sig=Math.sqrt(2)/a;
+    function gauss(x){return Math.exp(-x*x/(2*sig*sig));}
+    function lap(x){return Math.exp(-a*Math.abs(x));}
+    function plot(fn,color){
+      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+      for(let i=0;i<=LW;i++){ const x=(i/LW-0.5)*2; const y=fn(x);
+        const px=LX+i, py=LY+LH-6-y*(LH-16);
+        i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);} ctx.stroke();
+    }
+    plot(gauss,'#6ea8ff'); plot(lap,'#41d8c9');
+    ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('distribution shape (x = filter output)', LX+LW/2, 28);
+    ctx.textAlign='left'; ctx.font='12px "Segoe UI"';
+    ctx.fillStyle='#41d8c9'; ctx.fillText('■ Laplacian  e^(−α|x|)', LX+10, LY+20);
+    ctx.fillStyle='#6ea8ff'; ctx.fillText('■ Gaussian', LX+10, LY+38);
+    // ---- right: sparse sample bars ----
+    const RX=470, RY=40, RW=390, RH=200, N=64;
+    ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('64 edge-filter outputs (most ≈ 0 → sparse)', RX+RW/2, 28); ctx.textAlign='left';
+    ctx.strokeStyle='#2c3650'; ctx.beginPath(); ctx.moveTo(RX,RY+RH/2); ctx.lineTo(RX+RW,RY+RH/2); ctx.stroke();
+    seed=987; const eps=0.1; let within=0;
+    const bw=RW/N;
+    for(let i=0;i<N;i++){
+      let u=rnd()-0.5; // sample Laplacian via inverse CDF
+      let x=-Math.sign(u)*Math.log(1-2*Math.abs(u))/a;
+      if(Math.abs(x)<eps) within++;
+      const h=Math.max(1,Math.min(RH/2-4,Math.abs(x)*(RH/2-4)/0.7));
+      const px=RX+i*bw;
+      ctx.fillStyle= Math.abs(x)<eps ? '#41d8c9' : '#ffb454';
+      if(x>=0) ctx.fillRect(px+1,RY+RH/2-h,bw-2,h);
+      else ctx.fillRect(px+1,RY+RH/2,bw-2,h);
+    }
+    document.getElementById('lapRO').innerHTML =
+      'α = <b>'+a.toFixed(1)+'</b>  →  fraction of outputs within ε of zero (p<sub>ε</sub>) ≈ <b>'+
+      (within/N).toFixed(2)+'</b>. Higher α = sparser lighting = median converges faster (Claim 2).';
+  }
+  aEl.oninput=draw; draw();
+})();
+</script>
+
+<!-- ============ Demo E: median vs mean vs min ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvMed'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const X0=60, X1=840, Y=120;
+  const initial=[0.58,0.60,0.62,0.59,0.61,0.60,0.22,0.88,0.40];  // cluster + 3 outliers
+  let vals=initial.slice();
+  let drag=-1;
+  function toPx(v){return X0+v*(X1-X0);}
+  function toVal(px){return Math.max(0,Math.min(1,(px-X0)/(X1-X0)));}
+  function median(a){const s=a.slice().sort((p,q)=>p-q);const n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2;}
+  function draw(){
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    // axis
+    ctx.strokeStyle='#243049'; ctx.beginPath(); ctx.moveTo(X0,Y); ctx.lineTo(X1,Y); ctx.stroke();
+    ctx.fillStyle='#6b7a99'; ctx.font='12px "Segoe UI"';
+    ctx.fillText('dark', X0-6, Y+30); ctx.fillText('bright', X1-30, Y+30);
+    ctx.fillText('pixel value across frames  (drag any dot)', X0, 30);
+    const me=median(vals);
+    const mn=vals.reduce((s,v)=>s+v,0)/vals.length;
+    const mi=Math.min.apply(null,vals);
+    function marker(v,color,label,dy){
+      const px=toPx(v);
+      ctx.strokeStyle=color; ctx.lineWidth=2; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(px,Y-70); ctx.lineTo(px,Y+40); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle=color; ctx.font='bold 13px "Segoe UI"';
+      ctx.fillText(label+' '+v.toFixed(2), px+6, dy);
+    }
+    marker(mi,'#ff6b81','min',Y-52);
+    marker(mn,'#6ea8ff','mean',Y-34);
+    marker(me,'#41d8c9','median',Y-16);
+    // dots
+    for(let i=0;i<vals.length;i++){
+      const px=toPx(vals[i]);
+      ctx.beginPath(); ctx.arc(px,Y,8,0,7); ctx.fillStyle= i===drag?'#fff':'#cfe7ff';
+      ctx.fill(); ctx.strokeStyle='#41d8c9'; ctx.lineWidth=2; ctx.stroke();
+    }
+    document.getElementById('medRO').innerHTML =
+      '<b style="color:#41d8c9">median '+me.toFixed(2)+'</b>  (robust — sits on the true paint)   ·   '+
+      '<span style="color:#6ea8ff">mean '+mn.toFixed(2)+'</span> (pulled by outliers)   ·   '+
+      '<span style="color:#ff6b81">min '+mi.toFixed(2)+'</span> (grabs the darkest shadow)';
+  }
+  function pick(e){
+    const rct=c.getBoundingClientRect(); const sx=c.width/rct.width, sy=c.height/rct.height;
+    const mx=(e.clientX-rct.left)*sx, my=(e.clientY-rct.top)*sy;
+    for(let i=0;i<vals.length;i++){ if(Math.abs(toPx(vals[i])-mx)<12 && Math.abs(Y-my)<18){drag=i;return;} }
+    drag=-1;
+  }
+  function move(e){ if(drag<0) return; const rct=c.getBoundingClientRect();
+    const mx=(e.clientX-rct.left)*(c.width/rct.width); vals[drag]=toVal(mx); draw(); }
+  c.addEventListener('pointerdown',e=>{pick(e);if(drag>=0){c.setPointerCapture(e.pointerId);draw();}});
+  c.addEventListener('pointermove',move);
+  c.addEventListener('pointerup',()=>{drag=-1;draw();});
+  document.getElementById('medReset').onclick=()=>{vals=initial.slice();drag=-1;draw();};
+  draw();
+})();
+</script>
+
+<!-- ============ Demo C: temporal median sequence ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvSeq'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const PW=150, PH=150, TOP=44, T=11;
+  const fEl=document.getElementById('seqFrames'), dEl=document.getElementById('seqDark');
+  const px0=45, px1=375, px2=705;
+  function R(u,v){
+    let val=0.5;
+    const dx=u-0.5,dy=v-0.42; if(dx*dx+dy*dy<0.06) val=0.85;         // bright disk
+    if(u>0.15&&u<0.4&&v>0.6&&v<0.85) val=0.3;                        // dark patch
+    if(u>0.62&&u<0.85&&v>0.55&&v<0.8) val=0.68;                      // light patch
+    return val;
+  }
+  let frames=[];                                                     // frames[t] = Float array PW*PH
+  function build(dark){
+    frames=[];
+    for(let t=0;t<T;t++){
+      const arr=new Float32Array(PW*PH);
+      const cx=(t+0.5)/T, hw=0.15;
+      for(let py=0;py<PH;py++)for(let px=0;px<PW;px++){
+        const u=px/PW,v=py/PH; let sh=1;
+        if(Math.abs(u-cx)<hw) sh=dark;
+        arr[py*PW+px]=R(u,v)*sh;
+      }
+      frames.push(arr);
+    }
+  }
+  function panel(x, getVal, label){
+    const img=ctx.createImageData(PW,PH); const d=img.data;
+    for(let i=0;i<PW*PH;i++){ let v=getVal(i); v=v<0?0:v>1?1:v; const g=(v*255)|0;
+      d[i*4]=g;d[i*4+1]=g;d[i*4+2]=g;d[i*4+3]=255; }
+    ctx.putImageData(img,x,TOP);
+    ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText(label,x+PW/2,32); ctx.textAlign='left';
+  }
+  function draw(){
+    const n=+fEl.value; const dark=1-(+dEl.value/100);
+    document.getElementById('vFrames').textContent=n+' / '+T;
+    document.getElementById('vSdark').textContent=(+dEl.value)+'%';
+    if(frames.length===0) build(dark);
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    // current (latest) frame
+    const cur=frames[n-1];
+    panel(px0, i=>cur[i], 'latest frame ('+n+')');
+    // median over first n frames
+    panel(px1, i=>{ const tmp=[]; for(let t=0;t<n;t++) tmp.push(frames[t][i]);
+      tmp.sort((a,b)=>a-b); const m=tmp.length; return m%2?tmp[(m-1)/2]:(tmp[m/2-1]+tmp[m/2])/2; },
+      'MEDIAN of '+n+' frames');
+    // mean over first n frames
+    panel(px2, i=>{ let s=0; for(let t=0;t<n;t++) s+=frames[t][i]; return s/n; },
+      'MEAN of '+n+' frames');
+    ctx.fillStyle='#41d8c9'; ctx.font='12px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('← shadow gone', px1+PW/2, TOP+PH+22);
+    ctx.fillStyle='#ff6b81'; ctx.fillText('← shadow smear remains', px2+PW/2, TOP+PH+22);
+    ctx.textAlign='left';
+  }
+  function rebuild(){ frames=[]; draw(); }
+  fEl.oninput=draw; dEl.oninput=rebuild;
+  // play
+  let playing=false, timer=null;
+  const btn=document.getElementById('seqPlay');
+  function step(){ let n=+fEl.value; n = n>=T?1:n+1; fEl.value=n; draw();
+    if(n>=T){ stop(); } }
+  function start(){ playing=true; btn.textContent='⏸ Pause';
+    fEl.value=1; draw(); timer=setInterval(step,650); }
+  function stop(){ playing=false; btn.textContent='▶ Play'; if(timer){clearInterval(timer);timer=null;} }
+  btn.onclick=()=>{ playing?stop():start(); };
+  document.getElementById('seqReset').onclick=()=>{ stop(); fEl.value=1; rebuild(); };
+  draw();
+})();
+</script>
+
+<!-- ============ Demo F: binomial guarantee ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvBin'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const pEl=document.getElementById('binP'), tEl=document.getElementById('binT');
+  function choose(n,k){ let r=1; for(let i=1;i<=k;i++) r=r*(n-k+i)/i; return r; }
+  function draw(){
+    const p=+pEl.value/100, T=+tEl.value;
+    document.getElementById('vPe').textContent=p.toFixed(2);
+    document.getElementById('vT').textContent=T;
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    // binomial pmf
+    const maj=Math.floor(T/2)+1;                       // need > T/2 clean
+    let success=0; const bars=[];
+    for(let k=0;k<=T;k++){ const pk=choose(T,k)*Math.pow(p,k)*Math.pow(1-p,T-k);
+      bars.push(pk); if(k>=maj) success+=pk; }
+    // draw bars
+    const BX=60, BY=60, BW=520, BH=170;
+    ctx.strokeStyle='#243049'; ctx.strokeRect(BX,BY,BW,BH);
+    const bw=BW/(T+1);
+    let maxp=Math.max.apply(null,bars);
+    for(let k=0;k<=T;k++){ const h=bars[k]/maxp*(BH-10);
+      ctx.fillStyle= k>=maj ? '#7ee787' : '#3a4a6a';
+      ctx.fillRect(BX+k*bw+2, BY+BH-h, bw-4, h);
+    }
+    ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('P( k of '+T+' frames are “clean” )', BX+BW/2, 44);
+    ctx.fillStyle='#7ee787'; ctx.font='12px "Segoe UI"';
+    ctx.fillText('green = majority clean (k > T/2) → median is correct', BX+BW/2, BY+BH+28);
+    ctx.textAlign='left';
+    // big number
+    const RX=640;
+    ctx.fillStyle='#9fb0cc'; ctx.font='14px "Segoe UI"';
+    ctx.fillText('Guaranteed success', RX, 90);
+    ctx.fillText('probability:', RX, 110);
+    ctx.fillStyle='#41d8c9'; ctx.font='bold 54px "Segoe UI"';
+    ctx.fillText(success.toFixed(3), RX, 165);
+    ctx.fillStyle='#6b7a99'; ctx.font='13px "Segoe UI"';
+    ctx.fillText('p(majority within ε)', RX, 195);
+    document.getElementById('binRO').innerHTML =
+      'With p<sub>ε</sub> = <b>'+p.toFixed(2)+'</b> and <b>'+T+'</b> frames, the median lands within ε of the '+
+      'true paint with probability ≥ <b>'+success.toFixed(3)+'</b>.'+
+      ( (Math.abs(p-0.85)<0.001&&(T===3||T===5)) ? '  ✓ matches the paper.' : '' );
+  }
+  pEl.oninput=draw; tEl.oninput=draw; draw();
+})();
+</script>
+
+<!-- ============ Demo: always-in-shadow (Fig 5) ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvAlways'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const PW=150, PH=150, TOP=44, T=11;
+  const dEl=document.getElementById('alwDark');
+  const px=[45,215,385,555,725];
+  // true paint: a bright disk (0.85) on mid bg (0.5)
+  function R(u,v){ const dx=u-0.5,dy=v-0.5; return (dx*dx+dy*dy<0.09)?0.85:0.5; }
+  function draw(){
+    const dark=1-(+dEl.value/100);
+    document.getElementById('vAdark').textContent=(+dEl.value)+'%';
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    // build frames: a shadow band always covers the disk region but sweeps a bit within it
+    // so the disk is ALWAYS at least partly shadowed -> min/mean underestimate.
+    const frames=[];
+    for(let t=0;t<T;t++){
+      const arr=new Float32Array(PW*PH);
+      const cx=0.5+0.12*Math.sin(t/T*6.28), hw=0.32;   // wide band centered on disk, always covering it
+      for(let i=0;i<PW*PH;i++){ const u=(i%PW)/PW, v=((i/PW)|0)/PH;
+        let sh=1; if(Math.abs(u-cx)<hw) sh=dark; arr[i]=R(u,v)*sh; }
+      frames.push(arr);
+    }
+    function panel(x,fn,label,col){
+      const img=ctx.createImageData(PW,PH),d=img.data;
+      for(let i=0;i<PW*PH;i++){let vv=fn(i);vv=vv<0?0:vv>1?1:vv;const g=(vv*255)|0;
+        d[i*4]=g;d[i*4+1]=g;d[i*4+2]=g;d[i*4+3]=255;}
+      ctx.putImageData(img,x,TOP);
+      ctx.fillStyle=col||'#e6ecf7'; ctx.font='12px "Segoe UI"'; ctx.textAlign='center';
+      ctx.fillText(label,x+PW/2,32); ctx.textAlign='left';
+    }
+    panel(px[0], i=>frames[0][i], 'a frame', '#9fb0cc');
+    panel(px[1], i=>R((i%PW)/PW, ((i/PW)|0)/PH), 'TRUE paint', '#e6ecf7');
+    panel(px[2], i=>{const t=[];for(let k=0;k<T;k++)t.push(frames[k][i]);t.sort((a,b)=>a-b);
+      const m=t.length;return m%2?t[(m-1)/2]:(t[m/2-1]+t[m/2])/2;}, 'MEDIAN ✓','#41d8c9');
+    panel(px[3], i=>{let s=0;for(let k=0;k<T;k++)s+=frames[k][i];return s/T;}, 'MEAN ✗','#6ea8ff');
+    panel(px[4], i=>{let m=1;for(let k=0;k<T;k++)m=Math.min(m,frames[k][i]);return m;}, 'MIN ✗','#ff6b81');
+    // measure disk brightness for each estimate
+    const centre=((PH/2|0)*PW)+(PW/2|0);
+    const med=(()=>{const t=[];for(let k=0;k<T;k++)t.push(frames[k][centre]);t.sort((a,b)=>a-b);return t[(T-1)/2];})();
+    let s=0;for(let k=0;k<T;k++)s+=frames[k][centre];const mean=s/T;
+    let mn=1;for(let k=0;k<T;k++)mn=Math.min(mn,frames[k][centre]);
+    document.getElementById('alwRO').innerHTML =
+      'True disk paint = <b>0.85</b>.  Recovered centre value → '+
+      '<b style="color:#41d8c9">median '+med.toFixed(2)+'</b> · '+
+      '<span style="color:#6ea8ff">mean '+mean.toFixed(2)+'</span> · '+
+      '<span style="color:#ff6b81">min '+mn.toFixed(2)+'</span>.  '+
+      'The disk is never fully lit, so only the median recovers 0.85.';
+  }
+  dEl.oninput=draw; draw();
+})();
+</script>
+
+<!-- ============ Demo G: composite (Fig 9) ============ -->
+<script>
+(function(){
+  const c=document.getElementById('cvComposite'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const PW=380, PH=170, TOP=40, GX=40, GX2=480;
+  const xEl=document.getElementById('logoX'), sEl=document.getElementById('compShadow');
+  const bFake=document.getElementById('modeFake'), bReal=document.getElementById('modeReal');
+  let mode='fake';
+  function illum(u,v,shadow){          // ground lighting: soft diagonal shadow band
+    let val=0.9-0.15*v;
+    const d=Math.abs(u-0.55);
+    if(d<0.2) val*= (1-(1-shadow)* (1-d/0.2));
+    return val;
+  }
+  function ground(u){ return 0.62 + 0.05*Math.sin(u*40); }   // paving reflectance
+  function inLogo(u,v,lx){ return (u>lx&&u<lx+0.22&&v>0.34&&v<0.66); }
+  function draw(){
+    const lx=+xEl.value/100, shadow=1-(+sEl.value/100);
+    document.getElementById('vLogoX').textContent=(+xEl.value)+'%';
+    document.getElementById('vCshadow').textContent=(+sEl.value)+'%';
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    function scene(ox,label){
+      const img=ctx.createImageData(PW,PH),d=img.data;
+      for(let py=0;py<PH;py++)for(let px2=0;px2<PW;px2++){
+        const u=px2/PW,v=py/PH; let r=ground(u); let onLogo=inLogo(u,v,lx);
+        if(onLogo) r=0.95;                       // logo is bright paint
+        const L=illum(u,v,shadow);
+        let out;
+        if(onLogo && mode==='fake') out=0.95;    // pasted flat on photo — ignores shadow
+        else out=r*L;                            // relit (or background)
+        out=out<0?0:out>1?1:out; const g=(out*255)|0;
+        const k=(py*PW+px2)*4;
+        if(onLogo){ // tint the logo slightly red so it's visible
+          d[k]=Math.min(255,g+60); d[k+1]=g*0.5|0; d[k+2]=g*0.5|0;
+        } else { d[k]=g;d[k+1]=g;d[k+2]=g; }
+        d[k+3]=255;
+      }
+      ctx.putImageData(img,ox,TOP);
+      ctx.strokeStyle='#243049'; ctx.strokeRect(ox,TOP,PW,PH);
+      ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+      ctx.fillText(label,ox+PW/2,30); ctx.textAlign='left';
+    }
+    // left = scene with the current mode; right = illumination reference
+    scene(GX, mode==='fake'?'Logo blended on the PHOTO (floats, fake)':'Logo on REFLECTANCE, then relit (embedded)');
+    // right: show the illumination image so the shadow is visible
+    grayPanel(ctx,GX2,TOP,PW,PH,(u,v)=>illum(u,v,shadow));
+    ctx.strokeStyle='#243049'; ctx.strokeRect(GX2,TOP,PW,PH);
+    ctx.fillStyle='#e6ecf7'; ctx.font='13px "Segoe UI"'; ctx.textAlign='center';
+    ctx.fillText('scene illumination (the shadow)',GX2+PW/2,30); ctx.textAlign='left';
+  }
+  function setMode(m){ mode=m; bFake.classList.toggle('on',m==='fake'); bReal.classList.toggle('on',m==='real'); draw(); }
+  bFake.onclick=()=>setMode('fake'); bReal.onclick=()=>setMode('real');
+  xEl.oninput=draw; sEl.oninput=draw; draw();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Clustering &amp; Motion Magnification</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Clustering &amp; Motion Magnification</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch06_layer_representation.html">📖 Ch 6</a>
+  <a class="navbtn" href="ch07_video_magnification.html">📖 Ch 7</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Clustering &amp; Motion Magnification</h1>
+    <p class="lede">K-means clustering (Chapter 6) and Eulerian vs Lagrangian magnification (Chapter 7). Answers stay
+    hidden until you press <strong>Check</strong>; press <strong>💡 Hint</strong> for the exact course-material
+    explanation, and <strong>Reset / Retake</strong> to run it again.</p>
+  </header>
+
+  <div id="quiz"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam02_optic_flow_applications.html"><span class="dir">‹ Previous exam</span><span class="ttl">Optic Flow Applications</span></a>
+    <a class="next" href="exam04_kalman_particle.html"><span class="dir">Next exam ›</span><span class="ttl">Kalman &amp; Particle Filters</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">In K-means, which step is more expensive computationally?</div>
+    <ul class="q-options">
+      <li>They have the same cost</li>
+      <li>None of the other answers</li>
+      <li>Assignment step (assigning points to centers)</li>
+      <li>Update step (computing the centers)</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — K-Means (PDF)</span>
+        <p>Algorithm K-Means:</p>
+        <p>1. Initialize $c_1, ..., c_k$<br>
+        2. Assign $x_i$ to the closest $c_j$<br>
+        3. $c_j = \frac{1}{|s_j|} \sum_{i \in s_j} x_i$<br>
+        4. Return to section 2.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The <strong>assignment</strong> step compares <em>every</em> point to <em>every</em> centre to find the
+        nearest one — that's $n \times k$ distance computations. The <strong>update</strong> step just averages the
+        points already inside each cluster — one pass over the $n$ points. So assignment dominates the cost.</p>
+      </div>
+      <a class="chap-link" href="ch06_layer_representation.html">Read the full section in Chapter 6 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">In Eulerian video processing:</div>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>The coordinate system is attached to the 3D object point</li>
+      <li>It does not matter</li>
+      <li>The coordinate system is attached to the 2D pixel</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Video Magnification (PDF)</span>
+        <p>The main difference between the two approaches lies in the coordinates: Lagrangian methods track individual
+        pixels over time, whereas <strong>Eulerian methods fixate on a region in the frame</strong> and observe its
+        intensity profile. In the Eulerian approach, each pixel is observed independently, without considering its
+        neighborhood.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Eulerian = sit at a <strong>fixed 2D pixel</strong> location and watch how its value changes over time (the
+        world flows past a fixed grid). Lagrangian = follow the moving object point. So the Eulerian coordinate system
+        is attached to the 2D pixel.</p>
+      </div>
+      <a class="chap-link" href="ch07_video_magnification.html">Read the full section in Chapter 7 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">Choose the correct completion. K-means…</div>
+    <ul class="q-options">
+      <li>Maximizes minimum distance to centers</li>
+      <li>Maximizes average distance to centers</li>
+      <li>Minimizes average distance to centers</li>
+      <li>Minimizes maximum distance to centers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — K-Means (PDF)</span>
+        <p>We define the distortion and our goal is to minimize it:</p>
+        <div class="eq">$$ \text{Distortion} = \sum_{i=1}^n \|x_i - C_{\text{Encode}(x_i)}\|^2 $$</div>
+        <p>Given dataset $x$ and the number of clusters $k$, we want to find the prototypes that minimize the
+        distortion.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The distortion is the sum (equivalently, the average) of squared distances from each point to its assigned
+        centre. K-means <strong>minimizes</strong> this — i.e. it minimizes the average distance to the centres.</p>
+      </div>
+      <a class="chap-link" href="ch06_layer_representation.html">Read the full section in Chapter 6 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">If we increase $k$ then:</div>
+    <ul class="q-options">
+      <li>The error does not depend on $k$</li>
+      <li>The error goes down</li>
+      <li>The error goes up</li>
+      <li>None of the other answers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — K-Means (PDF)</span>
+        <p>Notice that the larger the value of $k$, the smaller the distortion will be. Ideally, if $k$ equals the
+        number of pixels, the distortion would be zero.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>More centres means every point can sit closer to one of them, so the total squared error (distortion) can
+        only decrease. In the extreme, one centre per point gives zero error — which is exactly why you also need a
+        penalty (MDL) to choose a sensible $k$.</p>
+      </div>
+      <a class="chap-link" href="ch06_layer_representation.html">Read the full section in Chapter 6 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or false? When the data is 1D, and you are given a set of $n$ scalars, you can find an optimal
+      clustering into 3 clusters in time polynomial in $n$.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="callout note">
+        <span class="lbl">Why this is True</span>
+        <p>In general dimensions, finding the globally optimal K-means clustering is NP-hard, which is why the
+        iterative algorithm only converges to a <em>local</em> minimum and "depends on the initialization."</p>
+        <p>But in <strong>1D</strong> the problem collapses: sort the $n$ scalars, and an optimal clustering into $k$
+        groups is always made of <strong>contiguous intervals</strong>. So you only have to choose the split points.
+        A dynamic-programming sweep finds the optimal splits in polynomial time (about $O(k n^2)$) — no
+        initialization, no local minima.</p>
+      </div>
+      <a class="chap-link" href="ch06_layer_representation.html">Read the K-means section in Chapter 6 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or false? K-means depends on the initial guess.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — K-means in 4 lines</span>
+        <p>Drop $k$ random centres → each point joins its nearest centre → each centre moves to its members' mean →
+        repeat. It <strong>always reduces distortion and always converges, but depends on the initialization</strong>
+        — different random starts can land in different local minima. That's why in practice you run 2–3 random
+        restarts and keep the lowest-distortion result.</p>
+      </div>
+      <a class="chap-link" href="ch06_layer_representation.html">Read the full section in Chapter 6 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Mark the correct statement:</div>
+    <ul class="q-options">
+      <li>Both magnify intensity</li>
+      <li>Euler magnifies intensity; Lagrange magnifies motion</li>
+      <li>Both magnify motion</li>
+      <li>Euler magnifies motion; Lagrange magnifies intensity</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Video Magnification (PDF)</span>
+        <p>Motion magnification (also called Lagrangian Video Processing) estimates the motion vector of each pixel,
+        clusters the pixels into layers, and <strong>amplifies the motion</strong>. The Eulerian approach observes the
+        temporal derivative — it sits at a fixed location and <strong>amplifies the change of intensity over time</strong>.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p><strong>Lagrangian</strong> explicitly estimates and magnifies <em>motion</em> (it moves pixels).
+        <strong>Eulerian</strong> never estimates motion; it magnifies the <em>intensity</em> change at each fixed
+        pixel — which, via the Taylor link, makes the tiny motion visible.</p>
+      </div>
+      <a class="chap-link" href="ch07_video_magnification.html">Read the full section in Chapter 7 ›</a>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or false? The Eulerian Motion Magnification paper relies on the first-order Taylor approximation.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">The Eulerian trick — why the Taylor approximation is central</span>
+        <p>By Taylor, $I(x,t) \approx f(x) + \delta(t)\, f'(x)$. The change-over-time term is $\delta(t) f'(x)$;
+        multiply it by $\alpha$ and add it back and the pixel behaves as if it had $(1+\alpha)\delta(t)$ — the motion
+        is amplified by $\alpha$, <strong>without ever estimating motion</strong>. If a tiny shift $\delta$ happens,
+        the change in pixel value is approximately $\delta \times$ slope; that first-order (linear) approximation is
+        exactly what the paper relies on — and it also sets the method's limit (motions above ~1 pixel break it).</p>
+      </div>
+      <a class="chap-link" href="ch07_video_magnification.html">Read the full section in Chapter 7 ›</a>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

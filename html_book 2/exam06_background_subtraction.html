@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Background Subtraction</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Background Subtraction</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch08_background_subtraction.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Background Subtraction</h1>
+    <p class="lede">Per-pixel Gaussian Mixture Models, the MAP decision, and the $\omega/\sigma$ background test.
+    Answers stay hidden until you press <strong>Check</strong>; press <strong>💡 Hint</strong> for the exact
+    course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch08_background_subtraction.html" data-chapter-label="Chapter 8 · Background Subtraction"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam05_video_texture.html"><span class="dir">‹ Previous exam</span><span class="ttl">Video Texture</span></a>
+    <a class="next" href="exam07_intrinsic_images.html"><span class="dir">Next exam ›</span><span class="ttl">Intrinsic Images</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The following graph describes:</div>
+    <figure class="q-figure qfig">
+      <svg viewBox="0 0 640 250" width="640" role="img" aria-label="Three posterior curves P(k|X) for a 3-component Gaussian mixture across pixel intensity X.">
+        <!-- axes -->
+        <line x1="60" y1="210" x2="622" y2="210" stroke="#6b7a99" stroke-width="1.3"/>
+        <line x1="60" y1="28"  x2="60"  y2="210" stroke="#6b7a99" stroke-width="1.3"/>
+        <!-- gridline at p=1 -->
+        <line x1="60" y1="40" x2="622" y2="40" stroke="#2c3650" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="30" y="45" fill="#9fb0cc" font-size="12" font-family="sans-serif">1</text>
+        <text x="34" y="214" fill="#9fb0cc" font-size="12" font-family="sans-serif">0</text>
+        <!-- posterior curves -->
+        <polyline fill="none" stroke="#41d8c9" stroke-width="2.5" points="70,40 156,40 189,48 232,125 275,201 329,210 610,210"/>
+        <polyline fill="none" stroke="#ffb454" stroke-width="2.5" points="70,210 221,201 264,125 308,57 372,57 416,125 470,201 610,210"/>
+        <polyline fill="none" stroke="#6ea8ff" stroke-width="2.5" points="70,210 351,210 416,201 459,125 502,57 534,43 610,40"/>
+        <!-- x ticks -->
+        <text x="64"  y="228" fill="#9fb0cc" font-size="11" font-family="sans-serif">0</text>
+        <text x="316" y="228" fill="#9fb0cc" font-size="11" font-family="sans-serif">125</text>
+        <text x="600" y="228" fill="#9fb0cc" font-size="11" font-family="sans-serif">255</text>
+        <text x="300" y="246" fill="#9fb0cc" font-size="12" font-family="sans-serif">X  (pixel intensity)</text>
+        <!-- curve labels -->
+        <text x="70"  y="34"  fill="#41d8c9" font-size="12.5" font-family="sans-serif">P(k=1|X)</text>
+        <text x="300" y="50"  fill="#ffb454" font-size="12.5" font-family="sans-serif">P(k=2|X)</text>
+        <text x="520" y="34"  fill="#6ea8ff" font-size="12.5" font-family="sans-serif">P(k=3|X)</text>
+      </svg>
+      <figcaption>Posterior probability of each Gaussian component as a function of the pixel value $X$.</figcaption>
+    </figure>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>The likelihood of a pixel to be a foreground object</li>
+      <li>The likelihood of a pixel to be a background object</li>
+      <li>The MAP of a pixel to belong to a Gaussian</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — GMM decision (PDF)</span>
+        <p>Using Bayes, $\;p(k|x, \Phi) = \dfrac{p(k)\, p_{x|k}(x|k, \theta_k)}{f_x(x|\Phi)}\;$ gives the
+        <strong>MAP</strong> decision:</p>
+        <div class="eq">$$ \hat{k} = \arg\max_k P(k|x, \Phi) = \arg\max_k \omega_k\, f_{x|k}(x|k, \theta_k) $$</div>
+        <p>The bottom plot describes the <strong>posteriors</strong> of each Gaussian. Given the pixel value, we make
+        the decision by taking the Gaussian with the highest posterior: if the pixel's value is 0 we take Gaussian 1,
+        for 255 we take Gaussian 3, etc.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>These are the <strong>posterior</strong> curves $P(k\,|\,X)$ — for each intensity $X$, how probable each
+        Gaussian is. Choosing the highest one is the <strong>MAP</strong> (maximum a-posteriori) assignment of the
+        pixel to a Gaussian. They are not likelihoods (those are the $f_{x|k}$ before multiplying by the prior).</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">True or False? The position of the pixel in the image plane is relevant to the background-subtraction
+      algorithm.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Per-pixel — not per-region</span>
+        <p>Each pixel has its OWN Gaussian Mixture Model and is processed <strong>independently</strong> from its
+        intensity history — the pixel above the tree learns "mostly sky, sometimes branch," the pixel below learns
+        "mostly sidewalk." The algorithm never uses <em>where</em> a pixel sits in the frame, only the values it has
+        observed over time. So position is <strong>not</strong> relevant → False.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or False? The order of the frames is relevant to the background-subtraction algorithm.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — online updates (PDF)</span>
+        <p>$\omega_k$ represents how frequently the $k$-th Gaussian has been observed <em>in the past</em>. The model
+        is updated online: $\;M_t = (1-\rho)M_{t-1} + \rho x_t$, so newer frames are blended into the running
+        estimate with a learning rate $\rho$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The GMM is learned <strong>over time</strong> — weights build up as modes are seen repeatedly, and recent
+        frames update the means/variances. Shuffle the frame order and "how frequently / how recently" each mode was
+        seen changes, so the background estimate changes. Order matters → True.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Which of the following claims is correct?</div>
+    <ul class="q-options">
+      <li>Both (A) and (B)</li>
+      <li>None of the other answers</li>
+      <li>(B) A background object can become a foreground object</li>
+      <li>(A) A foreground object can become a background object</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>Initially a pixel reflects the color of the background. When a moving object enters, the value changes;
+        after it leaves, it returns to the background color. Gaussians are re-classified over time by sorting on
+        $\omega_k/\sigma_k$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Because the background test is dynamic, classification can flip <em>both</em> ways: a car that parks and
+        stays still is seen often enough that its Gaussian's weight grows — a former <strong>foreground</strong>
+        becomes <strong>background</strong>. Conversely, a long-static object that starts moving turns from
+        background into foreground. So both (A) and (B) hold.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">Which of the following tools is used by the Background-Subtraction algorithm?</div>
+    <ul class="q-options">
+      <li>Dynamic Programming</li>
+      <li>ML</li>
+      <li>MAP</li>
+      <li>None of the other answers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — GMM decision (PDF)</span>
+        <p>We classify each pixel by clustering with a GMM, and the decision is taken by the Gaussian with highest
+        posterior. Using Bayes:</p>
+        <div class="eq">$$ MAP:\quad \hat{k} = \arg\max_k P(k|x, \Phi) = \arg\max_k \omega_k\, f_{x|k}(x|k, \theta_k) $$</div>
+        <p>Here $p(k)$ is the prior and $p_{x|k}$ is the likelihood — combining them is exactly MAP.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">True or False? Typically, the weight of a Gaussian of the foreground is larger than the weight of a
+      Gaussian of the background.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>Sort the Gaussians in descending order of $\dfrac{\omega_k}{\sigma_k}$. Here $\omega_k$ represents how
+        frequently the $k$-th Gaussian has been observed in the past — the higher its value, the more likely it
+        belongs to the <strong>background</strong>.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The background is what the pixel sees most of the time, so its Gaussian has the <strong>large</strong>
+        weight $\omega$. The foreground (a passing object) is seen rarely, so its weight is <strong>small</strong>.
+        The claim is therefore False.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or False? The background-subtraction algorithm can handle RGB images.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>We consider the intensity of each pixel as a random variable $x$ … where $d$ is the dimension,
+        <strong>$x$ could be in grayscale or in RGB</strong>, $k$ is the index of the Gaussian and
+        $\theta_k = (\mu_k, \Sigma_k)$ are the parameters of Gaussian $k$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The pixel value is just a $d$-dimensional vector. Set $d=1$ for grayscale or $d=3$ for RGB — the same GMM
+        machinery works. So the answer is True.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">Which of the following terms is used to determine if a Gaussian belongs to the foreground or
+      background?</div>
+    <ul class="q-options">
+      <li>Both the mean and the variance of the Gaussian</li>
+      <li>None of the other answers</li>
+      <li>Variance of the Gaussian</li>
+      <li>Mean of the Gaussian</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF)</span>
+        <p>Sort the Gaussians in descending order of $\dfrac{\omega_k}{\sigma_k}$. $\sigma_k$ represents the width of
+        the Gaussian; smaller values (a tight, stable mode) make it more likely to be background.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The background test uses the weight $\omega_k$ and the <strong>variance $\sigma_k$</strong> (width). The
+        <em>mean</em> $\mu_k$ — the actual colour value — plays no part in the fg/bg decision. Of the offered options,
+        the relevant one is the <strong>variance</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

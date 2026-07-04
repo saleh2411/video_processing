@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Optic Flow Applications</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Optic Flow Applications</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch03_motion_applications.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Optic Flow Applications</h1>
+    <p class="lede">Super-resolution, hyperlapse, RANSAC and the Bayes ML/MAP picture. Answers stay hidden until you
+    press <strong>Check</strong>. Press <strong>💡 Hint</strong> on any question for the exact explanation from the
+    course material, and <strong>Reset / Retake</strong> to start over.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch03_motion_applications.html" data-chapter-label="Chapter 3 · Applications of Motion Estimation"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam01_optic_flow.html"><span class="dir">‹ Previous exam</span><span class="ttl">Optic Flow</span></a>
+    <a class="next" href="exam03_clustering_magnification.html"><span class="dir">Next exam ›</span><span class="ttl">Clustering &amp; Motion Magnification</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Hyperlapse is solved using:</div>
+    <ul class="q-options">
+      <li>Dynamic Programming</li>
+      <li>Quadratic Programming</li>
+      <li>None of the other answers</li>
+      <li>Linear programming</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 22)</span>
+        <p>We will do the following steps:</p>
+        <p>1. We will define a cost function $C$ which will measure the matching between a pair of images.<br>
+        2. We will build a matrix "Dynamic Programming" and find the optimal path.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Choosing which frames to keep — so the result is smooth — is a shortest-path problem over frames. The cost
+        $C_r(i,j)$ measures how jarring frame $j$ looks right after frame $i$; <strong>dynamic programming</strong>
+        finds the cheapest path through them.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">When Horn–Schunck assume the flow field is smooth, they use:</div>
+    <ul class="q-options">
+      <li>Prior</li>
+      <li>ML</li>
+      <li>RANSAC</li>
+      <li>None of the other answers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Horn–Schunck (Chapter 2)</span>
+        <p>The difference between Lucas–Kanade (LK) and Horn–Schunck (HS) is analogous to the difference between
+        Maximum Likelihood (ML) and Maximum A-Posteriori (MAP) estimation. In LK, the ML approach assumes that the
+        data alone dictates the solution, without any prior knowledge. In HS, prior knowledge is incorporated. The
+        second term in the HS formulation is therefore called the <strong>prior/regularizer</strong> or smoothness
+        term.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>"Smoothness" is a <strong>prior</strong> — a belief about the world (neighbouring pixels move alike) that
+        you impose <em>before</em> looking at the data. Adding a prior turns ML into MAP.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">RANSAC is designed to deal with:</div>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>Missing data</li>
+      <li>Gaussian noise</li>
+      <li>Outliers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — RANSAC (PDF pages 24–25)</span>
+        <p>When calculating transformations, there is a risk of matching false pairs of points. The RANSAC algorithm
+        is designed to address this problem. These false matches are <strong>outliers</strong> that can distort the
+        algorithm and negatively affect the solution. RANSAC is designed to eliminate these outliers.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — RANSAC</span>
+        <p>If some of your matches are wrong, one bad match drags a least-squares fit way off. RANSAC's trick: pick a
+        tiny random sample, fit a model, count how many points agree (inliers), repeat, keep the model with the most
+        inliers. Gaussian <em>noise</em> is handled fine by least squares — RANSAC is specifically about gross
+        <em>outliers</em>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">I can replace the Gaussian blur kernel with any other (known) blur kernel.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Super Resolution (PDF page 20)</span>
+        <p>We will use the following assumptions:</p>
+        <p>1. $H$ — the blur kernel is known and fixed for all the frames. <em>We will use gaussian blur here.</em></p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The forward model is $Y_i = D H F_i X$ (decimate · blur · warp · HR image). The only requirement on $H$ is
+        that it is <strong>known</strong> and fixed. Gaussian is just the example used in class — any known kernel
+        plugs into the same equations, so the statement is <strong>True</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The video super-resolution algorithm assumes:</div>
+    <ul class="q-options">
+      <li>Only the blur kernel is known</li>
+      <li>Only the scale factor is known</li>
+      <li>Only the motion is known</li>
+      <li>All the other answers</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Super Resolution (PDF page 20)</span>
+        <p>We will use the following assumptions:</p>
+        <p>1. $H$ — the blur kernel is known and fixed for all the frames.<br>
+        2. $D$ — the sampling (decimation) matrix is known and fixed; it takes every $r$-th element (the scale factor).<br>
+        3. $F_i$ — the motion is calculated on the frames $(Y_i)$, where $F_1$ is the identity.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>All three ingredients of $Y_i = D H F_i X$ are assumed known: the <strong>blur</strong> $H$, the
+        <strong>scale/decimation</strong> $D$, and the <strong>motion</strong> $F_i$. So the answer is "all the other
+        answers."</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">ML is a special case of MAP when:</div>
+    <ul class="q-options">
+      <li>The prior is a Gaussian distribution</li>
+      <li>ML is not a special case of MAP</li>
+      <li>The prior is a Gibbs distribution</li>
+      <li>The prior is a uniform distribution</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — MAP (PDF page 21)</span>
+        <p>From Bayes: $P(X|Y) = \dfrac{P(Y|X) P(X)}{P(Y)}$, so $\;x = \arg\max_X P(Y|X)P(X)$. Here $P(Y|X)$ is the
+        likelihood and $P(X)$ is the prior.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — ML vs MAP</span>
+        <p>MAP maximizes likelihood $\times$ prior. If the prior $P(X)$ is <strong>uniform</strong> — every $X$ equally
+        likely before seeing data — that term is a constant and drops out of the maximization. What's left is just the
+        likelihood: that is exactly ML. So ML = MAP with a uniform (flat) prior.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">The key idea of Hyperlapse is to:</div>
+    <ul class="q-options">
+      <li>Select frames that are consistent with each other</li>
+      <li>Select frames with no blur</li>
+      <li>Select every $n$-th frame</li>
+      <li>Select frames with high MAP</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Hyperlapse (PDF page 22)</span>
+        <p>It was discovered that it is not necessary to sample frames at constant time intervals; instead, selecting
+        frames where the camera is oriented in approximately the same direction produces better results.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Keeping every 60th frame gives unwatchable jitter. The trick: keep frames where the camera was pointing in
+        similar directions to each other — i.e. frames that are <strong>consistent</strong> — even if they're not
+        evenly spaced in time.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">Select the correct option (we assume the symbol "$=$" means <em>proportional</em>):</div>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>Prior $=$ Likelihood $\times$ Posterior</li>
+      <li>Likelihood $=$ Prior $\times$ Posterior</li>
+      <li>Posterior $=$ Likelihood $\times$ Prior</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Bayes / MAP (PDF page 21)</span>
+        <p>From Bayes:</p>
+        <div class="eq">$$ P(X|Y) = \frac{P(Y|X)\, P(X)}{P(Y)} $$</div>
+        <p>Since $P(Y)$ does not depend on $X$, this gives $\;\underbrace{P(X|Y)}_{\text{posterior}} \propto
+        \underbrace{P(Y|X)}_{\text{likelihood}} \cdot \underbrace{P(X)}_{\text{prior}}$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Dropping the constant denominator $P(Y)$, the posterior is proportional to likelihood times prior:
+        <strong>Posterior $=$ Likelihood $\times$ Prior</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

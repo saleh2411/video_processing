@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Kalman &amp; Particle Filters</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Kalman &amp; Particle Filters</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch04_kalman_particle.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Kalman &amp; Particle Filters</h1>
+    <p class="lede">Predict/update, the Kalman gain, the Markov &amp; conditional-independence assumptions, and the
+    Condensation particle filter. Answers stay hidden until you press <strong>Check</strong>; press
+    <strong>💡 Hint</strong> for the exact course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch04_kalman_particle.html" data-chapter-label="Chapter 4 · Kalman &amp; Particle Filters"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam03_clustering_magnification.html"><span class="dir">‹ Previous exam</span><span class="ttl">Clustering &amp; Motion Magnification</span></a>
+    <a class="next" href="exam05_video_texture.html"><span class="dir">Next exam ›</span><span class="ttl">Video Texture</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">In the "Predict" step of the Kalman filter we introduce:</div>
+    <ul class="q-options">
+      <li>Process noise</li>
+      <li>No noise</li>
+      <li>Measurement noise</li>
+      <li>Both process and measurement noise</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 30–34)</span>
+        <p>Project (predict) stage:</p>
+        <div class="eq">$$ \hat{x}_{k+1}' = \Phi \hat{x}_k, \qquad P'_{k+1} = \Phi P_k \Phi^T + Q $$</div>
+        <p>We define the <strong>System (process) noise</strong> as $Q = E[w_k w_k^T]$, where $w_k$ is the noise of
+        the model itself: $x_{k+1} = \Phi x_k + w_k$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Predict pushes the estimate forward with the motion model $\Phi$; uncertainty grows because the model
+        itself is imperfect — that growth is the <strong>process noise $Q$</strong>. The <em>measurement</em> noise
+        $R$ only enters later, in the update step.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or False? The number of particles can change over time.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Particle Filter (PDF)</span>
+        <p>The particles are sampled according to the distribution function, and <strong>we need enough particles so
+        that their distribution closely approximates the underlying probability distribution</strong> (typically
+        100–200 particles).</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Particles are just a cloud of weighted samples approximating a distribution. Nothing forces the cloud to
+        stay a fixed size — you can spawn more particles when the belief is spread out or uncertain, and fewer when
+        it's sharp. Adaptive particle filters do exactly this, so the number can change over time: <strong>True</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">In the particle filter, the assumption $\;P(X_t \mid X_{1:t-1}) = P(X_t \mid X_{t-1})\;$ is known as:</div>
+    <ul class="q-options">
+      <li>Conditional Independence Assumption</li>
+      <li>None of the other options</li>
+      <li>First order Markov assumption</li>
+      <li>Bayes Prior</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Particle Filter (PDF)</span>
+        <p>1. <strong>Markov assumption</strong>:</p>
+        <div class="eq">$$ P(x_t \mid x_{1:t}) = P(x_t \mid x_{t-1}) $$</div>
+        <p>This assumption was also used in the Kalman filter. In the case of Kalman, the matrix $\Phi$ would be
+        $P(x_t \mid x_{t-1})$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The next state depends only on the <em>immediately previous</em> state, not the whole history — the
+        defining property of a <strong>first-order Markov chain</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">In the particle filter, the conditional-independence assumption is that:</div>
+    <ul class="q-options">
+      <li>Measurements and States are independent</li>
+      <li>None of the other options</li>
+      <li>Measurements at different time steps are independent of each other</li>
+      <li>States at different time steps are independent</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Particle Filter (PDF)</span>
+        <p>2. <strong>Conditional Independence</strong>:</p>
+        <div class="eq">$$ P(z_{1:t} \mid x_{1:t}) = P(z_t \mid x_t)\, P(z_{1:t-1} \mid x_{1:t-1}) = \prod_{\tau=1}^t P(z_\tau \mid x_\tau) $$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Each measurement $z_\tau$ depends only on the state $x_\tau$ at <em>its own</em> time. Given the states,
+        the measurements at different time steps are independent of one another — which is what lets the joint
+        likelihood factor into a product $\prod_\tau P(z_\tau \mid x_\tau)$.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The Kalman Gain minimizes:</div>
+    <ul class="q-options">
+      <li>The distance between current and previous states</li>
+      <li>The Trace of the measurement covariance matrix</li>
+      <li>None of the other answers</li>
+      <li>The Trace of the new state covariance matrix</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 30–34)</span>
+        <p>Kalman suggested finding $K$ which minimizes $\text{Trace}[P_k]$. This is because the trace is the sum of
+        all the elements on the main diagonal, and in $P_k = E[e_k e_k^T]$ those are exactly the variances of each
+        variable in the state vector $x$.</p>
+        <div class="eq">$$ \frac{\partial\, T[P_k]}{\partial K_k} = 0 \;\Rightarrow\; K_k = P'_k H^T(H P'_k H^T + R)^{-1} $$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>$P_k$ is the covariance of the <strong>new (updated) state</strong> error. Its trace = total variance of
+        the estimate. Kalman picks the gain $K$ that makes that total uncertainty as small as possible.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The measurement covariance matrix is related to:</div>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>Prior</li>
+      <li>State Vector</li>
+      <li>Likelihood term</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 30–34)</span>
+        <p>The measurement model is $z_k = H x_k + v_k$, and we define the <strong>Measurement noise</strong> as
+        $R = E[v_k v_k^T]$. In the particle-filter view, the measure step evaluates $P(z_t \mid x_t)$ — the
+        <strong>likelihood</strong> of the measurement given the state.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The measurement covariance $R$ describes how noisy the sensor is — i.e. how spread out $z$ is around $Hx$.
+        That is precisely the shape of the measurement likelihood $P(z \mid x)$. So the measurement covariance
+        parametrizes the <strong>likelihood term</strong>, not the prior or the state.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Which of the following is correct?</div>
+    <ul class="q-options">
+      <li>Kalman Filter is a special case of Particle Filter</li>
+      <li>Particle Filter is a special case of Kalman Filter</li>
+      <li>None of the other answers</li>
+      <li>There is no relation between the two</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Particle Filter (PDF)</span>
+        <p>The predict stage is in fact the same as the one in the Kalman filter but is <strong>more general</strong>,
+        and we do this for every particle $n$. In the case of Kalman, the matrix $\Phi$ would be $P(x_t \mid x_{t-1})$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The Kalman filter assumes everything is <strong>linear and Gaussian</strong>, so the belief is always a
+        single Gaussian. The particle filter represents <em>any</em> distribution with a cloud of samples. Restrict
+        the particle filter to linear dynamics and Gaussian noise and it reduces to the Kalman filter — so Kalman is
+        the special case.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">In the equation
+      $\;P(X_{1:t}\mid Z_{1:t}) \sim P(Z_t\mid X_t)\,P(X_t\mid X_{t-1})\,P(X_{1:t-1}\mid Z_{1:t-1})$,
+      the term $P(Z_t\mid X_t)$ is:</div>
+    <ul class="q-options">
+      <li>None of the other options</li>
+      <li>The State transition probability</li>
+      <li>Filter distribution</li>
+      <li>Likelihood term</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Particle Filter (PDF)</span>
+        <p>This expression allows us to describe $P(x_{1:t} \mid z_{1:t})$ recursively. We can see from here that
+        $P(x_{1:t-1} \mid z_{1:t-1})$ is the recursion, $P(x_t \mid x_{t-1})$ is the <strong>motion model</strong>
+        (state transition), and $\;P(z_t \mid x_t)\;$ is the <strong>likelihood</strong>.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>$P(Z_t \mid X_t)$ answers "if the state were $X_t$, how well does it explain the measurement $Z_t$?" —
+        the definition of the likelihood. $P(X_t \mid X_{t-1})$ is the transition/motion model; $P(X_{1:t-1} \mid
+        Z_{1:t-1})$ is the recursive prior.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

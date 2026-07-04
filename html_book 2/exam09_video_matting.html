@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Video Matting</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Video Matting</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch10_video_matting.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Video Matting</h1>
+    <p class="lede">Trimaps, the opacity map, KDE colour models, geodesic distance maps and clean compositing without
+    colour bleed. Answers stay hidden until you press <strong>Check</strong>; press <strong>💡 Hint</strong> for the
+    exact course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch10_video_matting.html" data-chapter-label="Chapter 10 · Video Matting"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam08_video_colorization.html"><span class="dir">‹ Previous exam</span><span class="ttl">Video Colorization</span></a>
+    <a class="next" href="index.html"><span class="dir">Done ✓</span><span class="ttl">Back to all exams</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Mark the <strong>wrong</strong> statement. In filling the undecided region of the trimap:</div>
+    <ul class="q-options">
+      <li>opacity inside the region is computed based on distance maps</li>
+      <li>additional manual user input is required</li>
+      <li>densities are re-estimated using region boundaries as inputs</li>
+      <li>the opacity in foreground/background regions remains intact</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Opacity map (PDF pages 71–72)</span>
+        <p>At this stage we have a much richer set of data … We will <strong>estimate again the distribution
+        functions for refinement</strong> using the boundary samples, and assign each unsure pixel a continuous
+        $\alpha = \dfrac{w_F(x)}{w_F(x)+w_B(x)}$ with $w_F(x) = \tilde D_F(x)^{-r}\tilde P_F(x)$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The opacity map is filled <strong>automatically</strong>: re-estimate FG/BG colour densities from pixels
+        near the boundary, combine with the geodesic distance maps, and produce $\alpha$. The confident 0/1 regions
+        are left untouched. No <em>extra</em> manual input is needed — so "additional manual user input is required"
+        is the wrong statement.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">The algorithm presented in class assumes that the prior of the Foreground and Background is:</div>
+    <ul class="q-options">
+      <li>None of the other options</li>
+      <li>Gaussian</li>
+      <li>Uniform</li>
+      <li>Poisson</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Trimap Estimation (PDF)</span>
+        <p>The main parameters unknown to us here are $P(F)$ and $P(B)$. In the worst case, we can assume a
+        <strong>uniform distribution</strong>: $P(F) = P(B) = \tfrac{1}{2}$, so
+        $P(F|c) = \dfrac{f(c|F)}{f(c|F) + f(c|B)}$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>With no reason to prefer foreground or background a priori, both priors are set equal (uniform). That makes
+        the posterior depend only on the colour likelihoods.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Select the correct option (we assume the symbol "$=$" means <em>proportional</em>):</div>
+    <ul class="q-options">
+      <li>Prior $=$ Likelihood $\times$ Posterior</li>
+      <li>Posterior $=$ Likelihood $\times$ Prior</li>
+      <li>None of the other answers</li>
+      <li>Likelihood $=$ Prior $\times$ Posterior</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Trimap Estimation (PDF)</span>
+        <div class="eq">$$ P(F|c) = \frac{f(c|F)\, P(F)}{f(c)} $$</div>
+        <p>i.e. $\;\underbrace{P(F|c)}_{\text{posterior}} \propto \underbrace{f(c|F)}_{\text{likelihood}} \cdot
+        \underbrace{P(F)}_{\text{prior}}$ (the denominator $f(c)$ is a normalizing constant).</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Same Bayes rule as everywhere else in the course: dropping the constant $f(c)$, the posterior is
+        proportional to likelihood $\times$ prior.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">The problem of blending foreground and new-background pixels with a semi-transparent alpha is:</div>
+    <ul class="q-options">
+      <li>that it is not necessarily physically plausible</li>
+      <li>its computational intensity</li>
+      <li>that old background colors may contaminate the new image</li>
+      <li>that new background colors may contaminate the foreground</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Matting (PDF)</span>
+        <p>In semi-transparent areas the naive blend mixes the colors of the foreground and the background, which is
+        not desired. For example, if we had light hair on a red background, the color of the hair will be mixed with
+        red — and pasting it on a new background drags that old red along.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>At a fuzzy hair pixel, the measured colour $c$ already contains hair + the OLD (red) background. Blend
+        $\alpha c + (1-\alpha)B$ and the leftover red bleeds onto the NEW background — the <strong>old background
+        colours contaminate the new image</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">In video matting, a trimap is a mask assigning every pixel:</div>
+    <ul class="q-options">
+      <li>a foreground / background / transparency value</li>
+      <li>an RGB value</li>
+      <li>a transparent / half-transparent / opaque value</li>
+      <li>a foreground / background / undecided value</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Video Matting (PDF)</span>
+        <p><strong>Trimap:</strong> a map of only 3 values (hence the name): <strong>1</strong> — we confidently know
+        the pixel is foreground; <strong>0</strong> — we confidently know the pixel is background;
+        <strong>undecided value $\phi$</strong> — we are not sure if the pixel is foreground or background.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">The problem of contaminating old background colors in semi-transparent regions is solved by:</div>
+    <ul class="q-options">
+      <li>is not solved</li>
+      <li>finding adjacent fg and bg pixels blending to the given color</li>
+      <li>finding new opacity values</li>
+      <li>simply mixing them with the new background colors</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Matting (PDF)</span>
+        <p>We write $c(x) = \alpha f(x) + (1-\alpha)b(x)$ with unknown pure foreground/background $f,b$. We open a
+        window around the pixel and claim there are two pixels in the window satisfying the equation; we search for the
+        confident-FG / confident-BG pair that best explains the mixed colour:</p>
+        <div class="eq">$$ (x_F^*, x_B^*) = \arg\min \|\alpha(x) c(x_F) + (1-\alpha(x)) c(x_B) - c(x)\|^2 $$</div>
+        <p>Then composite with the <em>pure</em> $c(x_F^*)$: $\;J(x) = \alpha\, c(x_F^*) + (1-\alpha)\,B(x)$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Instead of using the contaminated pixel, find nearby confident foreground and background pixels whose blend
+        reproduces the measured colour. The confident-FG colour $c(x_F^*)$ is the <em>pure</em> foreground, free of old
+        background bleed.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">The distance maps in video matting are defined using a weighted metric based on the:</div>
+    <ul class="q-options">
+      <li>gradient of the posterior probabilities of the fg/bg classes</li>
+      <li>gradient of the luma values</li>
+      <li>ratio of the posterior probabilities of the fg/bg classes</li>
+      <li>prior probabilities of the fg/bg classes</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Trimap Estimation (PDF)</span>
+        <p>We do distance maps similar to video colorization, with path length</p>
+        <div class="eq">$$ L(p) = \int_p |\langle W(p(t)), \dot{p}(t) \rangle|\, dl, \qquad W(x) = \nabla_x\, P(F \mid c(x)) $$</div>
+        <p>chosen because it is consistently larger in the foreground and smaller in the background.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The metric weight $W$ is the <strong>gradient of the posterior</strong> $P(F\mid c)$ — the class
+        probability. Crossing between FG and BG classes creates a large gradient (high cost), so geodesic distances
+        separate the two regions.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">True or False? KDE is used in the algorithm to estimate the conditional probability of a color $c$,
+      given the class label (i.e., F or B).</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Trimap Estimation (PDF)</span>
+        <p>We work with <strong>Kernel Density Estimation (KDE)</strong> … we want to find the color distribution of
+        foreground and background. The scribbles indicate a conditional probability — a color given the scribble is
+        foreground or background:</p>
+        <div class="eq">$$ f(c|F) \propto \sum_{x \in \Omega_F} K(c, c(x)), \qquad K(c,c') \propto e^{-\frac{\|c-c'\|_2^2}{2\sigma^2}} $$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Instead of a histogram, KDE places a soft Gaussian "bell" around each scribble pixel's colour and sums
+        them, giving $f(c\mid F)$ and $f(c\mid B)$ — exactly the conditional probability of a colour given the class.
+        So the statement is True.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

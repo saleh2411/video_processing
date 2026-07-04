@@ -8,6 +8,7 @@ Each chapter shows the original lecture text alongside a plain-English explanati
 
 - `index.html` — landing page with cards for every chapter
 - `ch01` … `ch11` — one chapter per Contents section of the PDF
+- `ch12` — full reproduction of the Weiss ICCV 2001 paper *“Deriving intrinsic images from image sequences”*
 - `styles.css` — shared dark theme
 
 ## How to read a chapter
@@ -35,6 +36,7 @@ Every chapter ends with a **Rule of Thumb** card and a **Summary** table.
 | 9 | Video Colorization | click-to-place geodesic distance heatmap |
 | 10 | Video Matting | trimap with adjustable boundary band |
 | 11 | Re-targeting & PatchMatch | propagation-arrow convergence |
+| 12 | Intrinsic Images from Sequences (Weiss ICCV'01) | I=R×L decomposition, ambiguity slider, Laplacian/sparse filters, median-vs-mean-vs-min, moving-shadow median, binomial convergence, relit compositing |
 
 ## Run it
 

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Optic Flow</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Optic Flow</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Optic Flow</h1>
+    <p class="lede">Answers stay hidden until you press <strong>Check</strong>. Stuck on one? Press
+    <strong>💡 Hint</strong> to open the exact explanation for that question, lifted straight from the
+    course material. Press <strong>Reset / Retake</strong> any time to run it again from scratch.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch02_optical_flow.html" data-chapter-label="Chapter 2 · Optical Flow"></div>
+
+  <div class="pager">
+    <a class="prev" href="index.html"><span class="dir">Back</span><span class="ttl">All practice exams</span></a>
+    <a class="next" href="exam02_optic_flow_applications.html"><span class="dir">Next exam ›</span><span class="ttl">Optic Flow Applications</span></a>
+  </div>
+</div>
+
+<!-- ============ QUIZ CONTENT (inert until quiz.js clones it) ============ -->
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="2">
+    <div class="q-text">Horn–Schunck assumes that:</div>
+    <ul class="q-options">
+      <li>The flow field is constant</li>
+      <li>The flow field is sparse</li>
+      <li>The flow field is smooth</li>
+      <li>There is no aperture problem</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — Horn–Schunck</span>
+        <p>LK works on a window; HS solves for the whole image at once. To handle the under-determined system, it adds
+        a <strong>smoothness prior</strong>: neighbouring pixels should have similar flow. The parameter $\alpha$
+        controls smoothness:</p>
+        <ul>
+          <li>$\alpha$ small → trust the data, accept choppy flow.</li>
+          <li>$\alpha$ large → assume smooth world, ignore noisy data.</li>
+        </ul>
+        <p>The innovation in Horn–Schunck lies in the second term, which introduces a smoothness constraint, ensuring
+        that the solution varies as smoothly as possible across the image:</p>
+        <div class="eq">$$ (u,v) = \arg\min_{u,v} \iint [(I_x u + I_y v + I_t)^2 + \alpha (|\nabla u|^2 + |\nabla v|^2)]\, dx\, dy $$</div>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">Optic Flow is:</div>
+    <ul class="q-options">
+      <li>3D motion</li>
+      <li>Color of a pixel</li>
+      <li>None of the other answers</li>
+      <li>2D Projection of 3D motion</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 8)</span>
+        <p>Optical flow is the basis for motion estimation. By definition, it is the projection of the motion in 3D
+        onto a 2D image.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">"Flow" vs "motion field" — a subtle distinction</span>
+        <p>The true motion of points in the world produces a 3D motion field. Optical flow is what your CAMERA sees of
+        it — only the part perpendicular to the line of sight. A car driving straight toward you has nearly zero
+        optical flow even though it's moving 60 mph.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The Harris corner detector is used to:</div>
+    <ul class="q-options">
+      <li>Detect the Aperture problem</li>
+      <li>Detect the optic flow</li>
+      <li>Detect Vehicles</li>
+      <li>Detect interest points</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 13–14)</span>
+        <p>The task back then was finding points of interest and then tracking the object in the next time step.
+        Points of interest are usually corners of objects, where there are strong intensity changes in both the x and
+        y directions.</p>
+        <p>In the case of 2D translation, the matrix $B^T B$ can either be of rank 0, 1 or 2. If its rank is 0, the
+        point is not distinct from its neighbors. If the rank is 1, the point lies on an edge. If the rank is 2, the
+        point corresponds to a corner.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">What is the problem with the optic-flow equation $\; u I_x + v I_y + I_t = 0$ ?</div>
+    <ul class="q-options">
+      <li>The problem is over constrained</li>
+      <li>We don't know $I_x, I_y, I_t$</li>
+      <li>There is no problem</li>
+      <li>We have one equation and two unknowns</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 8–10)</span>
+        <p>The problem is that we have 2 unknowns and only one equation. The solution will be by observing a local
+        environment and get a set of equations:</p>
+        <div class="eq">$$ \begin{pmatrix} I_x & I_y \\ \vdots & \vdots \\ I_x & I_y \end{pmatrix} \begin{pmatrix} u \\ v \end{pmatrix} = \begin{pmatrix} I_t \\ \vdots \\ I_t \end{pmatrix}$$</div>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>One pixel = one equation, but we need two numbers $(u,v)$. So Lucas–Kanade assumes <em>all pixels in a small
+        window move together</em>. That gives $n^2$ equations for 2 unknowns — over-determined — and Least Squares
+        finds the best fit.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">What is the first order Taylor approximation of $\; I_1(x,y) = I_2(x+u,\, y+v)$ ?</div>
+    <ul class="q-options">
+      <li>$I_1(x,y) \approx I_2(x,y) + u I_x(x,y) + v I_y(x,y)$</li>
+      <li>$I_1(x,y) \approx u I_2(x,y) + v I_2(x,y)$</li>
+      <li>$I_1(x,y) \approx I_2(x,y)$</li>
+      <li>$I_1(x,y) \approx I_2(x+1,\, y+1)$</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 8–10)</span>
+        <p>The solution we'll offer uses the following assumption:</p>
+        <div class="eq">$$ I_2(x,y) \approx I_1(x,y) + u I_x(x,y) + v I_y(x,y) $$</div>
+        <p>This is the first-order Taylor approximation. We approximate the second image using the first image and its
+        derivatives with respect to the x-axis and y-axis.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">What the Taylor approximation actually does</span>
+        <p>If I shift a smooth signal by a tiny amount $(u,v)$, the change in its value at a point is roughly the slope
+        times the shift. That's literally the definition of a derivative — it works whenever the shift is small enough
+        that the linear approximation hasn't drifted too far from the true curve.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Lucas–Kanade supports 2D affine transformation estimation.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 10)</span>
+        <p>We define a point by $X = \begin{pmatrix} x \\ y \end{pmatrix}$ and work with two transformations —
+        translation and <strong>affine</strong>:</p>
+        <div class="eq">$$ W(X; P) = \begin{pmatrix} p_1 x + p_2 y + p_3 \\ p_4 x + p_5 y + p_6 \end{pmatrix} $$</div>
+        <p>The goal of LK is to minimize $\;P^* = \arg\min_P \sum_X [I_2(W(X; P)) - I_1(X)]^2$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>Instead of giving every pixel its own $(u,v)$, we assume all pixels in the window share <em>one</em>
+        transformation $W(X; P)$. Translation has 2 parameters; affine has 6. The LK math generalizes by replacing
+        "translation" with "any warp" — so yes, LK can estimate a full 2D affine motion.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">The constant brightness constraint assumes that:</div>
+    <ul class="q-options">
+      <li>None of the other answers</li>
+      <li>Pixel value of a 3D point does not change between frames</li>
+      <li>The illumination is fixed</li>
+      <li>All pixels have the same value</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF page 8)</span>
+        <p>We assume that the intensity and color of corresponding pixels in both images remain the same. This
+        assumption is known as the <strong>constant brightness constraint</strong>. However, this assumption does not
+        always hold — e.g. the observed brightness may change due to light reflections when viewed from different
+        angles.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">When "constant brightness" breaks</span>
+        <p>A red dot stays red after it moves. Shadows, specular highlights and changing lights break it: a glossy
+        bumper has a bright spot that moves as you walk around it — the pixel changes colour without the object moving.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Choose the similar-triangles equation that governs the 3D-to-2D projection
+      (a pinhole camera with focal length $f$; a 3D point $(X,Y,Z)$ projects to image point $(x,y)$):</div>
+    <figure class="q-figure qfig">
+      <svg viewBox="0 0 640 300" width="640" role="img" aria-label="Pinhole projection: two similar triangles sharing the optical centre.">
+        <!-- optical axis -->
+        <line x1="60" y1="230" x2="600" y2="230" stroke="#6b7a99" stroke-width="1.5"/>
+        <!-- image plane -->
+        <line x1="180" y1="120" x2="180" y2="245" stroke="#6b7a99" stroke-width="1.2" stroke-dasharray="5 4"/>
+        <!-- object plane -->
+        <line x1="520" y1="55" x2="520" y2="245" stroke="#6b7a99" stroke-width="1.2" stroke-dasharray="5 4"/>
+        <!-- ray from optical centre through image point to 3D point -->
+        <line x1="60" y1="230" x2="520" y2="70" stroke="#41d8c9" stroke-width="2"/>
+        <!-- x (small) and X (large) heights -->
+        <line x1="180" y1="230" x2="180" y2="180" stroke="#ffb454" stroke-width="2.5"/>
+        <line x1="520" y1="230" x2="520" y2="70" stroke="#ffb454" stroke-width="2.5"/>
+        <!-- optical centre -->
+        <circle cx="60" cy="230" r="4.5" fill="#e6ecf7"/>
+        <!-- image + object points -->
+        <circle cx="180" cy="180" r="4" fill="#ffb454"/>
+        <circle cx="520" cy="70" r="4.5" fill="#ffb454"/>
+        <!-- f and Z dimension lines -->
+        <line x1="60" y1="258" x2="180" y2="258" stroke="#9fb0cc" stroke-width="1"/>
+        <line x1="60" y1="278" x2="520" y2="278" stroke="#9fb0cc" stroke-width="1"/>
+        <!-- labels -->
+        <text x="44" y="248" fill="#e6ecf7" font-size="14" font-family="sans-serif">O</text>
+        <text x="112" y="253" fill="#9fb0cc" font-size="14" font-family="sans-serif">f</text>
+        <text x="285" y="273" fill="#9fb0cc" font-size="14" font-family="sans-serif">Z</text>
+        <text x="150" y="172" fill="#ffb454" font-size="14" font-family="sans-serif">(x, y)</text>
+        <text x="528" y="66" fill="#ffb454" font-size="14" font-family="sans-serif">(X, Y, Z)</text>
+        <text x="150" y="210" fill="#ffb454" font-size="13" font-family="sans-serif">x</text>
+        <text x="528" y="150" fill="#ffb454" font-size="13" font-family="sans-serif">X</text>
+      </svg>
+      <figcaption>Two similar right triangles share the optical centre O — the small one to the image plane, the large
+      one to the object.</figcaption>
+    </figure>
+    <ul class="q-options">
+      <li>$\dfrac{x}{f} = \dfrac{X}{Z}$</li>
+      <li>$\dfrac{x}{y} = \dfrac{X}{Y}$</li>
+      <li>$\dfrac{f}{Z} = \dfrac{Z}{f}$</li>
+      <li>$\dfrac{X}{y} = \dfrac{x}{Y}$</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (PDF pages 6–7)</span>
+        <p>Next, we examine the geometry of the world and the image. From triangle similarity rule:</p>
+        <div class="eq">$$ \frac{x}{f} = \frac{X}{Z} \implies x = X\frac{f}{Z}, \qquad \frac{y}{f} = \frac{Y}{Z} \implies y = Y\frac{f}{Z}$$</div>
+        <p>Where $f$ is a known camera parameter.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>A point at depth $Z$ lands on the image plane at $Xf/Z$ — pure triangle similarity. The $1/Z$ is what makes
+        faraway things small.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>

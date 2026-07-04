@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam · Intrinsic Images</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="quiz.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice Exam</b> &nbsp;· Intrinsic Images</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch12_intrinsic_images.html">📖 Chapter</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice Exam · Retakeable · 8 questions</div>
+    <h1>Intrinsic Images</h1>
+    <p class="lede">Weiss's "intrinsic images from sequences": reflectance × illumination, the ill-posed problem, the
+    log domain, the sparse-derivative prior and the median recipe. Answers stay hidden until you press
+    <strong>Check</strong>; press <strong>💡 Hint</strong> for the exact course-material explanation.</p>
+  </header>
+
+  <div id="quiz" data-chapter-href="ch12_intrinsic_images.html" data-chapter-label="Chapter 12 · Intrinsic Images from Sequences"></div>
+
+  <div class="pager">
+    <a class="prev" href="exam06_background_subtraction.html"><span class="dir">‹ Previous exam</span><span class="ttl">Background Subtraction</span></a>
+    <a class="next" href="exam08_video_colorization.html"><span class="dir">Next exam ›</span><span class="ttl">Video Colorization</span></a>
+  </div>
+</div>
+
+<div id="quiz-src" hidden>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">In ill-posed problems:</div>
+    <ul class="q-options">
+      <li>There is no unique solution to the problem</li>
+      <li>We need to work really hard to solve the problem, but there is a unique solution</li>
+      <li>There is a unique solution to an ill-posed problem</li>
+      <li>Neural Networks can solve an ill-posed problem uniquely and correctly</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Introduction (page 1)</span>
+        <p>Recovering two intrinsic images from a single input image is a classic <strong>ill-posed problem: the
+        number of unknowns is twice the number of equations</strong>. Denoting the input by $I(x,y)$, the reflectance
+        by $R(x,y)$ and the illumination by $L(x,y)$, we have $I = R \cdot L$ — one equation with two unknowns per
+        pixel.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Words to keep</span>
+        <p><em>Ill-posed</em> = more unknowns than equations, so <strong>infinitely many answers</strong> all fit
+        perfectly. There is no unique solution unless you add extra assumptions (a prior).</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">The solution in the paper consists of:</div>
+    <ul class="q-options">
+      <li>One reflectance image and multiple illumination images</li>
+      <li>One illumination image and one reflectance image</li>
+      <li>Multiple illumination images and multiple reflectance images</li>
+      <li>One illumination image and multiple reflectance images</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Abstract</span>
+        <p>Given a sequence of $T$ images where the reflectance is constant and the illumination changes, can we
+        recover $T$ illumination images and a single reflectance image? … Using a prior that assumes illumination
+        images give rise to sparse filter outputs, this leads to a simple algorithm for recovering the reflectance
+        image.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The paint (reflectance) never moves — so there's <strong>one</strong> reflectance image for the whole
+        sequence — while the lighting changes every frame, giving <strong>$T$</strong> illumination images.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Why do we work in the log domain?</div>
+    <ul class="q-options">
+      <li>Converting product to sum makes it easier to solve</li>
+      <li>It is more stable</li>
+      <li>None of the other answers</li>
+      <li>It is more accurate</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — §2 ML estimator (page 2)</span>
+        <p>For convenience, we work here in the log domain. Denote by $i(x,y), r(x,y), l(x,y,t)$ the logarithms of
+        $I, R, L$. Because $\log(a \times b) = \log a + \log b$, the model $I = R \cdot L$ becomes $\;i = r + l$.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">The log trick</span>
+        <p>Multiplication is awkward; addition is easy. Taking the logarithm turns the <strong>product</strong>
+        $R \cdot L$ into a <strong>sum</strong> $r + l$ — now the observed frame is simply "paint plus light," a
+        linear equation we can solve.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">Let $I$ be a grayscale image, and let $I_x, I_y$ denote its derivative images. We can always compute
+      $I_x, I_y$ given $I$. Is the inverse true as well — given some <em>random</em> derivative images $I_x, I_y$, is
+      there always an image $I$ whose derivatives are exactly $I_x, I_y$?</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — recovering $r$ from its filter outputs (page 3)</span>
+        <p>To recover $\hat r$ from its filtered versions we solve the <strong>over-constrained</strong> system
+        $\;f_n \star \hat r = \hat r_n$. There are more equations than unknowns, so in general only a
+        least-squares (pseudo-inverse) fit exists.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation — integrability</span>
+        <p>Going image → derivatives is always possible. Going the other way is <strong>over-constrained</strong>:
+        $I_x$ and $I_y$ are not independent (both come from one $I$), so they must satisfy a consistency condition
+        ($\partial_y I_x = \partial_x I_y$). A pair of <em>random</em> derivative images will not satisfy it, so no
+        exact image $I$ exists — the answer is <strong>False</strong>. This is exactly why the paper needs the
+        pseudo-inverse reconstruction.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">What are intrinsic images?</div>
+    <ul class="q-options">
+      <li>The luminance channel</li>
+      <li>An illumination image and a reflectance image</li>
+      <li>None of the other answers</li>
+      <li>Any of the R, G or B channels</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — Introduction (page 1)</span>
+        <p>Intrinsic images are a useful midlevel description of scenes proposed by Barrow and Tenenbaum. An image is
+        decomposed into two images: a <strong>reflectance image and an illumination image</strong>. The observed image
+        is a product of the two.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p><span class="term">Reflectance</span> = the paint/material of each surface (a red apple is red at noon or
+        midnight). <span class="term">Illumination</span> = how much light lands there. Every photo is these two,
+        multiplied.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="0">
+    <div class="q-text">Consider the 1D signal $X = [5,\,2,\,3,\,7,\,8]$ and its corresponding derivative signal
+      $dX = [-3,\,1,\,4,\,1]$. Mark the correct statement:</div>
+    <ul class="q-options">
+      <li>There exist other 1D signals $Y$ such that its derivative signal $dY = dX$</li>
+      <li>None of the other answers</li>
+      <li>All the other answers</li>
+      <li>$X$ can be recovered from $dX$ uniquely</li>
+    </ul>
+    <div class="q-hint">
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The derivative only records <em>differences</em> between neighbours, so it throws away the overall offset.
+        Shift the whole signal by any constant $c$ — e.g. $Y = X + c = [5{+}c,\,2{+}c,\,3{+}c,\,7{+}c,\,8{+}c]$ — and
+        the consecutive differences are unchanged, so $dY = dX$. Hence $X$ <strong>cannot</strong> be recovered from
+        $dX$ uniquely; you need one extra boundary value. This is the 1D version of the same "derivatives lose the
+        constant / need a boundary condition" fact behind the intrinsic-image reconstruction.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="3">
+    <div class="q-text">The prior suggested in the paper is that:</div>
+    <ul class="q-options">
+      <li>An image can be represented as a sparse signal</li>
+      <li>None of the other answers</li>
+      <li>Pixel values are sparse</li>
+      <li>The response of the derivative filter is sparse</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text — §2 (page 2)</span>
+        <p>We assume that when <strong>derivative filters</strong> are applied to $l(x,y,t)$ the resulting filter
+        outputs are <strong>sparse</strong>: more exactly, the filter outputs are independent over space and time and
+        have a Laplacian density.</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">What "sparse" means</span>
+        <p>Make a histogram of neighbouring-pixel differences of a natural image: it's a sharp spike at zero with
+        heavy tails (a Laplacian) — "mostly zero, occasional big edges." The prior is that the <em>derivative-filter
+        response</em> (not the pixels, not the image) is sparse. Lighting is smooth almost everywhere.</p>
+      </div>
+    </div>
+  </template>
+
+  <template class="q" data-correct="1">
+    <div class="q-text">True or False? The solution proposed in the paper is to take the temporal median filter of the pixel
+      values.</div>
+    <ul class="q-options">
+      <li>True</li>
+      <li>False</li>
+    </ul>
+    <div class="q-hint">
+      <div class="pdf-block">
+        <span class="pdf-label">Original text (page 4)</span>
+        <p>The ML estimate of the filtered reflectance image is $\;\hat{r}_n(x,y) = \mathrm{median}_t\, o_n(x,y,t)$ —
+        the median over time of each <strong>derivative-filter output</strong> $o_n$, not of the pixel values.</p>
+        <p>"The ML estimate has some similarities to the temporal median filter … but has very different performance
+        characteristics. Taking the temporal median of the frames themselves would <strong>not</strong> give the right
+        reflectance."</p>
+      </div>
+      <div class="explain">
+        <span class="explain-label">Plain-English explanation</span>
+        <p>The recipe is: apply the derivative filters, take the median of those <em>filter outputs</em> over time,
+        then reconstruct the image. Taking the median of the raw pixel values is a different (and wrong) thing — so
+        the statement is <strong>False</strong>.</p>
+      </div>
+    </div>
+  </template>
+
+</div>
+
+<script src="quiz.js"></script>
+</body>
+</html>
