@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Processing Project — Workflow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f0f0f; color: #fff; padding: 28px; min-height: 100vh;
+  }
+  header { max-width: 1300px; margin: 0 auto 18px; }
+  header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; }
+  header p { color: #888; margin-top: 6px; font-size: 14px; }
+  .meta { color:#666; font-size:12px; margin-top:8px; }
+  .container {
+    max-width: 1300px; margin: 0 auto; background: #161616;
+    border: 1px solid #242424; border-radius: 14px; padding: 28px;
+    overflow-x: auto;
+  }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin: 0 auto 16px; max-width:1300px; }
+  .legend span { display:flex; align-items:center; gap:6px; font-size:12px; color:#aaa; }
+  .dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
+
+  .flow { display:flex; align-items:stretch; gap:0; min-width: 1180px; }
+  .col { display:flex; flex-direction:column; justify-content:center; gap:18px; padding:0 6px; }
+  .arrowcol { display:flex; flex-direction:column; justify-content:center; align-items:center; min-width:64px; }
+
+  .node {
+    position:relative; border-radius:12px; padding:16px 18px; min-width:172px;
+    border:2px solid #444; cursor:pointer; transition:transform .18s, box-shadow .18s, opacity .18s;
+    background:#1a1a2e;
+  }
+  .node:hover { transform:scale(1.05); z-index:5; }
+  .node .icon { font-size:20px; margin-bottom:6px; }
+  .node .label { font-weight:700; font-size:14px; }
+  .node .sub { color:#9a9a9a; font-size:11.5px; margin-top:4px; line-height:1.35; }
+
+  .t-trigger { background:#1e3a5f; border-color:#3B82F6; }
+  .t-proc    { background:#1a3d2e; border-color:#10B981; }
+  .t-tool    { background:#3d2e1a; border-color:#F59E0B; }
+  .t-output  { background:#3d1a1a; border-color:#EF4444; }
+  .t-data    { background:#1a1a2e; border-color:#6366F1; }
+  .t-decision{ background:#2e1a3d; border-color:#A855F7; }
+
+  .arrow { color:#555; font-size:26px; line-height:1; transition:color .18s, transform .18s; }
+  .arrow .lbl { display:block; font-size:10px; color:#777; margin-bottom:2px; white-space:nowrap; text-align:center; }
+
+  .dim { opacity:0.18; }
+  .hl  { box-shadow:0 0 0 2px rgba(255,255,255,.15), 0 0 22px var(--glow); }
+  .arrow.hot { color: var(--glow); transform:scale(1.15); }
+
+  .tooltip {
+    position:fixed; pointer-events:none; background:#000; border:1px solid #333;
+    border-radius:8px; padding:10px 12px; font-size:12px; color:#ddd; max-width:280px;
+    opacity:0; transition:opacity .15s; z-index:50; line-height:1.45;
+  }
+  .hint { text-align:center; color:#555; font-size:12px; margin-top:14px; }
+  .branch-note { font-size:11px; color:#666; text-align:center; margin-top:4px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 Video Processing — Final Project Pipeline</h1>
+  <p>Classical (no Deep-Learning) pipeline: shaky input video → stabilized → person extracted → re-composited on new background → tracked. Run via <code>python Code/main.py</code>.</p>
+  <div class="meta">Course 0512-4263 · Inputs: INPUT.avi + background.jpg · Outputs: 6 videos + timing.json + tracking.json · Budget: &lt; 20 min runtime</div>
+</header>
+
+<div class="legend">
+  <span><i class="dot" style="background:#3B82F6"></i>Input / Trigger</span>
+  <span><i class="dot" style="background:#10B981"></i>Processing block</span>
+  <span><i class="dot" style="background:#6366F1"></i>Intermediate video</span>
+  <span><i class="dot" style="background:#EF4444"></i>Final output</span>
+  <span><i class="dot" style="background:#F59E0B"></i>Side artifact</span>
+</div>
+
+<div class="container">
+  <div class="flow" id="flow">
+
+    <!-- INPUT -->
+    <div class="col">
+      <div class="node t-trigger" data-id="input" data-conn="stab"
+           data-tip="INPUT.avi — shaky handheld video of one person walking. Plus background.jpg, the new scene. Same person may appear in a secret test video with different clothes & background.">
+        <div class="icon">🎥</div><div class="label">INPUT.avi</div>
+        <div class="sub">Shaky source video<br>+ background.jpg</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="stab"><span class="lbl">raw frames</span>➜</div></div>
+
+    <!-- STABILIZATION -->
+    <div class="col">
+      <div class="node t-proc" data-id="stab" data-conn="input stabavi"
+           data-tip="STABILIZATION: estimate inter-frame motion (feature matching / optical flow → affine or homography), smooth the trajectory, warp each frame. Don't blur — sharpness matters for matting. Black border pixels are OK.">
+        <div class="icon">⚙️</div><div class="label">Stabilization</div>
+        <div class="sub">Motion estimate +<br>trajectory smoothing</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="stabavi"><span class="lbl">stabilize.avi</span>➜</div></div>
+
+    <!-- BG SUB -->
+    <div class="col">
+      <div class="node t-data" data-id="stabavi" data-conn="stab bgsub"
+           data-tip="stabilize_ID1_ID2.avi — steadied color video. Input to the background-subtraction block.">
+        <div class="icon">🎞️</div><div class="label">stabilize.avi</div>
+        <div class="sub">Steady color video</div>
+      </div>
+      <div class="node t-proc" data-id="bgsub" data-conn="stabavi extracted binary"
+           data-tip="BACKGROUND SUBTRACTION: separate the walking person from the static-ish scene. Build a background model (KNN/MOG2 or color-space stats), threshold, clean with morphology. Allowed to study color spaces offline as constants — but avoid overfitting the secret video.">
+        <div class="icon">🪄</div><div class="label">Background<br>Subtraction</div>
+        <div class="sub">Person vs background<br>model + threshold</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="extracted"><span class="lbl">extracted.avi</span>➜</div>
+      <div class="arrow" data-edge="binary" style="margin-top:34px"><span class="lbl">binary.avi</span>➜</div>
+    </div>
+
+    <!-- MATTING -->
+    <div class="col">
+      <div class="node t-data" data-id="extracted" data-conn="bgsub matting"
+           data-tip="extracted_ID1_ID2.avi — person keeps original pixel values, everything else = 0 (black). Color video.">
+        <div class="icon">🧍</div><div class="label">extracted.avi</div>
+        <div class="sub">Person on black</div>
+      </div>
+      <div class="node t-data" data-id="binary" data-conn="bgsub matting"
+           data-tip="binary_ID1_ID2.avi — mask: 1 = person, 0 = not person. The only video allowed to be non-color. Feeds matting as the trimap source.">
+        <div class="icon">⬛</div><div class="label">binary.avi</div>
+        <div class="sub">1 = person, 0 = rest</div>
+      </div>
+      <div class="node t-tool" data-id="bgimg" data-conn="matting"
+           data-tip="background.jpg — new scene. Any size; resize to frame size, aspect ratio need NOT be preserved.">
+        <div class="icon">🏔️</div><div class="label">background.jpg</div>
+        <div class="sub">New scene (resize)</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="matting"><span class="lbl">3 inputs</span>➜</div></div>
+
+    <!-- MATTING BLOCK -->
+    <div class="col">
+      <div class="node t-proc" data-id="matting" data-conn="extracted binary bgimg matted alpha"
+           data-tip="MATTING: compute a soft alpha (0..1) near the person's boundary, then composite: out = alpha*foreground + (1-alpha)*newBackground. Inputs = background image + stabilize.avi + binary.avi.">
+        <div class="icon">🎨</div><div class="label">Matting</div>
+        <div class="sub">Alpha blend person<br>onto new background</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="matted"><span class="lbl">matted.avi</span>➜</div>
+      <div class="arrow" data-edge="alpha" style="margin-top:34px"><span class="lbl">alpha.avi</span>➜</div>
+    </div>
+
+    <!-- TRACKING + OUTPUTS -->
+    <div class="col">
+      <div class="node t-data" data-id="matted" data-conn="matting tracking"
+           data-tip="matted_ID1_ID2.avi — person composited on the new static background. Color. Input to tracking.">
+        <div class="icon">🌄</div><div class="label">matted.avi</div>
+        <div class="sub">Person on new bg</div>
+      </div>
+      <div class="node t-output" data-id="alpha" data-conn="matting"
+           data-tip="alpha_ID1_ID2.avi — per-pixel alpha in [0,1]; soft at boundaries. Save scaled ×255 as uint8.">
+        <div class="icon">◐</div><div class="label">alpha.avi</div>
+        <div class="sub">Alpha map [0,1]</div>
+      </div>
+      <div class="node t-proc" data-id="tracking" data-conn="matted output tjson"
+           data-tip="TRACKING: auto-select the single person and draw a rectangle every frame (e.g. particle filter / mean-shift / template). Graded vs secret ground-truth boxes.">
+        <div class="icon">🎯</div><div class="label">Tracking</div>
+        <div class="sub">Auto box on person</div>
+      </div>
+    </div>
+
+    <div class="arrowcol"><div class="arrow" data-edge="output"><span class="lbl">boxed frames</span>➜</div></div>
+
+    <!-- FINAL -->
+    <div class="col">
+      <div class="node t-output" data-id="output" data-conn="tracking"
+           data-tip="OUTPUT_ID1_ID2.avi — final video: person on new background with a tracking rectangle in every frame. Same frame count as INPUT.avi.">
+        <div class="icon">✅</div><div class="label">OUTPUT.avi</div>
+        <div class="sub">Tracked final video</div>
+      </div>
+      <div class="node t-output" data-id="tjson" data-conn="tracking"
+           data-tip="tracking.json — {frame# : [ROW, COL, HEIGHT, WIDTH]} for every frame. timing.json — seconds from main.py start to each video's completion.">
+        <div class="icon">🗂️</div><div class="label">tracking.json<br>+ timing.json</div>
+        <div class="sub">Boxes + timings</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="hint">Hover a node for details · Click to highlight its connections · Click empty space to reset</div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+  const flow = document.getElementById('flow');
+  const tip = document.getElementById('tip');
+  const nodes = [...document.querySelectorAll('.node')];
+  const arrows = [...document.querySelectorAll('.arrow')];
+  const glowMap = {
+    'trigger':'#3B82F6','proc':'#10B981','tool':'#F59E0B',
+    'output':'#EF4444','data':'#6366F1','decision':'#A855F7'
+  };
+  nodes.forEach(n=>{
+    const cls=[...n.classList].find(c=>c.startsWith('t-')).slice(2);
+    n.style.setProperty('--glow', glowMap[cls]);
+  });
+
+  // tooltip
+  nodes.forEach(n=>{
+    n.addEventListener('mousemove',e=>{
+      tip.textContent = n.dataset.tip;
+      tip.style.opacity=1;
+      let x=e.clientX+16, y=e.clientY+16;
+      if(x+290>innerWidth) x=e.clientX-296;
+      if(y+120>innerHeight) y=e.clientY-120;
+      tip.style.left=x+'px'; tip.style.top=y+'px';
+    });
+    n.addEventListener('mouseleave',()=>tip.style.opacity=0);
+  });
+
+  // click highlight
+  let active=null;
+  nodes.forEach(n=>{
+    n.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(active===n){ reset(); return; }
+      active=n;
+      const keep=new Set([n.dataset.id, ...n.dataset.conn.split(' ')]);
+      nodes.forEach(m=> m.classList.toggle('dim', !keep.has(m.dataset.id)));
+      nodes.forEach(m=> m.classList.toggle('hl', keep.has(m.dataset.id)));
+      // light arrows whose edge id is among connections
+      arrows.forEach(a=>{
+        const ed=a.dataset.edge;
+        a.classList.toggle('hot', keep.has(ed));
+      });
+    });
+  });
+  function reset(){
+    active=null;
+    nodes.forEach(m=>{m.classList.remove('dim','hl');});
+    arrows.forEach(a=>a.classList.remove('hot'));
+  }
+  document.body.addEventListener('click',reset);
+</script>
+</body>
+</html>

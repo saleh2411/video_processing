@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Processing Final Project — Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0f10; --surface:#1a1a1d; --border:#2a2a2d; --text:#fff; --muted:#a0a0a0;
+    --accent:#D97757; --accent-muted:rgba(217,119,87,.15);
+    --blue:#3B82F6; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --indigo:#6366F1; --purple:#A855F7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px;}
+  a{color:var(--accent);text-decoration:none;}
+
+  /* hero */
+  header.hero{padding:70px 0 50px;border-bottom:1px solid var(--border);
+    background:radial-gradient(900px 300px at 50% -40%,rgba(217,119,87,.14),transparent);}
+  .eyebrow{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;}
+  h1{font-size:42px;font-weight:800;letter-spacing:-1px;margin:12px 0 14px;}
+  .hero p{color:var(--muted);font-size:18px;max-width:680px;}
+  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--muted);}
+  .pill b{color:var(--text);}
+
+  section{padding:64px 0;border-bottom:1px solid var(--border);}
+  h2{font-size:28px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .lead{color:var(--muted);font-size:15px;margin-bottom:28px;max-width:720px;}
+  h3{font-size:18px;font-weight:600;margin-bottom:6px;}
+
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;}
+  .stat .num{font-size:30px;font-weight:800;}
+  .stat .lab{color:var(--muted);font-size:13px;margin-top:4px;}
+
+  /* flow steps */
+  .steps{display:flex;flex-direction:column;gap:18px;}
+  .step{display:flex;gap:18px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;position:relative;overflow:hidden;}
+  .step::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c);}
+  .step .circle{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:18px;
+    background:var(--cm);color:var(--c);border:2px solid var(--c);}
+  .step .body{flex:1;}
+  .step .body .io{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:8px;}
+  .step .body .io b{color:var(--text);}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:6px;margin:8px 6px 0 0;
+       background:var(--cm);color:var(--c);border:1px solid var(--c);}
+
+  /* cards grid */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;}
+  .card .ic{font-size:22px;margin-bottom:8px;}
+  .card p{color:var(--muted);font-size:14px;}
+
+  /* callout */
+  .callout{background:var(--accent-muted);border-left:4px solid var(--accent);border-radius:8px;padding:18px 20px;margin-top:18px;display:flex;gap:14px;}
+  .callout.warn{background:rgba(239,68,68,.12);border-color:var(--red);}
+  .callout.tip{background:rgba(16,185,129,.12);border-color:var(--green);}
+  .callout .ci{font-size:20px;flex:none;}
+  .callout p{font-size:14px;color:#d8d8d8;}
+  .callout b{color:#fff;}
+
+  /* table */
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;overflow:hidden;border-radius:12px;border:1px solid var(--border);}
+  .tbl th,.tbl td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);}
+  .tbl th{background:#202023;font-weight:600;font-size:13px;color:var(--muted);}
+  .tbl tr:last-child td{border-bottom:none;}
+  .tbl td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);}
+  .tbl tr:nth-child(even) td{background:rgba(255,255,255,.015);}
+
+  code{font-family:'JetBrains Mono',monospace;background:#0000004d;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:13px;}
+  pre{background:#0c0c0d;border:1px solid var(--border);border-radius:10px;padding:18px;overflow-x:auto;margin-top:14px;}
+  pre code{background:none;border:none;padding:0;font-size:13px;line-height:1.7;color:#d8d8d8;}
+  .kw{color:#c792ea;} .str{color:#c3e88d;} .com{color:#637777;} .fn{color:#82aaff;}
+
+  /* progress / pitfalls */
+  .bar{background:#0000004d;border-radius:999px;height:10px;overflow:hidden;margin:6px 0 2px;}
+  .bar > i{display:block;height:100%;border-radius:999px;}
+  .barlabel{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);}
+
+  footer{padding:40px 0 70px;color:var(--muted);font-size:13px;text-align:center;}
+  @media(max-width:760px){
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .grid{grid-template-columns:1fr;}
+    h1{font-size:32px;}
+    .step{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Course 0512-4263 · Video Processing & Analysis</div>
+    <h1>Final Project Field Guide</h1>
+    <p>Take a shaky video of a person walking and output a stabilized clip of them — re-composited onto a brand-new background, with a tracking box following them through every frame. All with classical computer vision. No deep learning allowed.</p>
+    <div class="pills">
+      <span class="pill"><b>4</b> processing blocks</span>
+      <span class="pill"><b>6</b> output videos</span>
+      <span class="pill"><b>2</b> JSON files</span>
+      <span class="pill">&lt; <b>20 min</b> runtime</span>
+      <span class="pill">submitted in <b>pairs</b></span>
+    </div>
+  </div>
+</header>
+
+<!-- BIG PICTURE -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">The deliverables</div>
+    <h2>What the grader runs</h2>
+    <p class="lead">One command: <code>python Code/main.py</code>. It reads <code>INPUT.avi</code> + <code>background.jpg</code> and must write everything into an <code>Outputs/</code> folder — no user input, no windows popping up, ends gracefully.</p>
+    <div class="stats">
+      <div class="stat"><div class="num" style="color:var(--blue)">1</div><div class="lab">entry point<br>main.py</div></div>
+      <div class="stat"><div class="num" style="color:var(--green)">6</div><div class="lab">.avi videos<br>all color*</div></div>
+      <div class="stat"><div class="num" style="color:var(--amber)">2</div><div class="lab">json files<br>timing + tracking</div></div>
+      <div class="stat"><div class="num" style="color:var(--red)">2</div><div class="lab">test videos<br>1 known + 1 secret</div></div>
+    </div>
+    <div class="callout warn">
+      <span class="ci">⚠️</span>
+      <p><b>Color everywhere.</b> Every output must be a 3-channel color video — the only exception is <code>binary.avi</code>. Inside your functions you can work on any channel you like, but write color frames out.</p>
+    </div>
+  </div>
+</section>
+
+<!-- THE PIPELINE -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">The pipeline</div>
+    <h2>Four blocks, in order</h2>
+    <p class="lead">Each block's output feeds the next. Files are named <code>&lt;stage&gt;_ID1_ID2.avi</code>. Open <code>workflow.html</code> for the interactive data-flow diagram.</p>
+    <div class="steps">
+
+      <div class="step" style="--c:var(--blue);--cm:rgba(59,130,246,.15)">
+        <div class="circle">1</div>
+        <div class="body">
+          <h3>Stabilization</h3>
+          <p>Estimate how the camera moves between consecutive frames, smooth that trajectory, then warp each frame to cancel the shake. The walking subject still moves — only the camera jitter is removed.</p>
+          <div><span class="tag">Feature detect + match</span><span class="tag">Optical flow</span><span class="tag">Affine / homography</span><span class="tag">Trajectory smoothing</span></div>
+          <div class="io">in: <b>INPUT.avi</b> &nbsp;→&nbsp; out: <b>stabilize_ID1_ID2.avi</b></div>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--green);--cm:rgba(16,185,129,.15)">
+        <div class="circle">2</div>
+        <div class="body">
+          <h3>Background Subtraction</h3>
+          <p>Model the static scene and pull out the moving person. Produces two things: the person cut out on a black background, and a binary mask. Clean noisy edges with morphology (open/close) and pick the largest blob.</p>
+          <div><span class="tag">KNN / MOG2</span><span class="tag">Color-space stats</span><span class="tag">Threshold</span><span class="tag">Morphology</span><span class="tag">Connected components</span></div>
+          <div class="io">in: <b>stabilize.avi</b> &nbsp;→&nbsp; out: <b>extracted_ID1_ID2.avi</b> + <b>binary_ID1_ID2.avi</b></div>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--purple);--cm:rgba(168,85,247,.15)">
+        <div class="circle">3</div>
+        <div class="body">
+          <h3>Matting</h3>
+          <p>Build a soft alpha matte (0..1) so the person's edges blend naturally — no harsh cut-out look. Composite the person over the new background image: <code>out = α·foreground + (1−α)·newBg</code>. Inputs are the background image, the stabilized video, and the binary mask.</p>
+          <div><span class="tag">Trimap from mask</span><span class="tag">Alpha estimation</span><span class="tag">Foreground / background colors</span><span class="tag">Alpha compositing</span></div>
+          <div class="io">in: <b>background.jpg</b> + <b>stabilize.avi</b> + <b>binary.avi</b> &nbsp;→&nbsp; out: <b>matted_ID1_ID2.avi</b> + <b>alpha_ID1_ID2.avi</b></div>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--red);--cm:rgba(239,68,68,.15)">
+        <div class="circle">4</div>
+        <div class="body">
+          <h3>Tracking</h3>
+          <p>Automatically lock onto the single walking person and draw a rectangle around them in every frame. Record each box as <code>[ROW, COL, HEIGHT, WIDTH]</code>. Graded against secret ground-truth boxes, so accuracy of the box matters.</p>
+          <div><span class="tag">Particle filter</span><span class="tag">Mean-shift / CAMShift</span><span class="tag">Template match</span><span class="tag">Mask bounding-box</span></div>
+          <div class="io">in: <b>matted.avi</b> &nbsp;→&nbsp; out: <b>OUTPUT_ID1_ID2.avi</b> + <b>tracking.json</b></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- OUTPUT SPEC -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">Exact spec</div>
+    <h2>Every file the Outputs/ folder must contain</h2>
+    <p class="lead">Case-sensitive names, no spaces, IDs substituted. Nothing extra in the folder.</p>
+    <table class="tbl">
+      <tr><th>File</th><th>What's in it</th><th>Notes</th></tr>
+      <tr><td>stabilize_ID1_ID2.avi</td><td>Steadied source video</td><td>Don't blur — keep it sharp for matting</td></tr>
+      <tr><td>extracted_ID1_ID2.avi</td><td>Person's real pixels, rest = 0</td><td>Color</td></tr>
+      <tr><td>binary_ID1_ID2.avi</td><td>Mask: 1 = person, 0 = not</td><td>Only video allowed non-color</td></tr>
+      <tr><td>alpha_ID1_ID2.avi</td><td>Alpha map, soft at edges</td><td>[0,1] → save ×255 as uint8</td></tr>
+      <tr><td>matted_ID1_ID2.avi</td><td>Person on new background</td><td>Color, static new scene</td></tr>
+      <tr><td>OUTPUT_ID1_ID2.avi</td><td>Matted + tracking rectangle</td><td>Same #frames as INPUT.avi</td></tr>
+      <tr><td>timing.json</td><td>Seconds to finish each video</td><td>keys: time_to_stabilize/binary/alpha/matted/output</td></tr>
+      <tr><td>tracking.json</td><td>{frame#: [ROW,COL,HEIGHT,WIDTH]}</td><td>one entry per frame</td></tr>
+    </table>
+    <div class="callout">
+      <span class="ci">🗂️</span>
+      <p><b>timing.json</b> measures wall-clock seconds from the start of <code>main.py</code> to the moment each video is fully written. <b>tracking.json</b> has one box per frame — its length = number of frames in INPUT.avi.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TIPS -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">Tips that move the grade</div>
+    <h2>What actually matters</h2>
+    <div class="grid">
+      <div class="card"><div class="ic">🎯</div><h3>Don't overfit the secret video</h3><p>You may study color spaces offline and hard-code constants, and use first-frame scribbles. But the second test video has the <b>same person in different clothes</b> on a maybe-different background. Tune for robustness, not just INPUT.avi.</p></div>
+      <div class="card"><div class="ic">🔪</div><h3>Keep stabilization sharp</h3><p>Interpolation blur quietly wrecks the matting stage — fuzzy edges = bad alpha. Black border regions from warping are explicitly fine.</p></div>
+      <div class="card"><div class="ic">⏱️</div><h3>Respect the 20-minute wall</h3><p>Runs are aborted at 20 min on the lab machines and runtime is part of the grade. Avoid per-pixel Python loops — vectorize with NumPy, downscale where you can.</p></div>
+      <div class="card"><div class="ic">📁</div><h3>Relative paths only</h3><p>Use <code>os.path</code> to build paths. No <code>C:\...</code> absolutes — the grader runs on Ubuntu 22.04 from the repo root.</p></div>
+      <div class="card"><div class="ic">📝</div><h3>The report is graded</h3><p>Explain each stage in the PDF. Any function "too specific" (one that does a whole stage for you) or any non-class algorithm must be explained, with source — or you lose points.</p></div>
+      <div class="card"><div class="ic">🧹</div><h3>Clean morphology pays off</h3><p>Most background-subtraction grade comes from a clean mask: open to kill speckle, close to fill holes, keep the largest connected component as the person.</p></div>
+    </div>
+
+    <div class="callout warn">
+      <span class="ci">🚫</span>
+      <p><b>Hard rules:</b> No deep learning / deep networks. No single built-in library function that solves an entire main block (stabilize, track, background-sub, or matting) end-to-end. <code>opencv</code> functions are allowed if you explain how they work in the report.</p>
+    </div>
+    <div class="callout tip">
+      <span class="ci">🪜</span>
+      <p><b>The "way out":</b> a full solution built on <code>opencv-contrib</code> trackers/subtractors — roughly ±10 lines per stage. It caps your project grade at <b>70/100</b>. Use it only as a safety net.</p>
+    </div>
+  </div>
+</section>
+
+<!-- REUSABLE CODE -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">Don't start from scratch</div>
+    <h2>Reuse code from ex1 / ex2 / ex3</h2>
+    <p class="lead">Two stages are nearly drop-in from your own course exercises (your implementations — not banned built-ins). Two stages have no prior code and must be built fresh.</p>
+
+    <div class="steps">
+
+      <div class="step" style="--c:var(--blue);--cm:rgba(59,130,246,.15)">
+        <div class="circle">1</div>
+        <div class="body">
+          <h3>Stabilization &nbsp;→&nbsp; ex2 <code>lucas_kanade.py</code> &nbsp;<span class="tag" style="--c:var(--green);--cm:rgba(16,185,129,.15)">near drop-in</span></h3>
+          <p>The whole file. <code>lucas_kanade_faster_video_stabilization_fix_effects()</code> is a complete stabilizer with video I/O, backed by <code>build_pyramid</code>, <code>lucas_kanade_step</code>, <code>warp_image</code> / <code>warp_image_remap</code>, <code>lucas_kanade_optical_flow</code> and the <code>faster_*</code> variants. Its inner <code>crop_resize</code> trims warp borders — that directly answers project FAQ #1.</p>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--green);--cm:rgba(16,185,129,.15)">
+        <div class="circle">2</div>
+        <div class="body">
+          <h3>Background Subtraction &nbsp;→&nbsp; <span class="tag" style="--c:var(--red);--cm:rgba(239,68,68,.15)">no reusable code</span></h3>
+          <p>Nothing in ex1–3 covers this. Build fresh: background model (KNN / MOG2 or color-space stats) → threshold → morphology → largest connected component. Borrow only the gradient helpers below for edge cues.</p>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--purple);--cm:rgba(168,85,247,.15)">
+        <div class="circle">3</div>
+        <div class="body">
+          <h3>Matting &nbsp;→&nbsp; <span class="tag" style="--c:var(--red);--cm:rgba(239,68,68,.15)">no reusable code</span></h3>
+          <p>Also fresh. Trimap from the binary mask → alpha estimation → composite. Reuse <code>create_grad_x_and_grad_y</code> (ex1) for boundary detection in the trimap band.</p>
+        </div>
+      </div>
+
+      <div class="step" style="--c:var(--red);--cm:rgba(239,68,68,.15)">
+        <div class="circle">4</div>
+        <div class="body">
+          <h3>Tracking &nbsp;→&nbsp; ex3 <code>particle_filter.py</code> &nbsp;<span class="tag" style="--c:var(--green);--cm:rgba(16,185,129,.15)">near drop-in</span></h3>
+          <p>The whole file: <code>predict_particles</code>, <code>compute_normalized_histogram</code>, <code>sample_particles</code>, <code>bhattacharyya_distance</code>, <code>compute_weights_and_cdf</code>, <code>show_particles</code>. Already dumps per-frame state to JSON — adapt that into <code>tracking.json</code>.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <h3 style="margin-top:30px">Shared utilities — pull into every stage</h3>
+    <table class="tbl" style="margin-top:12px">
+      <tr><th>Function / pattern</th><th>From</th><th>Use in project</th></tr>
+      <tr><td>get_video_parameters</td><td>ex1 basic_video_processing</td><td>fourcc / fps / h / w for every VideoCapture + VideoWriter</td></tr>
+      <tr><td>read→process→write loop</td><td>ex1 basic_video_processing</td><td>frame I/O template for all 6 output videos</td></tr>
+      <tr><td>create_grad_x_and_grad_y</td><td>ex1 harris_corner_detector</td><td>gradients for matting trimap edges &amp; bg-sub cues</td></tr>
+      <tr><td>our_harris_corner_detector</td><td>ex1 harris_corner_detector</td><td>feature points — alt anchor for stabilization</td></tr>
+      <tr><td>bgr_image_to_rgb_image</td><td>ex1 harris_corner_detector</td><td>channel conversion util</td></tr>
+      <tr><td>calc_mse_at_interest_region</td><td>ex2 main_river</td><td>self-benchmark stabilization / result quality</td></tr>
+    </table>
+
+    <div class="callout warn">
+      <span class="ci">⚠️</span>
+      <p><b>Adaptation needed before these fit:</b></p>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><div class="ic">🎨</div><h3>Make it color</h3><p>ex2 stabilizer runs grayscale (fakes color via <code>GRAY2BGR</code>). Project demands real color out — apply the same <code>u,v</code> warp to all 3 channels.</p></div>
+      <div class="card"><div class="ic">🔪</div><h3>Watch the resize blur</h3><p><code>crop_resize</code>'s <code>cv2.resize</code> softens frames; the brief warns blur wrecks matting. Tune trim margins / interpolation.</p></div>
+      <div class="card"><div class="ic">📦</div><h3>State → box</h3><p>Particle state isn't <code>[ROW,COL,HEIGHT,WIDTH]</code>. Convert avg/max state into that for <code>tracking.json</code> and the OUTPUT rectangle.</p></div>
+      <div class="card"><div class="ic">🚫</div><h3>Kill the plotting</h3><p>Strip <code>show_particles</code>' matplotlib display — project forbids drawing figures/videos to screen.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- SKELETON -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">Starting point</div>
+    <h2>main.py skeleton</h2>
+    <p class="lead">A timing-aware structure that matches the required outputs and JSON keys.</p>
+    <pre><code><span class="kw">import</span> os, json, time
+<span class="kw">import</span> cv2, numpy <span class="kw">as</span> np
+
+ID1, ID2 = <span class="str">"213851579"</span>, <span class="str">"213310485"</span>
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+IN  = os.path.join(ROOT, <span class="str">"Input"</span>)
+OUT = os.path.join(ROOT, <span class="str">"Outputs"</span>); os.makedirs(OUT, exist_ok=<span class="kw">True</span>)
+<span class="kw">def</span> <span class="fn">p</span>(name): <span class="kw">return</span> os.path.join(OUT, <span class="str">f"{name}_{ID1}_{ID2}.avi"</span>)
+
+t0 = time.time()
+timing = {}
+
+<span class="com"># 1. stabilize INPUT.avi  -> stabilize_*.avi</span>
+stabilize(os.path.join(IN,<span class="str">"INPUT.avi"</span>), p(<span class="str">"stabilize"</span>))
+timing[<span class="str">"time_to_stabilize"</span>] = time.time()-t0
+
+<span class="com"># 2. background subtraction -> extracted_*.avi + binary_*.avi</span>
+background_subtract(p(<span class="str">"stabilize"</span>), p(<span class="str">"extracted"</span>), p(<span class="str">"binary"</span>))
+timing[<span class="str">"time_to_binary"</span>] = time.time()-t0
+
+<span class="com"># 3. matting -> matted_*.avi + alpha_*.avi</span>
+matting(p(<span class="str">"stabilize"</span>), p(<span class="str">"binary"</span>), os.path.join(IN,<span class="str">"background.jpg"</span>),
+        p(<span class="str">"matted"</span>), p(<span class="str">"alpha"</span>))
+timing[<span class="str">"time_to_alpha"</span>]  = time.time()-t0
+timing[<span class="str">"time_to_matted"</span>] = time.time()-t0
+
+<span class="com"># 4. tracking -> OUTPUT_*.avi + tracking.json</span>
+boxes = track(p(<span class="str">"matted"</span>), p(<span class="str">"OUTPUT"</span>))
+timing[<span class="str">"time_to_output"</span>] = time.time()-t0
+
+json.dump(timing,   open(os.path.join(OUT,<span class="str">"timing.json"</span>),   <span class="str">"w"</span>))
+json.dump(boxes,    open(os.path.join(OUT,<span class="str">"tracking.json"</span>), <span class="str">"w"</span>))</code></pre>
+  </div>
+</section>
+
+<!-- GRADING WEIGHT -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--accent)">Where to spend effort</div>
+    <h2>Effort vs. payoff (rough guide)</h2>
+    <p class="lead">Not official weights — a sense of where difficulty and reward concentrate. Quality + runtime + report all count.</p>
+
+    <div class="barlabel"><span>Matting — hardest to get clean, big visual impact</span><span>★★★★★</span></div>
+    <div class="bar"><i style="width:95%;background:var(--purple)"></i></div>
+
+    <div class="barlabel"><span>Background subtraction — feeds matting + tracking</span><span>★★★★</span></div>
+    <div class="bar"><i style="width:80%;background:var(--green)"></i></div>
+
+    <div class="barlabel"><span>Stabilization — foundational, well-studied</span><span>★★★</span></div>
+    <div class="bar"><i style="width:62%;background:var(--blue)"></i></div>
+
+    <div class="barlabel"><span>Tracking — scored vs secret boxes</span><span>★★★</span></div>
+    <div class="bar"><i style="width:60%;background:var(--red)"></i></div>
+
+    <div class="barlabel"><span>Report PDF — explains & justifies everything</span><span>★★★★</span></div>
+    <div class="bar"><i style="width:78%;background:var(--accent)"></i></div>
+
+    <div class="callout tip" style="margin-top:26px">
+      <span class="ci">💡</span>
+      <p><b>Build order tip:</b> get a rough end-to-end pipeline producing all 6 videos first (even ugly), then improve the masks. A clean binary mask makes matting <i>and</i> tracking easier — it's the keystone.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Companion to <code>workflow.html</code> (interactive data-flow diagram) · Video Processing 0512-4263 Final Project · Built as a study aid from the project brief.
+  </div>
+</footer>
+
+</body>
+</html>
