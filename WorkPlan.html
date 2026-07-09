@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Processing Final Project — 2‑Person Work Plan</title>
+<style>
+  :root{
+    --a:#2563eb;      /* Developer A colour  */
+    --a-bg:#eff4ff;
+    --b:#7c3aed;      /* Developer B colour  */
+    --b-bg:#f4efff;
+    --shared:#0f9d6e; /* Shared / foundation */
+    --shared-bg:#e9f9f2;
+    --ink:#1b2330;
+    --muted:#5b6675;
+    --line:#e3e8ef;
+    --bg:#f6f8fb;
+    --card:#ffffff;
+    --warn:#b45309;
+    --warn-bg:#fff7ea;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.55;font-size:15.5px;
+  }
+  a{color:var(--a);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:#eef1f6;padding:.1em .4em;border-radius:5px;font-size:.86em;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px 90px}
+
+  /* ---------- hero ---------- */
+  header.hero{
+    background:linear-gradient(135deg,#111a2e 0%,#1e2a4a 55%,#2a2150 100%);
+    color:#fff;padding:46px 0 40px;
+  }
+  header.hero .wrap{padding-bottom:0}
+  .kicker{letter-spacing:.16em;text-transform:uppercase;font-size:12px;color:#9fb4e6;font-weight:700}
+  header.hero h1{margin:.25em 0 .15em;font-size:2.15rem;line-height:1.12}
+  header.hero p.sub{color:#c7d2e8;margin:.2em 0 1.4em;max-width:760px;font-size:1.02rem}
+  .facts{display:flex;flex-wrap:wrap;gap:10px}
+  .fact{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;padding:9px 13px;font-size:13px;color:#e7edf8}
+  .fact b{color:#fff;display:block;font-size:15px}
+
+  /* ---------- sticky nav ---------- */
+  nav.toc{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin-bottom:28px}
+  nav.toc .wrap{padding-top:10px;padding-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  nav.toc a{font-size:13px;color:var(--muted);padding:5px 10px;border-radius:20px;font-weight:600}
+  nav.toc a:hover{background:#eef1f6;text-decoration:none;color:var(--ink)}
+
+  /* ---------- generic section ---------- */
+  section{margin:38px 0}
+  h2{font-size:1.5rem;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  h2 .num{font-size:.8rem;color:#fff;background:var(--ink);min-width:26px;height:26px;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:8px;font-weight:700}
+  .lead{color:var(--muted);margin:.1em 0 1.1em;max-width:820px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+
+  /* owner accents */
+  .owner-a{border-top:4px solid var(--a)}
+  .owner-b{border-top:4px solid var(--b)}
+  .owner-s{border-top:4px solid var(--shared)}
+  .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;
+    padding:3px 9px;border-radius:20px;text-transform:uppercase}
+  .tag.a{background:var(--a-bg);color:var(--a)}
+  .tag.b{background:var(--b-bg);color:var(--b)}
+  .tag.s{background:var(--shared-bg);color:var(--shared)}
+  .tag.warn{background:var(--warn-bg);color:var(--warn)}
+
+  /* pipeline */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:6px}
+  .stage{flex:1;min-width:150px;border-radius:12px;padding:14px;color:#fff;position:relative}
+  .stage h4{margin:0 0 4px;font-size:15px}
+  .stage small{opacity:.9;font-size:11.5px;display:block;line-height:1.35}
+  .stage.s1{background:linear-gradient(135deg,#2563eb,#3b82f6)}
+  .stage.s2{background:linear-gradient(135deg,#1d4ed8,#2563eb)}
+  .stage.s3{background:linear-gradient(135deg,#7c3aed,#8b5cf6)}
+  .stage.s4{background:linear-gradient(135deg,#6d28d9,#7c3aed)}
+  .arrow{align-self:center;color:#9aa6b8;font-size:22px;padding:0 6px}
+  @media(max-width:820px){.arrow{transform:rotate(90deg);width:100%;text-align:center}}
+
+  /* tasks / checkboxes */
+  ul.tasks{list-style:none;margin:8px 0 0;padding:0}
+  ul.tasks li{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);align-items:flex-start}
+  ul.tasks li:last-child{border-bottom:0}
+  ul.tasks input[type=checkbox]{margin-top:3px;width:16px;height:16px;flex:0 0 auto;cursor:pointer;accent-color:var(--a)}
+  .owner-b ul.tasks input[type=checkbox]{accent-color:var(--b)}
+  .owner-s ul.tasks input[type=checkbox]{accent-color:var(--shared)}
+  ul.tasks label{cursor:pointer}
+  ul.tasks .hint{color:var(--muted);font-size:13px;display:block;margin-top:1px}
+
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f2f5f9;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:0}
+
+  .note{border-left:4px solid var(--warn);background:var(--warn-bg);padding:12px 15px;border-radius:0 10px 10px 0;margin:12px 0}
+  .note b{color:var(--warn)}
+  .ok{border-left:4px solid var(--shared);background:var(--shared-bg);padding:12px 15px;border-radius:0 10px 10px 0;margin:12px 0}
+
+  /* timeline */
+  .timeline{position:relative;margin-top:10px;padding-left:26px}
+  .timeline:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .phase{position:relative;margin-bottom:16px}
+  .phase:before{content:"";position:absolute;left:-22px;top:5px;width:14px;height:14px;border-radius:50%;
+    background:#fff;border:3px solid var(--ink)}
+  .phase h4{margin:0 0 2px}
+  .phase .who{font-size:12.5px;color:var(--muted)}
+
+  .step-num{display:inline-flex;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;font-weight:700;
+    align-items:center;justify-content:center;margin-right:8px}
+  .subtle{color:var(--muted);font-size:13.5px}
+  h3.stage-title{margin:22px 0 2px;font-size:1.12rem;display:flex;align-items:center;gap:8px}
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;padding-top:18px;border-top:1px solid var(--line)}
+  .pill{font-size:11px;background:#eef1f6;color:var(--muted);border-radius:20px;padding:2px 9px;font-weight:700}
+  .reset{font-size:12px;color:var(--muted);border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;cursor:pointer}
+  .reset:hover{background:#f2f5f9}
+  .prog{font-size:12px;color:var(--muted);margin-left:auto}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">0512‑4263 · Video Processing & Analysis · Final Project</div>
+    <h1>Stabilize → Subtract → Matte → Track</h1>
+    <p class="sub">A two‑person plan to build the whole pipeline <b>from scratch</b>, working in parallel with almost no blocking. Each stage is developed against a fixed file "contract", so Developer&nbsp;A and Developer&nbsp;B can code, test and tune independently and only meet at one clean integration seam.</p>
+    <div class="facts">
+      <div class="fact">INPUT.avi<b>1920×1080 · 30 fps · 205 frames</b></div>
+      <div class="fact">Entry point<b>python Code/main.py</b></div>
+      <div class="fact">Runtime budget<b>≤ 20 min (Tochna −1)</b></div>
+      <div class="fact">No deep learning<b>opencv‑contrib caps grade at 70</b></div>
+      <div class="fact">Deliverables<b>6 videos · 2 JSONs · report · screen‑rec</b></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <a href="#rules">Ground rules</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#strategy">Parallel strategy</a>
+    <a href="#split">Who owns what</a>
+    <a href="#contracts">Interface contracts</a>
+    <a href="#timeline">Timeline</a>
+    <a href="#foundation">Foundation</a>
+    <a href="#devA">Developer A</a>
+    <a href="#devB">Developer B</a>
+    <a href="#integration">Integration</a>
+    <a href="#submission">Submission</a>
+    <a href="#gotchas">Gotchas</a>
+    <button class="reset" onclick="resetAll()">Reset checkboxes</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- ===================== GROUND RULES ===================== -->
+  <section id="rules">
+    <h2><span class="num">0</span> Ground rules (read once, together)</h2>
+    <p class="lead">These constrain every design decision below. Pin them somewhere visible.</p>
+    <div class="grid2">
+      <div class="card">
+        <ul class="tasks">
+          <li><input type="checkbox" id="r1"><label for="r1"><b>Build it yourselves.</b><span class="hint">The provided solved copy in <code>video_processing_git/FinalProjectC</code> is a <b>reference/benchmark only</b>. Use it to sanity‑check your outputs — never copy its code. The PDF explicitly forbids using someone else's code.</span></label></li>
+          <li><input type="checkbox" id="r2"><label for="r2"><b>No deep learning.</b><span class="hint">Classical CV only. Using <code>opencv‑contrib</code> as a shortcut hard‑caps the grade at 70/100. Aim to implement the core steps yourselves.</span></label></li>
+          <li><input type="checkbox" id="r3"><label for="r3"><b>Everything is colour.</b><span class="hint">All inputs/outputs are 3‑channel BGR — except <code>binary.avi</code> may be excluded. Inside a function you may use any channels/colour space you like.</span></label></li>
+        </ul>
+      </div>
+      <div class="card">
+        <ul class="tasks">
+          <li><input type="checkbox" id="r4"><label for="r4"><b>Fully automatic.</b><span class="hint">No user input, no windows/plots shown on screen (prints to stdout are fine), must end gracefully with no manual interaction on Ubuntu 22.04 + the conda env from <code>requirements.txt</code>.</span></label></li>
+          <li><input type="checkbox" id="r5"><label for="r5"><b>Relative paths only.</b><span class="hint">Build every path from the repo root with <code>os.path</code>. No absolute paths anywhere. It must run via <code>python Code/main.py</code> from the project root.</span></label></li>
+          <li><input type="checkbox" id="r6"><label for="r6"><b>Time budget is part of the grade.</b><span class="hint">The full run must finish under 20 minutes; quality vs. runtime is scored. Design for a 205‑frame, Full‑HD video and keep per‑frame work bounded (crop to the person's ROI where possible).</span></label></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PIPELINE ===================== -->
+  <section id="pipeline">
+    <h2><span class="num">1</span> The pipeline &amp; where the files live</h2>
+    <p class="lead">Blue stages belong to <b style="color:var(--a)">Developer&nbsp;A</b>, purple to <b style="color:var(--b)">Developer&nbsp;B</b>. Red labels are the video files that flow between stages — these files <em>are</em> the interface.</p>
+    <div class="card">
+      <div class="pipe">
+        <div class="stage s1"><span class="tag a" style="background:rgba(255,255,255,.2);color:#fff">A</span><h4>1 · Stabilization</h4><small>in: INPUT.avi<br>out: <b>stabilize</b>.avi</small></div>
+        <div class="arrow">→</div>
+        <div class="stage s2"><span class="tag a" style="background:rgba(255,255,255,.2);color:#fff">A</span><h4>2 · Background Subtraction</h4><small>in: stabilize.avi<br>out: <b>binary</b>.avi, <b>extracted</b>.avi</small></div>
+        <div class="arrow">→</div>
+        <div class="stage s3"><span class="tag b" style="background:rgba(255,255,255,.2);color:#fff">B</span><h4>3 · Matting</h4><small>in: stabilize + binary + background.jpg<br>out: <b>matted</b>.avi, <b>alpha</b>.avi</small></div>
+        <div class="arrow">→</div>
+        <div class="stage s4"><span class="tag b" style="background:rgba(255,255,255,.2);color:#fff">B</span><h4>4 · Tracking</h4><small>in: matted.avi<br>out: <b>OUTPUT</b>.avi, tracking.json</small></div>
+      </div>
+      <p class="subtle" style="margin-top:14px">Every output filename carries both IDs, e.g. <code>stabilize_ID1_ID2.avi</code>. <code>main.py</code> also writes <code>timing.json</code>. The single integration seam is the arrow between stage&nbsp;2 and stage&nbsp;3 — that's the only place A's work has to reach B.</p>
+    </div>
+  </section>
+
+  <!-- ===================== PARALLEL STRATEGY ===================== -->
+  <section id="strategy">
+    <h2><span class="num">2</span> How two people avoid blocking each other</h2>
+    <p class="lead">The pipeline is a straight dependency chain, so naïvely B waits for A forever. The trick is <b>contract‑first development</b>: agree the exact file formats up front, then everyone develops against a stand‑in file of that format.</p>
+    <div class="grid2">
+      <div class="card owner-s">
+        <span class="tag s">The mechanism</span>
+        <ul class="tasks">
+          <li><span>①</span><label><b>Freeze the interfaces on day 1.</b><span class="hint">Frame size, fps, channel count, pixel meaning, JSON schemas — all fixed before anyone writes an algorithm (see §4).</span></label></li>
+          <li><span>②</span><label><b>Use the reference intermediates as test fixtures.</b><span class="hint">Copy the solved copy's <code>stabilize_*.avi</code> and <code>binary_*.avi</code> into <code>Temp/fixtures/</code>. Developer B builds Matting &amp; Tracking against these <em>immediately</em>, long before A's real stabilizer exists.</span></label></li>
+          <li><span>③</span><label><b>Swap fixtures for the real thing at integration.</b><span class="hint">Because both sides obey the same contract, integration is a path change, not a rewrite.</span></label></li>
+          <li><span>④</span><label><b>Benchmark, don't copy.</b><span class="hint">The reference outputs also give each person a visual target (“my binary mask should look roughly like this”). Compare frames; never lift code.</span></label></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag warn">Why this split</span>
+        <p style="margin:.5em 0 .3em">The chain is <b>Stabilize → Subtract → Matte → Track</b>. Cutting it in the middle gives two self‑contained halves joined by <b>one</b> seam:</p>
+        <ul class="tasks">
+          <li><span style="color:var(--a)">A</span><label><b>Front half</b> — Stabilization + Background Subtraction. Starts on <code>INPUT.avi</code> with zero dependencies.</label></li>
+          <li><span style="color:var(--b)">B</span><label><b>Back half</b> — Matting + Tracking. Starts on the reference <code>stabilize</code> + <code>binary</code> fixtures, zero wait.</label></li>
+        </ul>
+        <p class="subtle">Effort is balanced: each half contains one of the two hardest stages (Stabilization ≈ Matting) plus one lighter stage (Subtraction ≈ Tracking). Themes also line up with the reading list, so each person reads a coherent set of chapters.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SPLIT TABLE ===================== -->
+  <section id="split">
+    <h2><span class="num">3</span> Who owns what</h2>
+    <div class="card">
+      <table>
+        <tr><th>Area</th><th style="color:var(--a)">Developer A — “Motion &amp; Foreground”</th><th style="color:var(--b)">Developer B — “Matte &amp; Track”</th></tr>
+        <tr>
+          <td><b>Pipeline stages</b></td>
+          <td>1 · Stabilization<br>2 · Background Subtraction</td>
+          <td>3 · Matting<br>4 · Tracking</td>
+        </tr>
+        <tr>
+          <td><b>Produces</b></td>
+          <td><code>stabilize.avi</code><br><code>binary.avi</code>, <code>extracted.avi</code></td>
+          <td><code>matted.avi</code>, <code>alpha.avi</code><br><code>OUTPUT.avi</code>, <code>tracking.json</code></td>
+        </tr>
+        <tr>
+          <td><b>Core techniques</b></td>
+          <td>Harris/Shi‑Tomasi corners, pyramidal Lucas‑Kanade, RANSAC homography, warp composition; per‑pixel background model, robust statistics, morphology.</td>
+          <td>Trimap, KDE colour models (Parzen), Bayes opacity, distance transforms, alpha blending; Kalman filter, constant‑velocity motion.</td>
+        </tr>
+        <tr>
+          <td><b>Reading list</b></td>
+          <td>ch01 motion representation · ch02 optical flow · ch03 motion apps (RANSAC) · ch08 background subtraction</td>
+          <td>ch10 video matting · ch04 Kalman &amp; particle · (opt.) ch09 geodesic, ch11 inpainting</td>
+        </tr>
+        <tr>
+          <td><b>Owns in the report</b></td>
+          <td>Stabilization &amp; Background‑Subtraction sections + their figures.</td>
+          <td>Matting &amp; Tracking sections + their figures.</td>
+        </tr>
+        <tr>
+          <td><b>Shared (paired)</b></td>
+          <td colspan="2" style="text-align:center;background:var(--shared-bg)"><code>utils.py</code> · <code>main.py</code> orchestration · repo skeleton · <code>timing.json</code> · report intro/pipeline diagram · screen recording · final packaging</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== CONTRACTS ===================== -->
+  <section id="contracts">
+    <h2><span class="num">4</span> Interface contracts — freeze these first</h2>
+    <p class="lead">Nothing below is negotiable once you start coding in parallel. Both people copy this table into a shared note.</p>
+    <div class="card">
+      <table>
+        <tr><th>File</th><th>Format</th><th>Pixel / value meaning</th></tr>
+        <tr><td><code>stabilize_ID1_ID2.avi</code></td><td>1920×1080, 30 fps, 205 frames, BGR (XVID)</td><td>Input warped onto frame‑0 coords. Black warp borders are OK. <b>No blur.</b></td></tr>
+        <tr><td><code>binary_ID1_ID2.avi</code></td><td>same dims, may be single‑channel written as colour</td><td>Person = 1 (saved as 255), background = 0.</td></tr>
+        <tr><td><code>extracted_ID1_ID2.avi</code></td><td>same dims, BGR</td><td>Person keeps its <em>original stabilized values</em>; 0 everywhere else.</td></tr>
+        <tr><td><code>alpha_ID1_ID2.avi</code></td><td>same dims, colour</td><td>α ∈ [0,1]. Can't store floats in AVI → multiply ×255, cast to <code>uint8</code>, replicate to 3 channels.</td></tr>
+        <tr><td><code>matted_ID1_ID2.avi</code></td><td>same dims, BGR</td><td><code>α·person + (1−α)·new_background</code>. Background resized to frame size (aspect ratio need not be kept).</td></tr>
+        <tr><td><code>OUTPUT_ID1_ID2.avi</code></td><td>same dims, BGR</td><td>Matted frames with a rectangle around the tracked person.</td></tr>
+        <tr><td><code>tracking.json</code></td><td><code>{ "1":[ROW,COL,H,W], … "205":[…] }</code></td><td>One key per frame (1‑based), four <b>integers</b> = top‑left row, col, height, width.</td></tr>
+        <tr><td><code>timing.json</code></td><td>single dict</td><td>Keys: <code>time_to_stabilize, time_to_binary, time_to_alpha, time_to_matted, time_to_output</code> — seconds since <code>main.py</code> started, measured when each video finished writing.</td></tr>
+      </table>
+      <p class="subtle" style="margin-top:12px"><b>Shared function signatures (in <code>utils.py</code>)</b> — agree these names so both halves call the same helpers:
+      <code>path_from_root(*parts)</code>, <code>open_video(path)→(cap,params)</code>, <code>create_writer(path,fps,w,h)</code>, <code>frames_of(path)</code> (generator), <code>to_color(mask)</code>, <code>largest_component(mask)</code>, <code>fill_holes(mask)</code>, <code>bbox_of_mask(mask)→(row,col,h,w)</code>.</p>
+    </div>
+  </section>
+
+  <!-- ===================== TIMELINE ===================== -->
+  <section id="timeline">
+    <h2><span class="num">5</span> Timeline &amp; milestones</h2>
+    <p class="lead">Sized as a ~2‑week effort; compress or stretch the day ranges to fit your calendar. The point is the <b>ordering and the checkpoints</b>, not the exact days.</p>
+    <div class="card">
+      <div class="timeline">
+        <div class="phase">
+          <h4>Phase 0 — Foundation <span class="pill">Day 1 · both, paired</span></h4>
+          <div class="who">Repo skeleton, <code>requirements.txt</code> conda env, <code>utils.py</code>, empty <code>main.py</code> orchestration, freeze §4 contracts, drop reference videos into <code>Temp/fixtures/</code>. <b>Nobody writes an algorithm until this is done.</b></div>
+        </div>
+        <div class="phase">
+          <h4>Phase 1 — Hard stages, in parallel <span class="pill">Days 2–5</span></h4>
+          <div class="who"><b style="color:var(--a)">A:</b> Stabilization → <code>stabilize.avi</code> (working on <code>INPUT.avi</code>). &nbsp;·&nbsp; <b style="color:var(--b)">B:</b> Matting → <code>matted.avi</code>+<code>alpha.avi</code> (working on the <b>fixture</b> stabilize+binary).</div>
+        </div>
+        <div class="phase">
+          <h4>Phase 2 — Lighter stages, in parallel <span class="pill">Days 6–8</span></h4>
+          <div class="who"><b style="color:var(--a)">A:</b> Background Subtraction → <code>binary.avi</code>+<code>extracted.avi</code> (on A's own stabilize output). &nbsp;·&nbsp; <b style="color:var(--b)">B:</b> Tracking → <code>OUTPUT.avi</code>+<code>tracking.json</code> (on B's own matted output).</div>
+        </div>
+        <div class="phase">
+          <h4>Phase 3 — Integration <span class="pill">Days 9–10 · paired</span></h4>
+          <div class="who">Wire A's real <code>stabilize</code>+<code>binary</code> into B's Matting (swap fixture paths). Run <code>python Code/main.py</code> end‑to‑end. Fix the seam, verify all 8 outputs, confirm frame counts and JSON schemas.</div>
+        </div>
+        <div class="phase">
+          <h4>Phase 4 — Tune, document, package <span class="pill">Days 11–13 · both</span></h4>
+          <div class="who">Push quality up while staying under 20 min; write the PDF report; record the screen capture; assemble &amp; zip <code>FinalProject_ID1_ID2.zip</code> exactly per the spec.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FOUNDATION ===================== -->
+  <section id="foundation">
+    <h2><span class="num">6</span> Phase 0 — Shared foundation</h2>
+    <div class="card owner-s">
+      <span class="tag s">Both, paired · finish before splitting</span>
+      <ul class="tasks">
+        <li><input type="checkbox" id="f1"><label for="f1"><b>Fix the folder structure to match the submission spec.</b><span class="hint">Rename <code>Inputs/</code> → <code>Input/</code> (the spec's folder is singular). Confirm folders: <code>Code/ Document/ Input/ Outputs/ ScreenRec/ Temp/</code>. Put <code>INPUT.avi</code> + <code>background.jpg</code> in <code>Input/</code>.</span></label></li>
+        <li><input type="checkbox" id="f2"><label for="f2"><b>Create the conda env from <code>requirements.txt</code>.</b><span class="hint">numpy 2.2, opencv‑python 4.11, scipy 1.15, matplotlib, tqdm. Both machines identical. Verify <code>import cv2; cv2.__version__</code>.</span></label></li>
+        <li><input type="checkbox" id="f3"><label for="f3"><b>Write <code>utils.py</code> together</b> with the signatures in §4.<span class="hint">Video open/read/write, path‑from‑root, and the mask helpers (largest connected component, hole filling, bbox). Both halves depend on these, so build them once, jointly.</span></label></li>
+        <li><input type="checkbox" id="f4"><label for="f4"><b>Stub <code>main.py</code> orchestration + timing.</b><span class="hint">Calls the four stage functions in order, records seconds‑since‑start after each video, writes <code>timing.json</code> and creates <code>Outputs/</code>. Stage functions can be empty stubs at first.</span></label></li>
+        <li><input type="checkbox" id="f5"><label for="f5"><b>Agree the ID constants &amp; naming.</b><span class="hint">Set <code>ID1</code>, <code>ID2</code> once; every output uses <code>name_ID1_ID2.avi</code>. No spaces, case‑sensitive.</span></label></li>
+        <li><input type="checkbox" id="f6"><label for="f6"><b>Set up git + <code>Temp/fixtures/</code>.</b><span class="hint">Two branches (<code>feat/stab-bgsub</code>, <code>feat/matte-track</code>). Copy the reference <code>stabilize_*.avi</code> and <code>binary_*.avi</code> into <code>Temp/fixtures/</code> as B's stand‑in inputs.</span></label></li>
+      </ul>
+      <div class="ok"><b>Exit check:</b> <code>python Code/main.py</code> runs end‑to‑end through empty stubs, creates <code>Outputs/</code> and a valid <code>timing.json</code>, and exits 0. Now split.</div>
+    </div>
+  </section>
+
+  <!-- ===================== DEVELOPER A ===================== -->
+  <section id="devA">
+    <h2><span class="num">7</span> Developer A — Motion &amp; Foreground</h2>
+    <p class="lead">Owns the front half of the chain. Starts immediately on <code>INPUT.avi</code> — no dependency on B.</p>
+
+    <h3 class="stage-title"><span class="step-num" style="background:var(--a)">1</span>Stabilization → <code>stabilize.avi</code></h3>
+    <div class="card owner-a">
+      <p class="subtle">The camera is hand‑held and shaky; the scene is static. Warp every frame onto the coordinate system of frame 0. Read ch01 (affine/homography, homogeneous coords), ch02 (Lucas‑Kanade, Harris), ch03 (RANSAC) first.</p>
+      <ul class="tasks">
+        <li><input type="checkbox" id="a1"><label for="a1"><b>Detect features</b> in the previous frame — Shi‑Tomasi <code>goodFeaturesToTrack</code> (min‑eigenvalue Harris).<span class="hint">Starting point: ~600 corners, quality 0.01, min‑distance 20, block 11. Most land on the static background.</span></label></li>
+        <li><input type="checkbox" id="a2"><label for="a2"><b>Track them</b> into the current frame with pyramidal Lucas‑Kanade (<code>calcOpticalFlowPyrLK</code>), keep only status‑OK matches.<span class="hint">win 21×21, 4 pyramid levels. The pyramid handles the large shake between frames.</span></label></li>
+        <li><input type="checkbox" id="a3"><label for="a3"><b>Estimate a homography with RANSAC</b> (<code>findHomography(..., cv2.RANSAC)</code>, reproj ≈ 3px).<span class="hint">Points on the walking person violate the global background motion → rejected as outliers. That's exactly why RANSAC, not least squares.</span></label></li>
+        <li><input type="checkbox" id="a4"><label for="a4"><b>Compose to frame 0.</b> Keep a cumulative <code>H_cum</code> (current→frame0); multiply each new frame‑to‑frame H, renormalize by <code>H[2,2]</code>, then <code>warpPerspective</code>.</label></li>
+        <li><input type="checkbox" id="a5"><label for="a5"><b>Correct drift.</b> Composing ~200 homographies accumulates error — after warping, run a second LK pass between the reference frame and the warped frame and fold in the small residual.<span class="hint">This keeps the background pinned so background subtraction stays clean.</span></label></li>
+        <li><input type="checkbox" id="a6"><label for="a6"><b>Do not blur; leave black borders.</b><span class="hint">FAQ #1: warp borders are fine. Blurring here would hurt B's matting downstream (FAQ warning).</span></label></li>
+      </ul>
+      <div class="note"><b>Definition of done:</b> <code>stabilize.avi</code> is 1920×1080, 205 frames, background visibly locked (play it; the doorframe shouldn't jitter). Hand this file + the format to B.</div>
+    </div>
+
+    <h3 class="stage-title"><span class="step-num" style="background:var(--a)">2</span>Background Subtraction → <code>binary.avi</code> + <code>extracted.avi</code></h3>
+    <div class="card owner-a">
+      <p class="subtle">After stabilization each pixel shows its true background most of the time and the person only briefly. Model each pixel's background and flag values that are “too far” from it. Read ch08 (why Gaussians, per‑pixel, ω/σ, online updates, failure modes).</p>
+      <ul class="tasks">
+        <li><input type="checkbox" id="a7"><label for="a7"><b>Build a per‑pixel background model</b> from ~60 sampled frames.<span class="hint">Use robust stats so the passing person doesn't corrupt it: mean ← temporal <b>median</b>, σ ← <b>1.4826·MAD</b>. Work in Lab so you can separate luma from chroma.</span></label></li>
+        <li><input type="checkbox" id="a8"><label for="a8"><b>Score each pixel</b> as a joint z‑distance and threshold.<span class="hint">score = √(w_L·z_L² + z_a² + z_b²), z = |x−median|/σ. Down‑weight L (≈0.25) so shadows — which darken L but keep chroma — don't fire. Threshold ≈ 4–5. This is ch08's “more than ~k·σ from the background Gaussian”.</span></label></li>
+        <li><input type="checkbox" id="a9"><label for="a9"><b>Suppress cast shadows</b> explicitly: pixel is a shadow if luma ratio to background ∈ (0.35, 0.95) while chroma barely moves → force to background.</label></li>
+        <li><input type="checkbox" id="a10"><label for="a10"><b>Clean the mask:</b> morphological open (remove specks) then close (glue body parts), keep the <b>largest connected component</b> (there's exactly one person — FAQ #6), fill holes, light median blur.</label></li>
+        <li><input type="checkbox" id="a11"><label for="a11"><b>Ignore warp‑border pixels</b> (frame is black there, or the model's median is near‑black) so borders never become foreground.</label></li>
+        <li><input type="checkbox" id="a12"><label for="a12"><b>Write both outputs:</b> <code>binary</code> = mask×255 as colour; <code>extracted</code> = stabilized frame × mask (person keeps original values, 0 elsewhere — FAQ #2). Record <code>time_to_binary</code> the moment <code>binary.avi</code> finishes.</label></li>
+      </ul>
+      <div class="ok"><b>Optional easier path (FAQ #10):</b> OpenCV's <code>createBackgroundSubtractorKNN/MOG2</code> is allowed, but you must <em>explain how it works</em> in the report — and heavy reliance on contrib‑style shortcuts risks the 70‑pt cap. Prefer your own per‑pixel model.</div>
+    </div>
+  </section>
+
+  <!-- ===================== DEVELOPER B ===================== -->
+  <section id="devB">
+    <h2><span class="num">8</span> Developer B — Matte &amp; Track</h2>
+    <p class="lead">Owns the back half. Starts immediately against the <b>fixture</b> <code>stabilize</code> + <code>binary</code> videos in <code>Temp/fixtures/</code>; swaps in A's real files at integration.</p>
+
+    <h3 class="stage-title"><span class="step-num" style="background:var(--b)">3</span>Matting → <code>matted.avi</code> + <code>alpha.avi</code></h3>
+    <div class="card owner-b">
+      <p class="subtle">Inputs (FAQ #7): <code>background.jpg</code>, <code>stabilize.avi</code>, <code>binary.avi</code>. Follow ch10's flow Trimap → Opacity map → Matte. Crop to the person's bounding box each frame to stay fast.</p>
+      <ul class="tasks">
+        <li><input type="checkbox" id="b1"><label for="b1"><b>Build a trimap from the binary mask.</b><span class="hint">Erode the mask → confident foreground (α=1); dilate → outer edge; the band between (≈2·ρ wide, ρ≈10) is the undecided region matting must solve; outside the dilation is confident background (α=0). The binary mask plays the role of ch10's scribbles.</span></label></li>
+        <li><input type="checkbox" id="b2"><label for="b2"><b>Estimate FG/BG colour models with KDE (Parzen).</b><span class="hint">Sample pixels just inside/outside the band. Per Lab channel, build a 256‑bin histogram and Gaussian‑blur it (σ≈6) → a smooth likelihood LUT. Combine channels as independent (naïve‑Bayes) likelihoods.</span></label></li>
+        <li><input type="checkbox" id="b3"><label for="b3"><b>Posterior</b> with uniform priors: <code>P(F|c) = f(c|F) / (f(c|F)+f(c|B))</code>. Work in log‑space for stability.</label></li>
+        <li><input type="checkbox" id="b4"><label for="b4"><b>Opacity map (ch10):</b> combine colour posterior with distance to the confident regions.<span class="hint">α = w_F/(w_F+w_B), w_F = D_F^(−r)·P(F|c), w_B = D_B^(−r)·P(B|c). D_F/D_B from <code>distanceTransform</code> (Euclidean ≈ geodesic here), r≈2. Only compute inside the band; clamp α=1 in the FG core and α=0 outside.</span></label></li>
+        <li><input type="checkbox" id="b5"><label for="b5"><b>Composite:</b> <code>matted = α·frame + (1−α)·background</code>, background resized to frame size (aspect ratio need not be kept).</label></li>
+        <li><input type="checkbox" id="b6"><label for="b6"><b>Write both outputs:</b> <code>alpha</code> = α×255 as uint8, 3 channels (FAQ #5); <code>matted</code> as BGR. Record <code>time_to_alpha</code> and <code>time_to_matted</code> when each finishes.</label></li>
+      </ul>
+      <div class="note"><b>Definition of done:</b> on the fixtures, the person sits cleanly on <code>background.jpg</code> with soft, non‑jagged edges and no colour halo. <code>alpha.avi</code> is a clean silhouette that fades at the boundary.</div>
+    </div>
+
+    <h3 class="stage-title"><span class="step-num" style="background:var(--b)">4</span>Tracking → <code>OUTPUT.avi</code> + <code>tracking.json</code></h3>
+    <div class="card owner-b">
+      <p class="subtle">Select the person <b>automatically</b> in the matted video and track it with a Kalman filter (ch04). No manual init allowed.</p>
+      <ul class="tasks">
+        <li><input type="checkbox" id="b7"><label for="b7"><b>Detect the person per frame</b> without any manual box.<span class="hint">Matted frames equal the new background wherever there's no person → threshold <code>|matted − background|</code>, morph‑clean, keep largest component, fill holes, take its bounding box as the measurement.</span></label></li>
+        <li><input type="checkbox" id="b8"><label for="b8"><b>Build a Kalman filter.</b><span class="hint">State = [row_c, col_c, h, w, v_row, v_col]; constant‑velocity for the centre, random‑walk for size. Measurement = [row_c, col_c, h, w]. Set F, H, Q, R (ch04: what goes in the state vector).</span></label></li>
+        <li><input type="checkbox" id="b9"><label for="b9"><b>Predict + update</b> each frame; when detection is missing, keep the prediction so the box never disappears. This smooths jittery detections.</label></li>
+        <li><input type="checkbox" id="b10"><label for="b10"><b>Draw the box</b> (green rectangle) on every matted frame → <code>OUTPUT.avi</code>. Clamp the box inside the frame.</label></li>
+        <li><input type="checkbox" id="b11"><label for="b11"><b>Write <code>tracking.json</code></b>: keys <code>"1"…"205"</code>, each <code>[ROW, COL, HEIGHT, WIDTH]</code> as <b>integers</b> (top‑left corner). Record <code>time_to_output</code> when <code>OUTPUT.avi</code> finishes.</label></li>
+      </ul>
+      <div class="ok"><b>Grading note:</b> tracking is scored by deviation from a secret ground truth. Prefer a tight box on the person's silhouette and a filter tuned to stay stable rather than chase every noisy detection.</div>
+    </div>
+  </section>
+
+  <!-- ===================== INTEGRATION ===================== -->
+  <section id="integration">
+    <h2><span class="num">9</span> Integration &amp; testing</h2>
+    <div class="grid2">
+      <div class="card owner-s">
+        <span class="tag s">Phase 3 · paired</span>
+        <ul class="tasks">
+          <li><input type="checkbox" id="i1"><label for="i1"><b>Swap fixtures → real files.</b> Point Matting at A's actual <code>stabilize</code>/<code>binary</code> outputs instead of <code>Temp/fixtures/</code>.</label></li>
+          <li><input type="checkbox" id="i2"><label for="i2"><b>Run the whole thing:</b> <code>python Code/main.py</code> from the project root, clean env.</label></li>
+          <li><input type="checkbox" id="i3"><label for="i3"><b>Re‑tune B on real data.</b> A's mask may differ slightly from the reference fixture — retune trimap band width and the diff threshold if edges or the tracked box drift.</label></li>
+          <li><input type="checkbox" id="i4"><label for="i4"><b>Profile the runtime.</b> Confirm the total is comfortably under 20 min; ROI‑crop the heavy per‑pixel loops (matting, subtraction) if not.</label></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag warn">Contract tests (write as a tiny script)</span>
+        <ul class="tasks">
+          <li><input type="checkbox" id="i5"><label for="i5">All 6 videos open, are 1920×1080, and have <b>205 frames</b>.</label></li>
+          <li><input type="checkbox" id="i6"><label for="i6"><code>binary</code> only contains 0/255; <code>extracted</code> is 0 outside the person.</label></li>
+          <li><input type="checkbox" id="i7"><label for="i7"><code>alpha</code> spans 0→255 and is a clean silhouette.</label></li>
+          <li><input type="checkbox" id="i8"><label for="i8"><code>tracking.json</code> has exactly 205 integer‑quad entries; <code>timing.json</code> has the 5 required keys, all increasing.</label></li>
+          <li><input type="checkbox" id="i9"><label for="i9">No windows pop up, no prompts, exit code 0.</label></li>
+          <li><input type="checkbox" id="i10"><label for="i10"><b>Robustness pass:</b> the grader may use a secret video (same person, different clothes, maybe different background). Don't hard‑overfit colours/scribbles (FAQ #8/#9).</label></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SUBMISSION ===================== -->
+  <section id="submission">
+    <h2><span class="num">10</span> Report &amp; submission checklist</h2>
+    <div class="grid2">
+      <div class="card">
+        <span class="tag s">The report (PDF, both write their sections)</span>
+        <ul class="tasks">
+          <li><input type="checkbox" id="s1"><label for="s1">In English; explains <b>each step</b> with figures. Presentation is graded — don't underestimate it.</label></li>
+          <li><input type="checkbox" id="s2"><label for="s2">Explain any non‑course technique you invented, and any change to a course algorithm.</label></li>
+          <li><input type="checkbox" id="s3"><label for="s3">If you used a very specific library function that does a stage's core work, explain what it does (and expect fewer points).</label></li>
+          <li><input type="checkbox" id="s4"><label for="s4">If you used MOG2/KNN, explain how they work.</label></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag warn">Zip structure — <code>FinalProject_ID1_ID2.zip</code></span>
+        <ul class="tasks">
+          <li><input type="checkbox" id="s5"><label for="s5"><code>Document/</code> — the PDF report.</label></li>
+          <li><input type="checkbox" id="s6"><label for="s6"><code>Code/</code> — <code>main.py</code> + all Python files.</label></li>
+          <li><input type="checkbox" id="s7"><label for="s7"><code>Input/</code> — <code>INPUT.avi</code> + <code>background.jpg</code>.</label></li>
+          <li><input type="checkbox" id="s8"><label for="s8"><code>Outputs/</code> — the 6 AVIs + <code>timing.json</code> + <code>tracking.json</code> (and <b>nothing extra</b>).</label></li>
+          <li><input type="checkbox" id="s9"><label for="s9"><code>ScreenRec/</code> — screen recording of a full run creating all outputs.</label></li>
+          <li><input type="checkbox" id="s10"><label for="s10"><code>Temp/</code> — optional scratch artifacts.</label></li>
+          <li><input type="checkbox" id="s11"><label for="s11">Case‑sensitive names, <b>no spaces</b> anywhere, relative paths only. Then upload to Moodle.</label></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GOTCHAS ===================== -->
+  <section id="gotchas">
+    <h2><span class="num">11</span> Gotchas &amp; FAQ shortlist</h2>
+    <div class="card">
+      <table>
+        <tr><th>Trap</th><th>What to do</th></tr>
+        <tr><td>Black borders after warping</td><td>Fine (FAQ #1). Don't blur to hide them — blur hurts matting.</td></tr>
+        <tr><td><code>extracted.avi</code> content</td><td>Person = same values as the stabilized video, 0 everywhere else (FAQ #2).</td></tr>
+        <tr><td><code>binary.avi</code> coding</td><td>0 = no person, 1 = person (save 1 as 255) (FAQ #3).</td></tr>
+        <tr><td>Can't store α∈[0,1] in AVI</td><td>Multiply ×255, cast to <code>uint8</code>, save that (FAQ #4/#5).</td></tr>
+        <tr><td>Matting inputs</td><td>background image + <code>stabilize.avi</code> + <code>binary.avi</code> (FAQ #7) — <em>not</em> the raw INPUT.</td></tr>
+        <tr><td>Offline colour constants / scribbles</td><td>Allowed, but don't overfit — the secret test video changes clothes and maybe background (FAQ #8/#9).</td></tr>
+        <tr><td>Runtime</td><td>Hard 20‑min cap on Tochna −1 machines; a run is aborted past that.</td></tr>
+        <tr><td>Reference solution</td><td>Benchmark only. Copying its code violates the “no one else's code” rule — implement your own.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Work plan generated for <b>salehkhalil1124@gmail.com</b> · 2026‑07‑09 · Video Processing &amp; Analysis (0512‑4263) final project.<br>
+    Reference solution kept read‑only in <code>video_processing_git/FinalProjectC</code>. Build your own copy in <code>FinalProject/</code>. Progress checkboxes save in your browser.
+  </footer>
+
+</div>
+
+<script>
+  // Persist checkbox state locally so the plan doubles as a live progress tracker.
+  (function () {
+    var KEY = 'vp_final_plan_v1';
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('input[type=checkbox]'));
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+    function progress() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      var el = document.getElementById('prog');
+      if (el) el.textContent = done + ' / ' + boxes.length + ' done';
+    }
+    boxes.forEach(function (b) {
+      if (saved[b.id]) b.checked = true;
+      b.addEventListener('change', function () {
+        saved[b.id] = b.checked;
+        localStorage.setItem(KEY, JSON.stringify(saved));
+        progress();
+      });
+    });
+    // progress pill in the nav
+    var nav = document.querySelector('nav.toc .wrap');
+    if (nav) { var span = document.createElement('span'); span.className = 'prog'; span.id = 'prog'; nav.appendChild(span); }
+    progress();
+    window.resetAll = function () {
+      if (!confirm('Clear all checkboxes?')) return;
+      boxes.forEach(function (b) { b.checked = false; });
+      localStorage.removeItem(KEY);
+      progress();
+    };
+  })();
+</script>
+</body>
+</html>
