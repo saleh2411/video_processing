@@ -1,7 +1,7 @@
 {
-    "time_to_stabilize": 8.9,
-    "time_to_binary": 30.59,
-    "time_to_alpha": 42.11,
-    "time_to_matted": 42.11,
-    "time_to_output": 49.18
+    "time_to_stabilize": 6.44,
+    "time_to_binary": 23.9,
+    "time_to_alpha": 50.71,
+    "time_to_matted": 50.71,
+    "time_to_output": 56.46
 }

@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building matting.py — Workflow</title>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root {
+  --bg:        #0e1320;
+  --bg-2:      #151c2e;
+  --card:      #1b2336;
+  --ink:       #e6ecf7;
+  --ink-dim:   #9fb0cc;
+  --ink-faint: #6b7a99;
+  --accent:    #41d8c9;   /* teal   — formulas / lecture */
+  --accent-2:  #6ea8ff;   /* blue   — code & mechanics */
+  --accent-3:  #ffb454;   /* amber  — why it's written this way */
+  --accent-4:  #c792ea;   /* violet — module / contract */
+  --danger:    #ff6b81;   /* red    — pitfalls & edge cases */
+  --good:      #7ee787;   /* green  — checkpoints */
+  --line:      #2c3650;
+  --shadow:    0 10px 30px rgba(0,0,0,.35);
+  --radius:    14px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 80% -10%, #1a2440 0%, var(--bg) 55%) fixed;
+  color: var(--ink); line-height: 1.66; font-size: 17px;
+}
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 14px; padding: 12px 22px;
+  background: rgba(14,19,32,.86); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .crumb { color: var(--ink-faint); font-size: 14px; }
+.topbar .crumb b { color: var(--accent); }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 34px 22px 90px; }
+header.hero {
+  margin-bottom: 26px; padding: 26px 28px;
+  background: linear-gradient(135deg, var(--card) 0%, var(--bg-2) 100%);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+header.hero .eyebrow { text-transform: uppercase; letter-spacing:.16em; font-size:12.5px; color:var(--accent); font-weight:700; }
+header.hero h1 { margin: 6px 0 8px; font-size: 31px; line-height: 1.2; }
+header.hero p.lede { margin: 0; color: var(--ink-dim); font-size: 16.5px; }
+
+h2 { font-size: 24px; margin: 46px 0 14px; padding-left: 13px; border-left: 4px solid var(--accent); scroll-margin-top: 70px; }
+h3 { font-size: 19px; margin: 30px 0 10px; scroll-margin-top: 70px; }
+p { margin: 12px 0; }
+ul, ol { padding-left: 22px; } li { margin: 6px 0; }
+strong { color: #fff; }
+code, .mono {
+  font-family: "JetBrains Mono","Cascadia Code",Consolas,monospace;
+  background:#0c1322; border:1px solid var(--line);
+  padding:1px 6px; border-radius:6px; font-size:14.3px; color:#cfe7ff;
+}
+
+/* ── phase banner ── */
+.phase {
+  margin: 46px 0 6px; padding: 16px 22px; border-radius: 12px;
+  background: linear-gradient(100deg, #21182e 0%, #171223 100%);
+  border: 1px solid var(--line); border-left: 5px solid var(--accent-4);
+  box-shadow: var(--shadow);
+}
+.phase .ph-eyebrow { font-size:11px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--accent-4); }
+.phase h2 { border:0; padding:0; margin:4px 0 4px; font-size:22px; }
+.phase p { margin:0; color: var(--ink-dim); font-size:15px; }
+
+/* ── step card ── */
+.step {
+  margin: 22px 0; border-radius: 12px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
+  scroll-margin-top: 70px;
+}
+.step-head {
+  display:flex; align-items:center; gap:14px; padding: 13px 18px;
+  background:#141b2c; border-bottom:1px solid var(--line);
+}
+.step-head .num {
+  flex:0 0 auto; width:34px; height:34px; border-radius:9px;
+  background:#0c1322; border:1px solid var(--accent-2); color:var(--accent-2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:"JetBrains Mono",Consolas,monospace; font-weight:800; font-size:14.5px;
+}
+.step-head h3 { margin:0; font-size:17.5px; }
+.step-head .where {
+  margin-left:auto; font-size:12px; color:var(--ink-faint);
+  font-family:"JetBrains Mono",Consolas,monospace; white-space:nowrap;
+}
+.step-body { padding: 16px 18px; }
+.step-body > *:first-child { margin-top: 0; }
+
+/* ── sub-blocks inside a step ── */
+.contract {
+  margin: 12px 0 16px; padding: 12px 16px; border-radius: 10px;
+  background:#1c1729; border:1px solid var(--line); border-left:3px solid var(--accent-4);
+  font-family:"JetBrains Mono",Consolas,monospace; font-size:13.6px; color:var(--ink-dim);
+  line-height:1.75; overflow-x:auto;
+}
+.contract .k { color: var(--accent-4); font-weight:700; }
+.contract .t { color: var(--accent); }
+
+.formula {
+  margin: 14px 0; padding: 12px 16px; border-radius: 10px; overflow-x:auto;
+  background: linear-gradient(180deg,#13252a 0%, #0f1c20 100%);
+  border:1px solid var(--line); border-left:3px solid var(--accent);
+}
+.formula .f-label { display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
+.formula mjx-container[display="true"] { margin:0 !important; }
+
+.why {
+  margin: 14px 0; padding: 12px 16px; border-radius: 10px;
+  background:#221a10; border:1px solid var(--line); border-left:3px solid var(--accent-3);
+}
+.why .w-label { display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent-3); margin-bottom:4px; }
+
+.check {
+  margin: 14px 0; padding: 12px 16px; border-radius: 10px;
+  background:#10231a; border:1px solid var(--line); border-left:3px solid var(--good);
+}
+.check .c-label { display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--good); margin-bottom:4px; }
+
+.pitfall {
+  margin: 14px 0; padding: 12px 16px; border-radius: 10px;
+  background:#281720; border:1px solid var(--line); border-left:3px solid var(--danger);
+}
+.pitfall .p-label { display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--danger); margin-bottom:4px; }
+
+pre.codeblock {
+  margin: 12px 0; padding: 13px 16px; border-radius: 10px; overflow-x:auto;
+  background:#0a0f1c; border:1px solid var(--line);
+  font-family:"JetBrains Mono",Consolas,monospace; font-size:13.5px; line-height:1.6; color:#cfe7ff;
+}
+pre.codeblock .cm { color: var(--ink-faint); }
+pre.codeblock .kw { color: var(--accent-4); }
+pre.codeblock .fn { color: var(--accent); }
+pre.codeblock .st { color: var(--accent-3); }
+pre.codeblock .hl { background:#1d2a3f; display:inline-block; width:100%; }
+
+.flow {
+  margin: 18px 0; padding: 16px; border-radius: 11px; overflow-x:auto;
+  background:#0c1322; border:1px solid var(--line);
+  font-family:"JetBrains Mono",Consolas,monospace; font-size:13.2px;
+  color:var(--ink-dim); white-space:pre; line-height:1.5;
+}
+.flow b { color: var(--accent); } .flow i { color: var(--accent-3); font-style:normal; }
+.flow u { color: var(--accent-4); text-decoration:none; } .flow s { color: var(--danger); text-decoration:none; }
+
+.callout { margin:18px 0; padding:14px 18px; border-radius:11px; background:var(--card);
+  border:1px solid var(--line); border-left:4px solid var(--accent-3); }
+.callout.key  { border-left-color:var(--accent);   background:#13252a; }
+.callout.note { border-left-color:var(--accent-2); background:#161f33; }
+.callout .lbl { font-weight:700; color:var(--ink); display:block; margin-bottom:3px; }
+
+.summary { margin:16px 0 30px; padding:16px 20px; border-radius:12px;
+  background: linear-gradient(180deg,#0f1d22 0%, #0a1418 100%);
+  border:1px solid var(--line); border-left:4px solid var(--accent); box-shadow:var(--shadow); }
+.summary .summary-label { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color:var(--accent); text-transform:uppercase; margin-bottom:8px; }
+.tablewrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:14.4px; margin-top:6px; }
+td, th { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+th { color:var(--accent); font-weight:700; }
+td.n { color:var(--accent-2); font-weight:700; font-family:"JetBrains Mono",Consolas,monospace; white-space:nowrap; }
+td .mono { font-size:13.3px; }
+
+.muted { color:var(--ink-faint); font-size:14px; }
+hr.sep { border:none; border-top:1px solid var(--line); margin:40px 0; }
+
+nav.toc { margin:26px 0 10px; padding:16px 20px; border-radius:12px; background:var(--bg-2); border:1px solid var(--line); }
+nav.toc .toc-label { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color:var(--ink-faint); text-transform:uppercase; margin-bottom:8px; }
+nav.toc ol { margin:0; padding-left:22px; column-count:2; column-gap:30px; }
+nav.toc li { margin:5px 0; break-inside:avoid; }
+@media (max-width:700px){ nav.toc ol { column-count:1; } }
+
+.legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin:18px 0; }
+.legend .item { padding:10px 14px; border-radius:9px; background:#0c1322; border:1px solid var(--line); font-size:13.8px; }
+.legend .item b { display:block; font-size:11px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:2px; }
+.legend .l1 { border-left:4px solid var(--accent-4); } .legend .l1 b { color:var(--accent-4); }
+.legend .l2 { border-left:4px solid var(--accent);   } .legend .l2 b { color:var(--accent); }
+.legend .l3 { border-left:4px solid var(--accent-3); } .legend .l3 b { color:var(--accent-3); }
+.legend .l4 { border-left:4px solid var(--good);     } .legend .l4 b { color:var(--good); }
+.legend .l5 { border-left:4px solid var(--danger);   } .legend .l5 b { color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Building matting.py</b> · a step-by-step workflow · Video Processing 0512-4263</span>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Companion to “Matting, From Zero”</div>
+    <h1>Building <span class="mono" style="font-size:.85em">matting.py</span>, step by step</h1>
+    <p class="lede">Thirteen steps, in the order you would actually type them. Each step names the
+    <strong>module</strong> it belongs to, states its <strong>contract</strong> (what goes in, what comes out, with
+    shapes and dtypes), gives the <strong>one formula</strong> it implements and the <strong>lecture section it
+    comes from</strong>, shows the <strong>real code from our file</strong>, explains why it's written that way,
+    and ends with a <strong>checkpoint</strong> you can run before moving on. Nothing here is pseudocode — every
+    snippet is the actual content of <a href="../Code/matting.py">Code/matting.py</a>. And every algorithmic step
+    is a course algorithm: the colour model is the joint 3-D Parzen KDE evaluated with the low-rank scheme of
+    lecture §10.4, the distances are the geodesic $D_F, D_B$ of §10.1–10.2 with $W = \nabla P(F|c)$, and the
+    composite is the pure-colour matting of §10.3 — not the naive blend.</p>
+  </header>
+
+  <div class="legend">
+    <div class="item l1"><b>Violet</b>Module &amp; contract — the signature, shapes, dtypes.</div>
+    <div class="item l2"><b>Teal</b>The formula this step implements.</div>
+    <div class="item l3"><b>Amber</b>Why it's written this way, not another way.</div>
+    <div class="item l4"><b>Green</b>Checkpoint — run this before the next step.</div>
+    <div class="item l5"><b>Red</b>Pitfall or edge case, with the guard that handles it.</div>
+  </div>
+
+  <nav class="toc">
+    <span class="toc-label">The thirteen steps</span>
+    <ol>
+      <li><a href="#s0">Read the contract before writing anything</a></li>
+      <li><a href="#s1">Constants — turn every lecture symbol into a named number</a></li>
+      <li><a href="#s2">Structuring elements — build $B_\rho(x)$ once</a></li>
+      <li><a href="#s3"><span class="mono">_kde_3d</span> — the joint density leaf (§10.4)</a></li>
+      <li><a href="#s4"><span class="mono">_posterior_fg</span> — Bayes over the joint KDE</a></li>
+      <li><a href="#s5">Crop to the ROI, and bail out if nobody's there</a></li>
+      <li><a href="#s6">Erode + dilate → the trimap</a></li>
+      <li><a href="#s7">Collect local colour samples near the band</a></li>
+      <li><a href="#s8">Geodesic distances → $\tilde D_F$, $\tilde D_B$ (Dijkstra)</a></li>
+      <li><a href="#s9">The opacity formula</a></li>
+      <li><a href="#s10"><span class="mono">_pure_composite</span> — the lecture's matting (§10.3)</a></li>
+      <li><a href="#s11"><span class="mono">matting()</span> — set up the I/O</a></li>
+      <li><a href="#s12">The frame loop</a></li>
+      <li><a href="#s13">Timestamps and release order</a></li>
+      <li><a href="#maps">Master map: step → formula → code</a></li>
+      <li><a href="#cases">Every edge case in the file</a></li>
+      <li><a href="#debug">When it looks wrong: a debugging table</a></li>
+    </ol>
+  </nav>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2>The architecture, before the first line</h2>
+
+  <p>Four functions, stacked. Each one is a pure transformation of the one below it, which is why you can build
+  and test them <strong>bottom-up</strong> — every leaf is verifiable without ever opening a video file.</p>
+
+  <div class="flow">
+                          ┌────────────────────────────────────────────────┐
+  <u>INPUTS</u> (FAQ #7)         │                <b>matting.py</b>                     │       <u>OUTPUTS</u>
+                          │                                                │
+  stabilize.avi ─ c(x) ──▶│  ┌──────────────────────────────────────────┐  │
+                          │  │ <b>matting()</b>              <i>ORCHESTRATOR</i>      │  │──▶ matted_ID1_ID2.avi
+  binary.avi ──── mask ──▶│  │  open · resize bg · writers · frame loop  │  │──▶ alpha_ID1_ID2.avi
+                          │  │                                            │  │
+  background.jpg ─ B ────▶│  └────────────────────┬─────────────────────┘  │
+                          │            once per frame                       │
+                          │  ┌────────────────────▼─────────────────────┐  │
+                          │  │ <b>_process_frame()</b>      <i>ALPHA + COMPOSITE</i>  │  │
+                          │  │  ROI · trimap · α formula · paste-back    │  │
+                          │  └──┬──────────┬──────────┬──────────┬──────┘  │
+                          │     │          │          │          │          │
+                          │  ┌──▼───────┐┌─▼────────┐┌▼─────────┐┌▼──────┐ │
+                          │  │<b>_posterior</b>││<b>_band_</b>    ││<b>_geodesic</b> ││<b>_pure_</b> │ │
+                          │  │<b>_fg()</b>     ││<b>graph()</b>   ││<b>_dist()</b>   ││<b>compo-</b> │ │
+                          │  │Bayes     ││|ΔP|+ε·dl ││Dijkstra  ││<b>site()</b> │ │
+                          │  │P(F|c)    ││8-neighb. ││min-only  ││§10.3  │ │
+                          │  └──┬───────┘└──────────┘└──────────┘└───────┘ │
+                          │     │ 2× (one per class)                        │
+                          │  ┌──▼───────────────────────────────────────┐  │
+                          │  │ <b>_kde_3d()</b>            <i>JOINT DENSITY LEAF</i>  │  │
+                          │  │  64³ histogram ∗ separable Gaussian       │  │
+                          │  │  = the low-rank fast KDE of lecture §10.4 │  │
+                          │  └──────────────────────────────────────────┘  │
+                          └────────────────────────────────────────────────┘
+
+  <u>BUILD ORDER</u>  (bottom-up — each is unit-testable on synthetic arrays, no video needed)
+      <b>_kde_3d</b> ─▶ <b>_posterior_fg</b> ─▶ <b>_band_graph</b> · <b>_geodesic_dist</b> · <b>_pure_composite</b> ─▶ <b>_process_frame</b> ─▶ <b>matting</b>
+       step 3        step 4                step 8            step 10           steps 5–10      steps 11–13</div>
+
+  <div class="callout key">
+    <span class="lbl">Why bottom-up and not top-down</span>
+    The bottom two functions take NumPy arrays and return NumPy arrays. No video, no OpenCV I/O, no disk. You can
+    check both in a REPL in ten seconds. If you write <span class="mono">matting()</span> first and the output
+    looks wrong, you have four suspects and a 40-second render loop between you and each of them. Build the leaves,
+    prove them, then you only ever have <em>one</em> new suspect at a time.
+  </div>
+
+  <h3>The data, and how its shape changes</h3>
+
+  <div class="summary">
+    <span class="summary-label">Shapes and dtypes at every hop</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Stage</th><th>Variable</th><th>Shape</th><th>dtype</th><th>Range</th></tr>
+      <tr><td>read</td><td class="mono">frame</td><td>(H, W, 3)</td><td>uint8</td><td>0–255, BGR</td></tr>
+      <tr><td>read</td><td class="mono">binary_frame</td><td>(H, W, 3)</td><td>uint8</td><td>0 or ~255</td></tr>
+      <tr><td>threshold</td><td class="mono">mask</td><td>(H, W)</td><td>uint8</td><td><strong>0 or 1</strong></td></tr>
+      <tr><td>crop</td><td class="mono">mask_roi</td><td>(h, w)</td><td>uint8</td><td>0 or 1</td></tr>
+      <tr><td>trimap</td><td class="mono">fg_core, dilated</td><td>(h, w)</td><td>uint8</td><td>0 or 1</td></tr>
+      <tr><td>trimap</td><td class="mono">band</td><td>(h, w)</td><td>bool</td><td>True on the ribbon</td></tr>
+      <tr><td>colour</td><td class="mono">lab_roi</td><td>(h, w, 3)</td><td>uint8</td><td>0–255 (OpenCV scales Lab)</td></tr>
+      <tr><td>samples</td><td class="mono">lab_roi[fg_sample_px]</td><td>(N, 3)</td><td>uint8</td><td>N ≈ tens of thousands</td></tr>
+      <tr><td>KDE</td><td class="mono">density</td><td>(64, 64, 64)</td><td>float32</td><td>sums to 1, strictly &gt; 0</td></tr>
+      <tr><td>Bayes</td><td class="mono">p_fg</td><td>(h, w)</td><td>float32</td><td>0–1</td></tr>
+      <tr><td>graph</td><td class="mono">ids, graph</td><td>(h, w) / (n, n) sparse</td><td>int32 / float64</td><td>node ids, edge costs</td></tr>
+      <tr><td>distance</td><td class="mono">d_f, d_b</td><td>(n_band,)</td><td>float64</td><td>&gt; 0 geodesic path cost, inf if unreachable</td></tr>
+      <tr><td>opacity</td><td class="mono">a_band</td><td>(n_band,)</td><td>float32</td><td>0–1, band pixels only</td></tr>
+      <tr><td>composite</td><td class="mono">matted_roi</td><td>(h, w, 3)</td><td>float32</td><td>J(x): frame on core, §10.3 blend on band, B elsewhere</td></tr>
+      <tr><td>paste back</td><td class="mono">alpha, matted</td><td>(H, W) / (H, W, 3)</td><td>float32</td><td>zero / background outside the ROI</td></tr>
+      <tr><td>write α</td><td class="mono">alpha_u8</td><td>(H, W, 3)</td><td>uint8</td><td>0–255 (FAQ #5)</td></tr>
+      <tr><td>write J</td><td class="mono">matted (clipped)</td><td>(H, W, 3)</td><td>uint8</td><td>0–255, BGR</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="pitfall">
+    <span class="p-label">The dtype discipline that prevents 80% of matting bugs</span>
+    <p>Masks are <strong>uint8 holding 0 or 1</strong> — not 0/255, not bool. OpenCV's
+    <span class="mono">erode</span> and <span class="mono">dilate</span> want uint8, and keeping the values at 0/1
+    means <span class="mono">dilated - fg_core</span> is a clean subtraction. If you carry 0/255 masks, that line
+    silently produces garbage. Boolean views (<span class="mono">band</span>, <span class="mono">fg_bool</span>,
+    <span class="mono">rim_f</span>…) are derived once and used for indexing. Alphas are
+    <strong>float32 in [0,1]</strong> everywhere internally, and only become uint8 at the moment of writing.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════ PHASE 0 ═══════════════════════ -->
+  <div class="phase">
+    <div class="ph-eyebrow">Phase 0 · Setup</div>
+    <h2>Fix the contract and the constants</h2>
+    <p>Nothing here computes anything. It exists so that every later step has an unambiguous name for the thing
+    it needs.</p>
+  </div>
+
+  <!-- STEP 0 -->
+  <div class="step" id="s0">
+    <div class="step-head"><div class="num">0</div><h3>Read the contract before writing anything</h3>
+    <span class="where">module boundary</span></div>
+    <div class="step-body">
+      <p>Matting is stage 3 of 4. It does not get to choose its inputs. The project PDF (FAQ #7) fixes them, and
+      the stage after it (tracking) depends on a property of its output. Write this down before you type
+      <span class="mono">import cv2</span>.</p>
+
+      <div class="contract">
+<span class="k">module</span>   matting.py — turn a segmented person into a person on a new background
+<span class="k">in</span>       stabilize_ID1_ID2.avi   the colours  <span class="t">c(x)</span>       (H,W,3) uint8, per frame
+         binary_ID1_ID2.avi      the mask     <span class="t">α_T seed</span>  (H,W,3) uint8, per frame
+         background.jpg          the new bg   <span class="t">B(x)</span>       any size — we resize
+<span class="k">out</span>      alpha_ID1_ID2.avi       opacity      <span class="t">α(x)</span>       ×255 uint8, 3ch  (FAQ #5)
+         matted_ID1_ID2.avi      composite    <span class="t">J(x)</span>       (H,W,3) uint8
+<span class="k">return</span>   (alpha_done_time, matted_done_time)   wall-clock, for timing.json
+<span class="k">invariant</span>  where α = 0, the matted frame equals the resized background <span class="t">exactly</span>
+           └─ tracking.py detects the person as |J − B| &gt; 30. Break this and tracking breaks.</div>
+
+      <div class="why">
+        <span class="w-label">Why the invariant matters more than it looks</span>
+        <p>That last line is the only coupling between matting and tracking, and it is invisible if you don't write
+        it down. It's why <span class="mono">_process_frame</span> returns
+        <span class="mono">np.zeros</span> rather than something "close to zero" when the person is absent, and why
+        the composite must use the <em>same</em> resized background array the tracker will later subtract. Design
+        the invariant in; don't discover it in stage 4.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step" id="s1">
+    <div class="step-head"><div class="num">1</div><h3>Constants — turn every lecture symbol into a named number</h3>
+    <span class="where">matting.py:65–72</span></div>
+    <div class="step-body">
+      <p>Every free parameter in the lecture becomes exactly one module-level constant. No magic numbers deeper in
+      the file. This is also your tuning surface: when the output looks wrong, you will change these and nothing
+      else.</p>
+
+      <pre class="codeblock">RHO = <span class="st">7</span>             <span class="cm"># half-width of the undecided band around the contour</span>
+SAMPLE_RADIUS = <span class="st">25</span>  <span class="cm"># how far from the band color samples are collected</span>
+KDE_BINS = <span class="st">64</span>       <span class="cm"># histogram bins per Lab channel (quantization step 4)</span>
+KDE_SIGMA = <span class="st">2.0</span>     <span class="cm"># Parzen bell width, in histogram-bin units</span>
+DIST_R = <span class="st">2.0</span>        <span class="cm"># exponent of the distance weighting, r in (0, 2]</span>
+GEO_EPS = <span class="st">1e-3</span>      <span class="cm"># spatial regularizer of the geodesic step cost</span>
+N_CAND = <span class="st">7</span>          <span class="cm"># confident FG/BG candidates per band pixel (window N(x))</span>
+EPS = <span class="st">1e-8</span></pre>
+
+      <div class="summary" style="margin:14px 0">
+        <div class="tablewrap">
+        <table>
+          <tr><th>Constant</th><th>Lecture symbol</th><th>Appears in</th><th>Why this value</th></tr>
+          <tr><td class="mono">RHO</td><td>$\rho$</td><td>Step 2, 6</td><td>Band half-width. Lecture says 5–15 px. Wide enough to hold a soft edge; narrow enough that a motion-blurred shin doesn't dissolve into the band. (10 was visibly too wide on this clip.)</td></tr>
+          <tr><td class="mono">SAMPLE_RADIUS</td><td>—</td><td>Step 2, 7</td><td>Ours, not the lecture's. Implements "we have a lot more samples on the boundary": large enough for stable statistics, small enough to stay local.</td></tr>
+          <tr><td class="mono">KDE_BINS</td><td>—</td><td>Step 3</td><td>Quantization of the §10.4 low-rank evaluation: 64 bins per channel = colour step of 4 uint8 levels, $64^3 \approx 262\text{k}$ voxels — small enough to blur in milliseconds, fine enough that quantization is invisible.</td></tr>
+          <tr><td class="mono">KDE_SIGMA</td><td>$\sigma$</td><td>Step 3</td><td>Bell width in <em>bin</em> units: 2 bins = 8 uint8 levels, ~3% of the range. Smooths sensor noise without merging distinct colours.</td></tr>
+          <tr><td class="mono">DIST_R</td><td>$r$</td><td>Step 9</td><td>Top of the lecture's allowed range $(0,2]$. The band is narrow, so we want geometry to speak loudly.</td></tr>
+          <tr><td class="mono">GEO_EPS</td><td>—</td><td>Step 8</td><td>Cost of a geodesic step through <em>flat</em> $P(F|c)$. Keeps every path cost strictly positive and finite, and makes the distance fall back to (scaled) Euclidean where colour says nothing.</td></tr>
+          <tr><td class="mono">N_CAND</td><td>$|N(x)|$</td><td>Step 10</td><td>How many confident FG and BG pixels enter the §10.3 pair search per band pixel: $7 \times 7 = 49$ candidate pairs — enough variety, still vectorisable.</td></tr>
+          <tr><td class="mono">EPS</td><td>—</td><td>Steps 3, 9</td><td>Guards divisions, and keeps empty histogram bins from being true zeros.</td></tr>
+        </table>
+        </div>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Two constants that aren't knobs</span>
+        <p><span class="mono">EPS</span> is a load-bearing guard, not a tuning parameter:
+        <span class="mono">density + EPS</span> keeps a colour unseen by <em>both</em> models from producing $0/0$
+        in the Bayes ratio (it produces a neutral $0.5$ instead), and <span class="mono">w_f + w_b + EPS</span>
+        stops $0/0$ in Step 9. <span class="mono">GEO_EPS</span> sits in between: its <em>presence</em> is
+        load-bearing (without it a flat band has zero-cost paths and the distance argument collapses), but its
+        <em>value</em> only matters relative to the $|\Delta P| \le 1$ colour costs — it just has to be much
+        smaller.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step" id="s2">
+    <div class="step-head"><div class="num">2</div><h3>Structuring elements — build $B_\rho(x)$ once, at import</h3>
+    <span class="where">matting.py:74–77</span></div>
+    <div class="step-body">
+
+      <div class="formula">
+        <span class="f-label">Formula this implements — the lecture's ball and band</span>
+        <div>$$ B_\rho(x) = \{y : \|y - x\| \le \rho\}, \qquad B_\rho(\Delta) = \bigcup_{x \in \Delta} B_\rho(x) $$</div>
+      </div>
+
+      <pre class="codeblock">_ERODE_K = cv2.<span class="fn">getStructuringElement</span>(cv2.MORPH_ELLIPSE, (<span class="st">2</span> * RHO + <span class="st">1</span>, <span class="st">2</span> * RHO + <span class="st">1</span>))
+_SAMPLE_K = cv2.<span class="fn">getStructuringElement</span>(cv2.MORPH_ELLIPSE,
+                                      (<span class="st">2</span> * SAMPLE_RADIUS + <span class="st">1</span>, <span class="st">2</span> * SAMPLE_RADIUS + <span class="st">1</span>))
+_RIM_K = cv2.<span class="fn">getStructuringElement</span>(cv2.MORPH_ELLIPSE, (<span class="st">5</span>, <span class="st">5</span>))</pre>
+
+      <div class="why">
+        <span class="w-label">The third kernel is new machinery for the lecture algorithms</span>
+        <p><span class="mono">_RIM_K</span> extracts the <strong>rims</strong> — the ~2-px-thick strips of confident
+        foreground and confident background that touch the band (Step 8). The rims stand in for the lecture's
+        $\Omega_F$ and $\Omega_B$ twice over: they are the <em>source sets</em> of the geodesic distance maps
+        $D_F = d_L(x, \Omega_F)$, $D_B = d_L(x, \Omega_B)$, and they are the <em>candidate pools</em> for the
+        §10.3 window search $N(x) \cap \{\alpha = 1\}$, $N(x) \cap \{\alpha = 0\}$. Using only the rims instead of
+        the full confident regions is exact for the distances — any path from the band into the interior must cross
+        the rim first, so the minimum over $\Omega_F$ <em>is</em> the minimum over the rim.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">These two lines <em>are</em> the lecture's set-union formula</span>
+        <p>An <span class="mono">MORPH_ELLIPSE</span> element of size $(2\rho{+}1) \times (2\rho{+}1)$ is a discrete
+        disk of radius $\rho$ — that is literally $B_\rho(x)$. And morphological dilation of a set $S$ by a disk is,
+        <em>by definition</em>, $\bigcup_{x \in S} B_\rho(x)$. So <span class="mono">cv2.dilate(mask, _ERODE_K)</span>
+        is not "like" the lecture's band formula; it is a character-for-character implementation of it.</p>
+        <p>Odd size $2\rho{+}1$ because a structuring element needs a well-defined centre pixel. An even-sized
+        kernel would shift the mask by half a pixel every call.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Don't build these inside the frame loop</span>
+        <p><span class="mono">getStructuringElement</span> allocates and rasterises a disk. At module level it runs
+        once. Inside <span class="mono">_process_frame</span> it would run 205 times for a 205-frame video, for
+        an identical result. Constant, so hoist it — the leading underscore signals "private, precomputed."</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════ PHASE 1 ═══════════════════════ -->
+  <div class="phase">
+    <div class="ph-eyebrow">Phase 1 · The colour model</div>
+    <h2>Module: from a bag of sample colours to $P(F|c)$</h2>
+    <p>Two pure functions. No OpenCV I/O, no video, no frame. Given some foreground colours and some background
+    colours, decide for every pixel how foreground-ish its colour is. Testable in a REPL.</p>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step" id="s3">
+    <div class="step-head"><div class="num">3</div><h3><span class="mono">_kde_3d</span> — the joint density leaf, via lecture §10.4</h3>
+    <span class="where">matting.py:80–88</span></div>
+    <div class="step-body">
+
+      <div class="contract">
+<span class="k">in</span>   lab_samples   <span class="t">(N, 3)</span>       uint8   — Lab colours of every sample pixel of one class
+<span class="k">out</span>  density       <span class="t">(64,64,64)</span>   float32 — density[q] = f(q | that class),  Σ ≈ 1,  &gt; 0 everywhere</div>
+
+      <div class="formula">
+        <span class="f-label">Formula — the joint 3-D KDE (§10.1), evaluated with the low-rank scheme (§10.4)</span>
+        <div>$$ f(c|F) \;\propto\; \sum_{x \in \Omega_F} K\big(c,\, c(x)\big), \qquad K(c,c') \propto e^{-\frac{\|c-c'\|^2}{2\sigma^2}}, \qquad c \in \mathbb{R}^3 $$</div>
+        <p style="margin:10px 0 0;color:#d3e7e5">The lecture flags the direct sum as $O(|\Omega|\cdot|\Omega'|)$ —
+        too slow — and prescribes factorising the kernel, $K(x,y) = \sum_i \phi_i(x)\,\psi_i(y)$, computing
+        $a_i = \sum_y \psi_i(y)$ once, then $f(x) = \sum_i a_i \phi_i(x)$: linear instead of quadratic. Our
+        instantiation of that scheme:</p>
+        <ul style="margin:8px 0 0;color:#d3e7e5">
+          <li>$\psi_i$ = the indicator of colour-bin $i$ → the vector $a$ is just the <strong>3-D histogram</strong>
+          of the samples ($O(N)$);</li>
+          <li>$\phi_i(c) = K(c, \text{bin}_i)$, and the 3-D Gaussian factorises exactly across the axes,
+          $e^{-\|d\|^2/2\sigma^2} = e^{-d_L^2/2\sigma^2} e^{-d_a^2/2\sigma^2} e^{-d_b^2/2\sigma^2}$ — a rank-1
+          kernel per axis → evaluating $\sum_i a_i \phi_i$ is <strong>three 1-D convolutions</strong> of the
+          histogram ($O(\text{bins})$).</li>
+        </ul>
+        <p style="margin:10px 0 0;color:#d3e7e5"><strong>3-D histogram + separable Gaussian blur = the joint KDE,
+        computed the way §10.4 says to compute it.</strong> Total: $O(N + \text{bins})$ per class per frame.</p>
+      </div>
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">_kde_3d</span>(lab_samples):
+    <span class="cm">"""Joint 3-D KDE over Lab from uint8 samples (N, 3), evaluated with the</span>
+    <span class="cm">binned low-rank scheme of lecture 10.4. Returns a KDE_BINS^3 density."""</span>
+    q = (lab_samples &gt;&gt; <span class="st">2</span>).astype(np.int32)                       <span class="cm"># 256 levels → 64 bins per channel</span>
+    idx = (q[:, <span class="st">0</span>] * KDE_BINS + q[:, <span class="st">1</span>]) * KDE_BINS + q[:, <span class="st">2</span>]     <span class="cm"># ravel (L,a,b) → one bin index</span>
+    hist = np.<span class="fn">bincount</span>(idx, minlength=KDE_BINS ** <span class="st">3</span>).astype(np.float32)   <span class="cm"># aᵢ = Σ ψᵢ  (the spikes)</span>
+    density = <span class="fn">gaussian_filter</span>(hist.reshape(KDE_BINS, KDE_BINS, KDE_BINS), KDE_SIGMA)  <span class="cm"># ∗ K, separable</span>
+    density /= density.<span class="fn">sum</span>() + EPS    <span class="cm"># normalise — the lecture's ∝ made concrete</span>
+    <span class="kw">return</span> density + EPS              <span class="cm"># never exactly 0 — Step 4 divides by (f_F + f_B)</span></pre>
+
+      <div class="why">
+        <span class="w-label">Line by line</span>
+        <ul>
+          <li><span class="mono">lab_samples &gt;&gt; 2</span> — integer-divide every channel by 4, mapping 256 levels
+          onto 64 bins. This is the quantization that defines the $\psi_i$ basis. A colour step of 4 uint8 levels is
+          below anything the KDE bell (σ = 8 levels) can resolve anyway, so nothing is lost.</li>
+          <li><span class="mono">(q[:,0] * 64 + q[:,1]) * 64 + q[:,2]</span> — row-major raveling of the 3-D bin
+          coordinate into one flat index, so a single <span class="mono">bincount</span> builds the whole joint
+          histogram. No Python loop over samples.</li>
+          <li><span class="mono">scipy.ndimage.gaussian_filter</span> on the $64^3$ volume — scipy applies the
+          Gaussian <em>separably</em>, one axis at a time. That's not an optimisation trick bolted on: it works
+          only because the Gaussian factorises across dimensions, which is exactly the low-rank property §10.4
+          asks you to exploit.</li>
+          <li><span class="mono">density /= density.sum()</span> — the lecture writes $\propto$ and moves on because
+          the constant cancels in the Bayes ratio. We normalise anyway: one line, and the volume becomes a real
+          density you can sanity-check.</li>
+          <li><span class="mono">return density + EPS</span> — a colour seen by <em>neither</em> class would give
+          $0/0$ in Step 4's ratio. With the floor it gives $\text{EPS}/2\text{EPS} = 0.5$: "no evidence" maps to
+          "coin flip", which is the honest answer.</li>
+        </ul>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Why joint, and not one KDE per channel</span>
+        <p>A tempting shortcut is three 1-D KDEs multiplied together (naive Bayes). It's cheaper, but it assumes
+        the channels are independent given the class — an extra assumption the lecture never makes, and a real one:
+        it can't tell "dark-red" apart from a class containing dark-blue and light-red. The binned joint density
+        costs $64^3 \times 4$ bytes ≈ 1 MB and a few milliseconds per frame, so the shortcut buys nothing. This
+        implementation is the lecture's actual estimator.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint — run this before writing step 4</span>
+        <pre class="codeblock" style="margin:8px 0 0"><span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">from</span> matting <span class="kw">import</span> _kde_3d, KDE_BINS
+
+s = np.<span class="fn">array</span>([[<span class="st">100</span>, <span class="st">128</span>, <span class="st">128</span>], [<span class="st">104</span>, <span class="st">128</span>, <span class="st">128</span>], [<span class="st">200</span>, <span class="st">60</span>, <span class="st">128</span>]], np.uint8)
+d = <span class="fn">_kde_3d</span>(s)
+
+<span class="kw">assert</span> d.shape == (KDE_BINS,) * <span class="st">3</span>
+<span class="kw">assert</span> <span class="fn">abs</span>(d.<span class="fn">sum</span>() - <span class="st">1.0</span>) &lt; <span class="st">1e-2</span>            <span class="cm"># it's a density (up to the EPS floor)</span>
+<span class="kw">assert</span> (d &gt; <span class="st">0</span>).<span class="fn">all</span>()                          <span class="cm"># strictly positive EVERYWHERE — the whole point</span>
+<span class="kw">assert</span> d[<span class="st">25</span>, <span class="st">32</span>, <span class="st">32</span>] &gt; d[<span class="st">32</span>, <span class="st">32</span>, <span class="st">32</span>] &gt; d[<span class="st">55</span>, <span class="st">55</span>, <span class="st">55</span>]   <span class="cm"># peaks at the samples, decays smoothly</span>
+<span class="kw">assert</span> d[<span class="st">25</span>, <span class="st">32</span>, <span class="st">32</span>] &gt; d[<span class="st">25</span>, <span class="st">15</span>, <span class="st">32</span>]                    <span class="cm"># joint: falls off along EVERY axis</span></pre>
+        <p style="margin:10px 0 0">The last assert is the one a per-channel model would fail: it checks the density
+        is high only where <em>all three</em> coordinates match a sample, not wherever each coordinate matches
+        some sample.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="step" id="s4">
+    <div class="step-head"><div class="num">4</div><h3><span class="mono">_posterior_fg</span> — Bayes over the joint KDE</h3>
+    <span class="where">matting.py:91–98</span></div>
+    <div class="step-body">
+
+      <div class="contract">
+<span class="k">in</span>   lab_roi     <span class="t">(h,w,3)</span> uint8   — the cropped frame, in CIE-Lab
+     fg_samples  <span class="t">(Nf,3)</span>  uint8   — colours known to be foreground
+     bg_samples  <span class="t">(Nb,3)</span>  uint8   — colours known to be background
+<span class="k">out</span>  p_fg        <span class="t">(h,w)</span>   float32 — P(F | c(x)) for every pixel, in [0,1]</div>
+
+      <div class="formula">
+        <span class="f-label">Formula — Bayes with uniform priors (§10.1)</span>
+        <div>$$ P(F|c) = \frac{f(c|F)\,P(F)}{f(c|F)P(F) + f(c|B)P(B)} \;\;\overset{P(F)=P(B)=\frac12}{=}\;\; \frac{f(c|F)}{f(c|F) + f(c|B)} $$</div>
+        <p style="margin:10px 0 0;color:#d3e7e5">with $f(c|F)$ and $f(c|B)$ the two <em>joint</em> densities from
+        Step 3 — no factorisation, no extra assumption. This is the lecture's equation verbatim.</p>
+      </div>
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">_posterior_fg</span>(lab_roi, fg_samples, bg_samples):
+    <span class="cm">"""P(F|c) per pixel: Bayes with uniform priors over the two KDE models."""</span>
+    f_f = <span class="fn">_kde_3d</span>(fg_samples)
+    f_b = <span class="fn">_kde_3d</span>(bg_samples)
+    q = lab_roi &gt;&gt; <span class="st">2</span>                              <span class="cm"># same quantization as the density grid</span>
+    pf = f_f[q[..., <span class="st">0</span>], q[..., <span class="st">1</span>], q[..., <span class="st">2</span>]]   <span class="cm"># ← fancy-index: whole image, one lookup</span>
+    pb = f_b[q[..., <span class="st">0</span>], q[..., <span class="st">1</span>], q[..., <span class="st">2</span>]]
+    <span class="kw">return</span> pf / (pf + pb)</pre>
+
+      <div class="why">
+        <span class="w-label">The one idea: evaluation is a table lookup</span>
+        <p><span class="mono">f_f</span> is a $64^3$ volume. <span class="mono">q</span> is the image with every
+        channel quantized to the grid. Indexing the volume with the three channel-planes replaces every pixel by
+        its density value — the whole image, one vectorised operation. This is the payoff of the §10.4 scheme in
+        Step 3: all the kernel sums were precomputed into the volume, so per pixel there is nothing left to
+        compute.</p>
+        <p>Note what <em>disappeared</em> relative to a naive-Bayes implementation: no per-channel loop, no logs,
+        no log-sum-exp stabilisation. Those existed to keep a <em>product</em> of three small densities from
+        underflowing. With a single joint density there is no product — the ratio
+        <span class="mono">pf / (pf + pb)</span> is numerically safe as-is, because Step 3's
+        <span class="mono">+ EPS</span> guarantees the denominator is at least $2\,\text{EPS}$.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint — a three-pixel image with an obvious answer</span>
+        <pre class="codeblock" style="margin:8px 0 0"><span class="kw">from</span> matting <span class="kw">import</span> _posterior_fg
+
+fg = np.<span class="fn">tile</span>(np.<span class="fn">array</span>([<span class="st">200</span>, <span class="st">128</span>, <span class="st">128</span>], np.uint8), (<span class="st">50</span>, <span class="st">1</span>))   <span class="cm"># 50 bright samples</span>
+bg = np.<span class="fn">tile</span>(np.<span class="fn">array</span>([ <span class="st">40</span>, <span class="st">128</span>, <span class="st">128</span>], np.uint8), (<span class="st">50</span>, <span class="st">1</span>))   <span class="cm"># 50 dark samples</span>
+
+img = np.<span class="fn">zeros</span>((<span class="st">1</span>, <span class="st">3</span>, <span class="st">3</span>), np.uint8)
+img[<span class="st">0</span>, <span class="st">0</span>] = [<span class="st">200</span>, <span class="st">128</span>, <span class="st">128</span>]      <span class="cm"># pure foreground colour</span>
+img[<span class="st">0</span>, <span class="st">1</span>] = [ <span class="st">40</span>, <span class="st">128</span>, <span class="st">128</span>]      <span class="cm"># pure background colour</span>
+img[<span class="st">0</span>, <span class="st">2</span>] = [<span class="st">120</span>, <span class="st">128</span>, <span class="st">128</span>]      <span class="cm"># dead centre — genuinely ambiguous</span>
+
+p = <span class="fn">_posterior_fg</span>(img, fg, bg)
+<span class="fn">print</span>(p)     <span class="cm"># ≈ [[1.00, 0.00, 0.50]]</span>
+
+<span class="kw">assert</span> p[<span class="st">0</span>, <span class="st">0</span>] &gt; <span class="st">0.99</span> <span class="kw">and</span> p[<span class="st">0</span>, <span class="st">1</span>] &lt; <span class="st">0.01</span>
+<span class="kw">assert</span> <span class="fn">abs</span>(p[<span class="st">0</span>, <span class="st">2</span>] - <span class="st">0.5</span>) &lt; <span class="st">0.1</span>              <span class="cm"># symmetric evidence ⇒ coin flip</span>
+<span class="kw">assert</span> np.<span class="fn">isfinite</span>(p).<span class="fn">all</span>()                     <span class="cm"># no nan — the EPS floor is working</span></pre>
+        <p style="margin:10px 0 0">That third pixel is the important one. A colour model that returns 0.5 when the
+        evidence is symmetric is behaving correctly, and it's exactly the case the geodesic distance maps in
+        Step 8 exist to break.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════ PHASE 2 ═══════════════════════ -->
+  <div class="phase">
+    <div class="ph-eyebrow">Phase 2 · The per-frame engine</div>
+    <h2>Module: <span class="mono" style="font-size:.9em">_process_frame(frame, mask, background_f) → (α, J)</span></h2>
+    <p>Six steps inside one function. This is where the lecture's three-stage pipeline — trimap, opacity map,
+    matting — actually happens. It returns <em>both</em> outputs, because the §10.3 composite needs the band
+    machinery (rims, candidates) that only exists in here. Everything is cropped to a window around the person.</p>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="step" id="s5">
+    <div class="step-head"><div class="num">5</div><h3>Crop to the ROI, and bail out if nobody's there</h3>
+    <span class="where">matting.py:152–164</span></div>
+    <div class="step-body">
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">_process_frame</span>(frame, mask, background_f):
+    <span class="cm">"""Full-frame (alpha, matted) for one stabilized frame; alpha is float32</span>
+    <span class="cm">in [0, 1], matted is float32 BGR."""</span>
+    h, w = mask.shape
+    alpha = np.<span class="fn">zeros</span>((h, w), np.float32)     <span class="cm"># ← default answers: "no person anywhere",</span>
+    matted = background_f.<span class="fn">copy</span>()             <span class="cm">#    so the composite defaults to pure background</span>
+    box = <span class="fn">bbox_of_mask</span>(mask)
+    <span class="kw">if</span> box <span class="kw">is</span> <span class="kw">None</span>:
+        <span class="kw">return</span> alpha, matted                 <span class="cm"># EDGE CASE: empty mask, α ≡ 0, frame = pure background</span>
+    r0, c0, bh, bw = box
+    m = SAMPLE_RADIUS + RHO + <span class="st">5</span>              <span class="cm"># pad: everything we'll dilate by, plus slack</span>
+    r0, r1 = <span class="fn">max</span>(<span class="st">0</span>, r0 - m), <span class="fn">min</span>(h, r0 + bh + m)
+    c0, c1 = <span class="fn">max</span>(<span class="st">0</span>, c0 - m), <span class="fn">min</span>(w, c0 + bw + m)</pre>
+
+      <div class="why">
+        <span class="w-label">Why crop at all</span>
+        <p>The band lives within $\rho$ pixels of the person's contour. Building a Dijkstra graph, converting
+        colour and collecting KDE samples over a full 1920×1080 wall would be pure waste. Cropping to the person's
+        bounding box plus a margin is the single biggest speedup in the file, and it's <strong>free</strong> —
+        $\alpha$ outside the box is 0 and the composite outside it is the background, which is exactly what the
+        two default allocations already put there.</p>
+        <p>The margin $m = 25 + 7 + 5 = 37$ px is not arbitrary. It must cover every dilation we're about to
+        perform: <span class="mono">SAMPLE_RADIUS</span> for the sample-collection dilation in Step 7,
+        <span class="mono">RHO</span> for the band dilation in Step 6, and 5 px of slack. Too small a margin and
+        the dilations hit the crop edge, clipping the band.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">A Python subtlety that looks like a bug</span>
+        <pre class="codeblock" style="margin:8px 0">r0, r1 = <span class="fn">max</span>(<span class="st">0</span>, r0 - m), <span class="fn">min</span>(h, r0 + bh + m)</pre>
+        <p><span class="mono">r0</span> is being reassigned <em>and</em> read in the same statement. This is safe:
+        Python evaluates the entire right-hand tuple before binding anything, so both uses of
+        <span class="mono">r0</span> see the old value. Written as two statements it would be a real bug — the
+        second line would use the new <span class="mono">r0</span> and the box would be wrong.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #1 — the person is absent</span>
+        <p><span class="mono">bbox_of_mask</span> returns <span class="mono">None</span> for an all-zero mask.
+        We return the zero alpha immediately. Consequence downstream: the matted frame becomes the pure background
+        image, and the tracker's detector <span class="mono">|J − B| &gt; 30</span> finds nothing — so its Kalman
+        filter coasts on prediction alone. All of that is correct behaviour, and all of it follows from returning
+        <em>exactly</em> zeros here rather than something small-but-nonzero.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 6 -->
+  <div class="step" id="s6">
+    <div class="step-head"><div class="num">6</div><h3>Erode + dilate → the trimap</h3>
+    <span class="where">matting.py:166–177</span></div>
+    <div class="step-body">
+
+      <div class="formula">
+        <span class="f-label">Formula — the lecture's trimap (§10.1), $\alpha_T \in \{1, 0, \phi\}$</span>
+        <div>$$ \forall x \in V_F \setminus B_\rho(\Delta):\ \alpha_T = 1 \qquad \forall x \in V_B \setminus B_\rho(\Delta):\ \alpha_T = 0 \qquad \forall x \in B_\rho(\Delta):\ \alpha_T = \phi $$</div>
+      </div>
+
+      <pre class="codeblock">mask_roi = mask[r0:r1, c0:c1]
+fg_core = cv2.<span class="fn">erode</span>(mask_roi, _ERODE_K)     <span class="cm"># shrink by ρ  → confident FG,  α_T = 1</span>
+dilated = cv2.<span class="fn">dilate</span>(mask_roi, _ERODE_K)    <span class="cm"># grow   by ρ  → outside this: confident BG, α_T = 0</span>
+band_u8 = dilated - fg_core                  <span class="cm"># the ribbon between  → α_T = φ</span>
+band = band_u8.astype(<span class="kw">bool</span>)
+fg_bool = fg_core.astype(<span class="kw">bool</span>)
+
+frame_f = frame[r0:r1, c0:c1].astype(np.float32)
+bg_roi = background_f[r0:r1, c0:c1]
+alpha_roi = fg_core.astype(np.float32)       <span class="cm"># start from the hard mask: 1 inside, 0 out</span>
+matted_roi = bg_roi.<span class="fn">copy</span>()                   <span class="cm"># composite starts as pure new background…</span>
+matted_roi[fg_bool] = frame_f[fg_bool]       <span class="cm"># …with the frame pasted over the confident core: J = c where α_T = 1</span></pre>
+
+      <div class="why">
+        <span class="w-label">Why we get to skip the lecture's whole Stage-1 derivation</span>
+        <p>Pages 68–70 build KDE, then Bayes, then geodesic distance maps, then $V_F$ / $V_B$, then the boundary
+        $\Delta$ — and the <em>only</em> thing all that machinery produces is the silhouette. We already have the
+        silhouette: <span class="mono">binary.avi</span>, from the background-subtraction stage. Skipping the
+        derivation of something you were handed isn't cutting a corner.</p>
+        <p>And the result is the same object. Eroding by $\rho$ and dilating by $\rho$ and taking the difference
+        gives you exactly the set of pixels within $\rho$ of the mask contour, which <em>is</em>
+        $B_\rho(\Delta)$ with the mask contour as $\Delta$.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #2 — <span class="mono">dilated - fg_core</span> on uint8</span>
+        <p>This is an unsigned subtraction. It is safe <em>only</em> because $\text{fg\_core} \subseteq
+        \text{dilated}$ always (erosion shrinks, dilation grows, same kernel). Swap the operands and every
+        background pixel becomes $0 - 1 = 255$ by wraparound, and your band is the entire image. If you ever
+        change the two kernels to different radii, revisit this line.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Why <span class="mono">alpha_roi</span> starts as <span class="mono">fg_core</span></span>
+        <p>It's the trimap with $\phi \mapsto 0$. If everything after this point fails or is skipped — no band, not
+        enough samples — you fall back to a hard binary matte. Ugly, but correct-ish and never
+        <span class="mono">nan</span>. Graceful degradation, chosen deliberately: the band pixels get
+        <em>overwritten</em> in Step 9, they aren't accumulated into.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint — look at your trimap. Do not skip this.</span>
+        <pre class="codeblock" style="margin:8px 0 0">vis = np.<span class="fn">zeros</span>((*mask_roi.shape, <span class="st">3</span>), np.uint8)
+vis[dilated == <span class="st">0</span>]  = (<span class="st">94</span>, <span class="st">76</span>, <span class="st">68</span>)      <span class="cm"># grey  — confident background</span>
+vis[band]         = (<span class="st">84</span>, <span class="st">180</span>, <span class="st">255</span>)    <span class="cm"># amber — the band, α_T = φ</span>
+vis[fg_core == <span class="st">1</span>] = (<span class="st">135</span>, <span class="st">231</span>, <span class="st">126</span>)   <span class="cm"># green — confident foreground</span>
+cv2.<span class="fn">imwrite</span>(<span class="st">'Temp/trimap.png'</span>, vis)
+
+<span class="fn">print</span>(<span class="st">'band covers'</span>, <span class="st">100</span> * band.<span class="fn">mean</span>(), <span class="st">'% of the ROI'</span>)</pre>
+        <p style="margin:10px 0 0">You want a clean amber ribbon of roughly uniform width hugging the outline. If
+        the band swallows a limb, <span class="mono">RHO</span> is too large for how thin that limb is — the
+        erosion ate it entirely. If the band is broken or ragged, the problem is upstream in
+        <span class="mono">binary.avi</span>, not here.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 7 -->
+  <div class="step" id="s7">
+    <div class="step-head"><div class="num">7</div><h3>Collect local colour samples near the band</h3>
+    <span class="where">matting.py:179–185</span></div>
+    <div class="step-body">
+
+      <div class="formula">
+        <span class="f-label">Formula — the lecture's trimap refinement (§10.2)</span>
+        <p style="margin:6px 0 0;color:#d3e7e5">"Now, our focus is on a specific region with much more limited color
+        variation. We have a lot more samples of the foreground and background on the <strong>boundary</strong>.
+        Thus, we will estimate again the distribution functions for refinement." → this is where
+        $\tilde P_F$ (tilde = the <em>local</em> version) gets computed.</p>
+      </div>
+
+      <pre class="codeblock"><span class="kw">if</span> band.<span class="fn">any</span>():
+    lab_roi = cv2.<span class="fn">cvtColor</span>(frame[r0:r1, c0:c1], cv2.COLOR_BGR2Lab)
+    near_band = cv2.<span class="fn">dilate</span>(band_u8, _SAMPLE_K).astype(<span class="kw">bool</span>)   <span class="cm"># within 25 px of the band</span>
+    fg_sample_px = fg_bool &amp; near_band            <span class="cm"># confident FG, but only near the band</span>
+    bg_sample_px = (dilated == <span class="st">0</span>) &amp; near_band     <span class="cm"># confident BG, but only near the band</span>
+    <span class="kw">if</span> fg_sample_px.<span class="fn">any</span>() <span class="kw">and</span> bg_sample_px.<span class="fn">any</span>():
+        p_fg = <span class="fn">_posterior_fg</span>(lab_roi, lab_roi[fg_sample_px], lab_roi[bg_sample_px])   <span class="cm"># = P̃_F</span></pre>
+
+      <div class="why">
+        <span class="w-label">The <span class="mono">&amp; near_band</span> is the entire point of this step</span>
+        <p>A <em>global</em> foreground model has to describe the person's whole body — dark hair, pale skin, blue
+        jeans, white shoes. Wide, multi-humped, useless. But restrict the samples to a 25-px neighbourhood of the
+        band next to, say, his elbow, and the foreground is only ever "sleeve blue" while the background is only
+        ever "wall beige." Two tight, well-separated bumps. That is why the lecture re-estimates the distributions
+        instead of reusing the ones from Stage 1, and the tilde in $\tilde P_F$ is its shorthand for "the good local
+        version."</p>
+        <p><span class="mono">lab_roi[fg_sample_px]</span> uses a boolean mask to index a 3-channel image, which
+        yields an <span class="mono">(N, 3)</span> array of just the selected pixels' colours — exactly the "bag of
+        samples" <span class="mono">_kde_3d</span> wants.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Why CIE-Lab and not BGR</span>
+        <p>The kernel $K(c,c') \propto e^{-\|c-c'\|^2/2\sigma^2}$ measures colour difference with a Euclidean norm
+        and <em>one</em> $\sigma$ for all directions. That's only sane if equal numeric distances look equally
+        different to a human eye. In BGR they don't — a gap of 6 is a big change in shadow and invisible in
+        highlight. Lab is designed to be roughly perceptually uniform, so a single
+        <span class="mono">KDE_SIGMA</span> means the same thing everywhere in colour space.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge cases #3 and #4 — the two guards, and what they actually prevent</span>
+        <p><strong><span class="mono">if band.any()</span></strong> fires when
+        <span class="mono">dilated == fg_core</span>, which happens when the mask fills the <em>entire</em> cropped
+        ROI — erode and dilate then have no border to bite on (OpenCV's <span class="mono">erode</span> treats the
+        image border as foreground by default). Only reachable if the person spans the full padded window. Cheap
+        insurance.</p>
+
+        <p><strong><span class="mono">if fg_sample_px.any() and bg_sample_px.any()</span></strong> is the one that
+        matters, and its failure mode is worse than it looks. Trace it: erosion by $\rho$ deletes
+        <span class="mono">fg_core</span> entirely when the person is everywhere thinner than
+        $2\rho = 14$ px — a small or distant subject. Now <span class="mono">fg_samples</span> is empty, so
+        <span class="mono">np.bincount([])</span> gives a zero histogram, which normalises to the all-EPS floor —
+        $f(c|F) = 10^{-8}$ <em>uniformly</em> while $f(c|B)$ stays orders of magnitude larger wherever real
+        background colours live. The posterior collapses to $P(F|c) \approx 0$ everywhere, so $w_F \approx 0$, so
+        <strong>$\alpha \equiv 0$ across the whole band</strong> — and <span class="mono">fg_core</span> was already
+        empty. <strong>The person vanishes from the matted video entirely.</strong> No crash, no warning, no
+        <span class="mono">nan</span>.</p>
+        <p>The mirror case (<span class="mono">bg_sample_px</span> empty, when the dilation fills the ROI) gives
+        $P(F|c) \approx 1$ everywhere, so $\alpha \equiv 1$ and the new background never appears at all. Both are
+        silent-corruption bugs. The guard falls back to the hard binary matte from Step 6, which is visibly ugly —
+        and visibly ugly is exactly what you want a failure to be.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 8 -->
+  <div class="step" id="s8">
+    <div class="step-head"><div class="num">8</div><h3>Geodesic distances → $\tilde D_F$, $\tilde D_B$, via Dijkstra</h3>
+    <span class="where">matting.py:101–127, 186–195</span></div>
+    <div class="step-body">
+
+      <div class="contract">
+<span class="k">fn</span>   _band_graph(p_fg, domain)      → ids <span class="t">(h,w) int32</span> (−1 outside), graph <span class="t">(n,n) sparse CSR</span>
+<span class="k">fn</span>   _geodesic_dist(ids, graph, src) → d <span class="t">(n,)</span> float64 — path cost to the nearest source node
+<span class="k">domain</span>  band ∪ rim_f ∪ rim_b — the graph never leaves the neighbourhood of the boundary</div>
+
+      <div class="formula">
+        <span class="f-label">Formula — the lecture's geodesic distance maps (§10.1–10.2)</span>
+        <div>$$ L(p) = \int_p \big|\langle W(p(t)),\, \dot p(t)\rangle\big|\, dl, \qquad W(x) = \nabla_x P(F|c(x)) $$</div>
+        <div>$$ d_L(x,y) = \min_{p \in [x,y]} L(p), \qquad D_F(x) = \min_{y \in \Omega_F} d_L(x, y), \qquad D_B(x) = \min_{y \in \Omega_B} d_L(x, y) $$</div>
+        <p style="margin:10px 0 0;color:#d3e7e5">A path is cheap while it stays on one side of the colour boundary
+        (flat $P$) and pays $|\Delta P|$ the moment it crosses it. So $D_F$ is small exactly for pixels that can
+        reach the confident foreground <em>without crossing the person's edge</em>.</p>
+      </div>
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">_band_graph</span>(p_fg, domain):
+    <span class="cm">"""Sparse 8-neighbor graph over the True pixels of `domain` whose edge</span>
+    <span class="cm">costs discretize the lecture's geodesic length: |&lt;W, p'&gt;| dl with</span>
+    <span class="cm">W = grad P(F|c), i.e. |P(u) - P(v)| plus GEO_EPS per unit step."""</span>
+    h, w = domain.shape
+    ids = np.<span class="fn">full</span>((h, w), -<span class="st">1</span>, np.int32)
+    n = <span class="fn">int</span>(domain.<span class="fn">sum</span>())
+    ids[domain] = np.<span class="fn">arange</span>(n, dtype=np.int32)          <span class="cm"># pixel → graph-node id</span>
+    us, vs, ws = [], [], []
+    <span class="kw">for</span> dy, dx, step <span class="kw">in</span> ((<span class="st">0</span>, <span class="st">1</span>, <span class="st">1.0</span>), (<span class="st">1</span>, <span class="st">0</span>, <span class="st">1.0</span>),
+                         (<span class="st">1</span>, <span class="st">1</span>, <span class="st">2.0</span> ** <span class="st">0.5</span>), (<span class="st">1</span>, -<span class="st">1</span>, <span class="st">2.0</span> ** <span class="st">0.5</span>)):   <span class="cm"># 4 offsets = all 8 neighbours, undirected</span>
+        sl_u = (<span class="fn">slice</span>(<span class="st">0</span>, h - dy), <span class="fn">slice</span>(<span class="fn">max</span>(<span class="st">0</span>, -dx), w - <span class="fn">max</span>(<span class="st">0</span>, dx)))
+        sl_v = (<span class="fn">slice</span>(dy, h), <span class="fn">slice</span>(<span class="fn">max</span>(<span class="st">0</span>, dx), w - <span class="fn">max</span>(<span class="st">0</span>, -dx)))
+        iu, iv = ids[sl_u], ids[sl_v]
+        ok = (iu &gt;= <span class="st">0</span>) &amp; (iv &gt;= <span class="st">0</span>)                    <span class="cm"># both endpoints inside the domain</span>
+        us.append(iu[ok])
+        vs.append(iv[ok])
+        ws.append(np.<span class="fn">abs</span>(p_fg[sl_u] - p_fg[sl_v])[ok] + GEO_EPS * step)   <span class="cm"># |ΔP| + ε·dl</span>
+    graph = <span class="fn">csr_matrix</span>((np.<span class="fn">concatenate</span>(ws),
+                        (np.<span class="fn">concatenate</span>(us), np.<span class="fn">concatenate</span>(vs))), shape=(n, n))
+    <span class="kw">return</span> ids, graph
+
+
+<span class="kw">def</span> <span class="fn">_geodesic_dist</span>(ids, graph, src_mask):
+    <span class="cm">"""Geodesic distance d_L(x, sources) for every graph node (lecture: D_F,</span>
+    <span class="cm">D_B), via multi-source Dijkstra."""</span>
+    <span class="kw">return</span> <span class="fn">dijkstra</span>(graph, directed=<span class="kw">False</span>, indices=ids[src_mask], min_only=<span class="kw">True</span>)</pre>
+
+      <p>…and the call site inside <span class="mono">_process_frame</span>:</p>
+
+      <pre class="codeblock"><span class="cm"># confident pixels bordering the band: Omega_F / Omega_B for the</span>
+<span class="cm"># distance maps and the window N(x) of the matting search</span>
+near = cv2.<span class="fn">dilate</span>(band_u8, _RIM_K).astype(<span class="kw">bool</span>)
+rim_f = fg_bool &amp; near                       <span class="cm"># Ω_F — the inner rim</span>
+rim_b = (dilated == <span class="st">0</span>) &amp; near                <span class="cm"># Ω_B — the outer rim</span>
+<span class="kw">if</span> rim_f.<span class="fn">any</span>() <span class="kw">and</span> rim_b.<span class="fn">any</span>():
+    domain = band | rim_f | rim_b
+    ids, graph = <span class="fn">_band_graph</span>(p_fg, domain)
+    d_f = <span class="fn">_geodesic_dist</span>(ids, graph, rim_f)[ids[band]]   <span class="cm"># D̃_F at every band pixel</span>
+    d_b = <span class="fn">_geodesic_dist</span>(ids, graph, rim_b)[ids[band]]   <span class="cm"># D̃_B at every band pixel</span></pre>
+
+      <div class="why">
+        <span class="w-label">How the continuous formula becomes a graph</span>
+        <p>Discretize the path integral one step at a time. Along a step from pixel $u$ to neighbour $v$, the
+        integrand $|\langle \nabla P, \dot p\rangle|\,dl$ is the directional derivative of $P$ times the step
+        length — which is simply $|P(v) - P(u)|$, the change in posterior across that step. Summing over the steps
+        of a path gives $L(p)$; minimising over paths is a shortest-path problem; and shortest paths on a
+        non-negative graph is <strong>Dijkstra</strong>. The $+\,\text{GEO\_EPS} \cdot dl$ term is the one addition:
+        where $P$ is flat the lecture's cost is 0 for <em>every</em> path, so the minimum is degenerate; the tiny
+        per-length charge breaks the tie in favour of spatially short paths (and makes the distance collapse to
+        scaled-Euclidean exactly where colour has nothing to say — a sensible fallback, not a distortion).</p>
+        <p><span class="mono">min_only=True</span> makes scipy's Dijkstra <em>multi-source</em>: seed all rim nodes
+        at distance 0 and grow one wavefront, giving $\min_{y \in \Omega}$ directly instead of one run per source
+        pixel. Two calls on the same graph — one seeded with <span class="mono">rim_f</span>, one with
+        <span class="mono">rim_b</span> — produce both maps.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Why the graph is tiny, and why that's exact — not an approximation</span>
+        <p>The domain is only <span class="mono">band ∪ rim_f ∪ rim_b</span> — a ribbon a few pixels thick around
+        the contour, some tens of thousands of nodes, not the two million pixels of the frame. Restricting to it is
+        exact for both maps: every path from a band pixel to <em>anywhere</em> in the confident foreground must
+        pass through the inner rim first, and path costs are non-negative, so the minimum over $\Omega_F$ is
+        attained on the rim. Same argument on the background side. This is what keeps the per-frame cost at
+        ~0.1 s instead of seconds.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint</span>
+        <pre class="codeblock" style="margin:8px 0 0"><span class="kw">assert</span> (d_f &gt; <span class="st">0</span>).<span class="fn">all</span>() <span class="kw">and</span> (d_b &gt; <span class="st">0</span>).<span class="fn">all</span>()   <span class="cm"># band pixels are never sources</span>
+<span class="kw">assert</span> d_f.<span class="fn">min</span>() &gt;= GEO_EPS                      <span class="cm"># cheapest possible step cost</span>
+<span class="cm"># a band pixel whose colour matches the person should be geodesically nearer the FG rim:</span>
+inner = d_f &lt; d_b
+<span class="fn">print</span>(<span class="st">'band pixels nearer FG:'</span>, inner.<span class="fn">mean</span>())   <span class="cm"># ≈ the FG fraction of the band, ~0.5</span></pre>
+        <p style="margin:10px 0 0">If <span class="mono">d_f</span> and <span class="mono">d_b</span> come out
+        swapped (person transparent, wall opaque), you seeded the two Dijkstra calls with the wrong rims — the
+        source of each map must be the region that map measures distance <em>to</em>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 9 -->
+  <div class="step" id="s9">
+    <div class="step-head"><div class="num">9</div><h3>The opacity formula</h3>
+    <span class="where">matting.py:196–201</span></div>
+    <div class="step-body">
+
+      <div class="formula">
+        <span class="f-label">Formula — the lecture's opacity map (§10.2, typo corrected)</span>
+        <div>$$ \forall x \in B_\rho(\Delta): \quad \alpha(x) = \frac{w_F(x)}{w_F(x) + w_B(x)}, \qquad w_F(x) = \tilde D_F(x)^{-r}\,\tilde P_F(x), \quad r \in (0,2] $$</div>
+      </div>
+
+      <pre class="codeblock">    w_f = np.<span class="fn">power</span>(d_f, -DIST_R) * p_fg[band]           <span class="cm"># D̃_F^(−r) · P̃_F  — verbatim</span>
+    w_b = np.<span class="fn">power</span>(d_b, -DIST_R) * (<span class="st">1.0</span> - p_fg[band])   <span class="cm"># D̃_B^(−r) · P̃_B</span>
+    a_band = (w_f / (w_f + w_b + EPS)).astype(np.float32)
+<span class="kw">else</span>:
+    a_band = p_fg[band].astype(np.float32)      <span class="cm"># no rims → no distances; colour alone decides</span>
+alpha_roi[band] = a_band                        <span class="cm"># only the band — the rest keeps its hard 0/1</span></pre>
+
+      <div class="why">
+        <span class="w-label">Read it as a vote</span>
+        <p>Each side casts a vote whose loudness is <em>(how well the colour matches) × (how close it is)</em>.
+        $\alpha$ is the foreground's share of the total vote. Because it's a share, it lands in $[0,1]$ with no
+        clamping — the same structural trick as the Bayes formula in Step 4.</p>
+        <p>Multiplication means <strong>either factor can veto</strong>. A pixel whose colour is clearly background
+        ($p_{fg} \approx 0$) loses even if it's touching the person. A pixel geodesically far from the confident
+        foreground ($d_f$ large, so $d_f^{-2}$ tiny) loses even if its colour is a perfect match. Both kinds of
+        evidence must agree.</p>
+        <p>The distances are now path <em>costs</em>, not pixels — roughly $\text{GEO\_EPS} \times \text{length}$
+        while a path stays on one side of the colour edge, plus $|\Delta P|$ if it crosses. Three cases worth
+        being able to recite:</p>
+        <ul>
+          <li>A band pixel on the person's side of the edge: reaching the FG rim is flat
+          ($d_f \approx \text{GEO\_EPS}\cdot 3 = 0.003$), reaching the BG rim crosses the edge
+          ($d_b \approx 0.5$). The ratio $d_f^{-2}/d_b^{-2} \approx 3\times10^4$ — <em>geometry wins by orders of
+          magnitude, and α snaps to 1 without any clamp.</em></li>
+          <li>A blurred pixel where the posterior is flat across the whole band: both paths are flat, so
+          $d_f, d_b$ reduce to scaled Euclidean and nearly cancel mid-band → $\alpha \approx p_{fg}$.
+          <em>Geometry neutral, colour decides.</em></li>
+          <li>Same position, $p_{fg} = 0.1$ instead of $0.6$ → $\alpha \approx 0.1$. Same geometry, different
+          colour, wildly different alpha. <em>This is how a wisp of hair survives.</em></li>
+        </ul>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #5 — why $d^{-r}$ needs no guard here</span>
+        <p>The lecture wants $w_F \to \infty$ as $\tilde D_F \to 0$ so that α joins the trimap seamlessly at the
+        band's edge. In the old Euclidean version $d_f$ could be exactly 0 <em>inside</em> the map, forcing a
+        $d+1$ fudge that flattened the curve. Here the sources (the rims) are not band pixels, so every band
+        pixel's distance is at least one step: $d \ge \text{GEO\_EPS} > 0$. The power is always finite, yet
+        $d^{-2}$ still spans ~6 orders of magnitude across the band — the seamless-join behaviour the lecture
+        intended, with no fudge and no clamp.</p>
+        <p>The opposite extreme also takes care of itself: a band pixel <em>unreachable</em> from a rim (an
+        isolated speck in the mask) gets $d = \infty$ from Dijkstra, and NumPy evaluates
+        $\infty^{-2} = 0$ — that side's vote silently drops out. No special case in the code.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #6 — <span class="mono">+ EPS</span> in the denominator</span>
+        <p>If a band pixel is unreachable from <em>both</em> rims, both weights are 0 and $0/0$ =
+        <span class="mono">nan</span> — a black speck in the written frame. The EPS makes it
+        $0/\text{EPS} = 0$ instead: an unexplainable speck defaults to background. It also covers genuine float
+        underflow when both distances are large and both posteriors extreme.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #7 — the <span class="mono">else</span> branch</span>
+        <p>If either rim is empty (a mask fragment with no confident interior, or one flush against the ROI edge),
+        there are no Dijkstra sources and no distances. The fallback $\alpha = \tilde P_F$ is still a lecture
+        formula — Bayes from §10.1 — just without the geometric term. Better than discarding the band.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 10 -->
+  <div class="step" id="s10">
+    <div class="step-head"><div class="num">10</div><h3><span class="mono">_pure_composite</span> — the lecture's matting</h3>
+    <span class="where">matting.py:130–149, 202–207</span></div>
+    <div class="step-body">
+
+      <div class="contract">
+<span class="k">in</span>   frame_f  <span class="t">(h,w,3)</span> float32 BGR · a_band <span class="t">(n,)</span> · band, rim_f, rim_b <span class="t">(h,w)</span> bool · bg_roi <span class="t">(h,w,3)</span> float32
+<span class="k">out</span>  J        <span class="t">(n, 3)</span> float32 — the composited colour of every band pixel</div>
+
+      <div class="formula">
+        <span class="f-label">Formula — matting with the recovered pure foreground colour (§10.3)</span>
+        <div>$$ (x_F^*, x_B^*) = \arg\min_{\substack{x_F \in N(x) \cap \{\alpha=1\} \\ x_B \in N(x) \cap \{\alpha=0\}}} \big\|\alpha(x)\,c(x_F) + (1-\alpha(x))\,c(x_B) - c(x)\big\|^2 $$</div>
+        <div>$$ J(x) = \alpha(x)\, c(x_F^*) + \big(1 - \alpha(x)\big)\, B_{\text{new}}(x) $$</div>
+        <p style="margin:10px 0 0;color:#d3e7e5">The naive blend $J = \alpha c + (1-\alpha)B$ is the one the
+        lecture says <em>"we won't do that"</em> about: $c(x)$ on the band already mixes the person with the
+        <strong>old</strong> background, and the residue $J_{\text{naive}} - J_{\text{correct}} =
+        \alpha(1-\alpha)(b_{\text{old}} - f)$ is the <strong>halo</strong> — zero at both confident ends, maximal
+        at $\alpha = 0.5$. So §10.3 first recovers the <em>pure</em> foreground colour: assume some confident-FG
+        neighbour has the same surface colour $f$ and some confident-BG neighbour has the same $b$, and pick the
+        pair that best reconstructs the observed mixture.</p>
+      </div>
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">_pure_composite</span>(frame_f, a_band, band, rim_f, rim_b, bg_roi):
+    <span class="cm">"""Lecture 10.3 matting for the band pixels: find the confident pair</span>
+    <span class="cm">(x_F*, x_B*) minimizing ||alpha*c(x_F) + (1-alpha)*c(x_B) - c(x)||^2 and</span>
+    <span class="cm">composite with the pure foreground color c(x_F*)."""</span>
+    n = <span class="fn">int</span>(band.<span class="fn">sum</span>())
+    kf, kb = <span class="fn">min</span>(N_CAND, <span class="fn">int</span>(rim_f.<span class="fn">sum</span>())), <span class="fn">min</span>(N_CAND, <span class="fn">int</span>(rim_b.<span class="fn">sum</span>()))
+    a1 = a_band[:, <span class="kw">None</span>]
+    <span class="kw">if</span> kf == <span class="st">0</span> <span class="kw">or</span> kb == <span class="st">0</span>:
+        <span class="kw">return</span> a1 * frame_f[band] + (<span class="st">1.0</span> - a1) * bg_roi[band]   <span class="cm"># no candidates → direct blend</span>
+    band_yx = np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(band))
+    idx_f = <span class="fn">cKDTree</span>(np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(rim_f))).query(band_yx, k=kf)[<span class="st">1</span>]   <span class="cm"># N(x) ∩ {α=1}</span>
+    idx_b = <span class="fn">cKDTree</span>(np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(rim_b))).query(band_yx, k=kb)[<span class="st">1</span>]   <span class="cm"># N(x) ∩ {α=0}</span>
+    cand_f = frame_f[rim_f][idx_f].reshape(n, kf, <span class="st">3</span>)          <span class="cm"># candidate FG colours per band pixel</span>
+    cand_b = frame_f[rim_b][idx_b].reshape(n, kb, <span class="st">3</span>)          <span class="cm"># candidate BG colours per band pixel</span>
+    a = a_band[:, <span class="kw">None</span>, <span class="kw">None</span>, <span class="kw">None</span>]
+    recon = a * cand_f[:, :, <span class="kw">None</span>, :] + (<span class="st">1.0</span> - a) * cand_b[:, <span class="kw">None</span>, :, :]   <span class="cm"># all kf×kb mixtures</span>
+    err = ((recon - frame_f[band][:, <span class="kw">None</span>, <span class="kw">None</span>, :]) ** <span class="st">2</span>).<span class="fn">sum</span>(-<span class="st">1</span>)          <span class="cm"># ‖·‖² per pair</span>
+    best_f = err.reshape(n, -<span class="st">1</span>).argmin(<span class="st">1</span>) // kb               <span class="cm"># the argmin's FG index, x_F*</span>
+    pure_f = cand_f[np.<span class="fn">arange</span>(n), best_f]                     <span class="cm"># c(x_F*) — the recovered pure colour</span>
+    <span class="kw">return</span> a1 * pure_f + (<span class="st">1.0</span> - a1) * bg_roi[band]            <span class="cm"># J = α·c(x_F*) + (1−α)·B_new</span></pre>
+
+      <p>…and the tail of <span class="mono">_process_frame</span>:</p>
+
+      <pre class="codeblock">    alpha_roi[band] = a_band
+    matted_roi[band] = <span class="fn">_pure_composite</span>(frame_f, a_band, band,
+                                       rim_f, rim_b, bg_roi)
+
+alpha[r0:r1, c0:c1] = alpha_roi        <span class="cm"># paste the ROI back into the full frame</span>
+matted[r0:r1, c0:c1] = matted_roi
+<span class="kw">return</span> alpha, matted</pre>
+
+      <div class="why">
+        <span class="w-label">How the window $N(x)$ became a k-d tree</span>
+        <p>The lecture "opens a window around the pixel" and searches confident pixels inside it. The candidates
+        live on the rims (Step 2), so "confident pixels near $x$" = "nearest rim pixels to $x$" — which is exactly
+        the query a <span class="mono">cKDTree</span> answers, for all band pixels at once. Each band pixel gets its
+        <span class="mono">N_CAND</span> = 7 nearest FG and 7 nearest BG candidates; broadcasting builds all
+        $7 \times 7 = 49$ reconstructions per pixel in one tensor of shape <span class="mono">(n, 7, 7, 3)</span>
+        (a few MB), and <span class="mono">argmin</span> picks the winning pair. No Python loop over pixels — the
+        whole §10.3 search is five NumPy lines.</p>
+        <p>Note <span class="mono">// kb</span>: the argmin runs over the flattened $7\times7$ pair grid, and
+        integer division recovers the <em>row</em> — the FG index. We never need $x_B^*$: the lecture composites
+        with the <em>new</em> background $B(x)$, so the best BG candidate's only job was to help explain the
+        observed mixture.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">The search runs in BGR, deliberately</span>
+        <p>Steps 3–4 model colour in Lab because perceptual uniformity helps a <em>density</em>. Here the
+        governing equation is physical, not perceptual: $c(x) = \alpha f + (1-\alpha) b$ is how light actually
+        mixes, and it holds in the sensor's (linear-ish) BGR — not after Lab's non-linear warp. The reconstruction
+        error and the final blend both stay in float32 BGR.</p>
+      </div>
+
+      <div class="pitfall">
+        <span class="p-label">Edge case #8 — no candidates at all</span>
+        <p>If either rim is empty, there is nothing to search and <span class="mono">_pure_composite</span> falls
+        back to blending the observed colour — the naive formula, accepted knowingly for that frame's band rather
+        than dropping the band to hard 0/1. The same degenerate frames trip the Step 9 fallback, so the two
+        degrade together.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint — the alpha histogram tells you if it worked</span>
+        <pre class="codeblock" style="margin:8px 0 0">alpha, matted = <span class="fn">_process_frame</span>(frame, mask, background_f)
+
+<span class="kw">assert</span> alpha.dtype == np.float32
+<span class="kw">assert</span> alpha.<span class="fn">min</span>() == <span class="st">0.0</span> <span class="kw">and</span> alpha.<span class="fn">max</span>() == <span class="st">1.0</span>   <span class="cm"># core and far background are untouched 1/0</span>
+<span class="kw">assert</span> np.<span class="fn">isfinite</span>(alpha).<span class="fn">all</span>()
+
+counts, _ = np.<span class="fn">histogram</span>(alpha, bins=<span class="st">10</span>, range=(<span class="st">0</span>, <span class="st">1</span>))
+<span class="fn">print</span>(counts)   <span class="cm"># want: HUGE at bin 0, big at bin 9, a thin ramp between</span>
+
+<span class="cm"># where α = 0 the composite must be the background, exactly — the tracker's invariant</span>
+zero = (alpha == <span class="st">0</span>)
+<span class="kw">assert</span> np.<span class="fn">array_equal</span>(matted[zero], background_f[zero])</pre>
+        <p style="margin:10px 0 0">A strongly <strong>bimodal</strong> histogram is the signature of a healthy
+        matte. If the middle bins are fat, your band is too wide or the colour model has collapsed to 0.5
+        everywhere — check the Step 4 checkpoint. If the histogram is purely bimodal with <em>nothing</em> in
+        between, the band never got written and you fell through one of the guards in Step 7.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════ PHASE 3 ═══════════════════════ -->
+  <div class="phase">
+    <div class="ph-eyebrow">Phase 3 · The orchestrator</div>
+    <h2>Module: <span class="mono" style="font-size:.9em">matting(...) → two .avi files</span></h2>
+    <p>I/O, the frame loop, and the one line of actual compositing. Everything hard is already done.</p>
+  </div>
+
+  <!-- STEP 11 -->
+  <div class="step" id="s11">
+    <div class="step-head"><div class="num">11</div><h3><span class="mono">matting()</span> — set up the I/O</h3>
+    <span class="where">matting.py:210–226</span></div>
+    <div class="step-body">
+
+      <pre class="codeblock"><span class="kw">def</span> <span class="fn">matting</span>(stabilized_path, binary_path, background_image_path,
+            matted_path, alpha_path):
+    cap, prm = <span class="fn">open_video</span>(stabilized_path)          <span class="cm"># probe geometry only...</span>
+    w, h, fps = prm[<span class="st">'width'</span>], prm[<span class="st">'height'</span>], prm[<span class="st">'fps'</span>]
+    cap.<span class="fn">release</span>()                                  <span class="cm"># ...then close it; frames_of() reopens</span>
+
+    background = cv2.<span class="fn">imread</span>(background_image_path)
+    <span class="kw">if</span> background <span class="kw">is</span> <span class="kw">None</span>:
+        <span class="kw">raise</span> <span class="fn">IOError</span>(<span class="st">'Could not read background image: {}'</span>.<span class="fn">format</span>(background_image_path))
+    background = cv2.<span class="fn">resize</span>(background, (w, h), interpolation=cv2.INTER_AREA)
+    background_f = background.astype(np.float32)         <span class="cm"># convert ONCE, not per frame</span>
+
+    alpha_writer = <span class="fn">create_writer</span>(alpha_path, fps, w, h)
+    matted_writer = <span class="fn">create_writer</span>(matted_path, fps, w, h)</pre>
+
+      <div class="why">
+        <span class="w-label">Four decisions in twelve lines</span>
+        <ul>
+          <li><strong>Probe then release.</strong> We only need <span class="mono">(w, h, fps)</span>. The actual
+          reading is done by the <span class="mono">frames_of()</span> generator, which opens its own capture. Two
+          captures on one file is fine; leaking one is not.</li>
+          <li><strong><span class="mono">cv2.imread</span> returns <span class="mono">None</span> on failure,
+          it does not raise.</strong> A silent <span class="mono">None</span> would crash 40 lines later inside
+          <span class="mono">cv2.resize</span> with a useless message. Check it here, name the file in the error.</li>
+          <li><strong><span class="mono">INTER_AREA</span></strong> is the correct filter for downscaling: it
+          averages the source pixels covered by each destination pixel, so it doesn't alias. (<span
+          class="mono">INTER_LINEAR</span> would sample and produce moiré on the fjord's texture.) The project
+          allows not preserving aspect ratio, so we force the exact frame size.</li>
+          <li><strong><span class="mono">background_f</span> is converted to float32 once.</strong> Inside the loop
+          it's used 205 times — as the default composite, the ROI slice <span class="mono">bg_roi</span>, and the
+          $B_{\text{new}}$ of the §10.3 blend. Converting per frame would allocate a fresh 1920×1080×3 float array
+          every iteration for no reason.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 12 -->
+  <div class="step" id="s12">
+    <div class="step-head"><div class="num">12</div><h3>The frame loop</h3>
+    <span class="where">matting.py:228–239</span></div>
+    <div class="step-body">
+
+      <pre class="codeblock">n_done = <span class="st">0</span>
+<span class="kw">for</span> frame, binary_frame <span class="kw">in</span> <span class="fn">zip</span>(<span class="fn">frames_of</span>(stabilized_path), <span class="fn">frames_of</span>(binary_path)):
+    mask = (binary_frame[..., <span class="st">0</span>] &gt; <span class="st">127</span>).astype(np.uint8)     <span class="cm"># 3ch 0/255 → 1ch 0/1</span>
+    alpha, matted = <span class="fn">_process_frame</span>(frame, mask, background_f)
+
+    alpha_u8 = np.<span class="fn">clip</span>(alpha * <span class="st">255.0</span>, <span class="st">0</span>, <span class="st">255</span>).astype(np.uint8)      <span class="cm"># FAQ #5</span>
+    alpha_writer.<span class="fn">write</span>(cv2.<span class="fn">merge</span>([alpha_u8, alpha_u8, alpha_u8]))   <span class="cm"># 1ch → 3ch, writer wants colour</span>
+    matted_writer.<span class="fn">write</span>(np.<span class="fn">clip</span>(matted, <span class="st">0</span>, <span class="st">255</span>).astype(np.uint8))
+
+    n_done += <span class="st">1</span>
+    <span class="kw">if</span> n_done % <span class="st">50</span> == <span class="st">0</span>:
+        <span class="fn">print</span>(<span class="st">'  matting: {} frames done'</span>.<span class="fn">format</span>(n_done))</pre>
+
+      <div class="why">
+        <span class="w-label">Four small things, each with a reason</span>
+        <ul>
+          <li><strong><span class="mono">zip(frames_of(a), frames_of(b))</span></strong> walks two videos in
+          lockstep, one frame of each in memory at a time. The stabilized frame supplies $c(x)$; the binary frame
+          supplies the trimap seed. <span class="mono">zip</span> also stops at the shorter one, which is the
+          behaviour you want if a codec drops a trailing frame.</li>
+          <li><strong><span class="mono">&gt; 127</span> and not <span class="mono">== 255</span>.</strong>
+          <span class="mono">binary.avi</span> was written as 3-channel 0/255, but XVID is lossy — a "255" can come
+          back as 251, a "0" as 4. Thresholding at the midpoint is robust to that; equality testing is not. This is
+          the single most common way to get an empty mask and wonder why every frame is pure background.</li>
+          <li><strong><span class="mono">cv2.merge([alpha_u8]*3)</span></strong> — $\alpha$ is one channel, but the
+          writer was created with <span class="mono">isColor=True</span>. Replicating gives a grey video where
+          brightness <em>is</em> opacity, which is what FAQ #5 asks for.</li>
+          <li><strong><span class="mono">np.clip(..., 0, 255)</span> before <span class="mono">astype(uint8)</span>.</strong>
+          NumPy's uint8 cast <em>wraps</em>, it doesn't saturate: 256.4 becomes 0, not 255. Float rounding around
+          $\alpha \approx 1$ will produce 255.0000001. Clip first, always.</li>
+        </ul>
+        <p>Notice how little is left here: the composite moved into <span class="mono">_process_frame</span>
+        (Steps 6 and 10), because the §10.3 blend needs the band, the rims and the candidate search — none of which
+        exist at this level. The loop just converts, writes, and counts.</p>
+      </div>
+
+      <div class="check">
+        <span class="c-label">Checkpoint — verify the invariant tracking depends on</span>
+        <pre class="codeblock" style="margin:8px 0 0"><span class="cm"># where alpha is exactly 0, the written matted frame must be the background, exactly</span>
+matted_u8 = np.<span class="fn">clip</span>(matted, <span class="st">0</span>, <span class="st">255</span>).astype(np.uint8)
+zero = (alpha == <span class="st">0</span>)
+<span class="kw">assert</span> np.<span class="fn">array_equal</span>(matted_u8[zero], background[zero])
+
+<span class="cm"># and the alpha video's mean brightness should track the person's area</span>
+<span class="fn">print</span>(alpha.<span class="fn">mean</span>())   <span class="cm"># ~0.03–0.08 for a person filling a few % of the frame</span></pre>
+        <p style="margin:10px 0 0">The assertion is the contract from Step 0. If it fails, tracking's detector
+        <span class="mono">|J − B| &gt; 30</span> will fire on background pixels and the bounding box will explode to
+        the whole frame. It holds by construction: band pixels always have $\alpha > 0$, and everything outside the
+        dilation was never written over the background copy.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 13 -->
+  <div class="step" id="s13">
+    <div class="step-head"><div class="num">13</div><h3>Timestamps and release order</h3>
+    <span class="where">matting.py:241–246</span></div>
+    <div class="step-body">
+
+      <pre class="codeblock">alpha_writer.<span class="fn">release</span>()
+alpha_done_time = time.<span class="fn">time</span>()      <span class="cm"># ← AFTER release, not after the last write()</span>
+matted_writer.<span class="fn">release</span>()
+matted_done_time = time.<span class="fn">time</span>()
+<span class="fn">print</span>(<span class="st">'  matting: finished ({} frames)'</span>.<span class="fn">format</span>(n_done))
+<span class="kw">return</span> alpha_done_time, matted_done_time</pre>
+
+      <div class="why">
+        <span class="w-label">Why the timestamp goes after <span class="mono">release()</span></span>
+        <p>The project asks for the time at which each video "finished being filled with all its frames."
+        <span class="mono">VideoWriter</span> buffers. Frames are still in flight when the last
+        <span class="mono">write()</span> returns; <span class="mono">release()</span> is what flushes them and
+        finalises the AVI container. Taking <span class="mono">time.time()</span> before the release would report a
+        moment when the file on disk is incomplete.</p>
+        <p>Also: two separate releases, two separate timestamps. <span class="mono">timing.json</span> wants
+        <span class="mono">time_to_alpha</span> and <span class="mono">time_to_matted</span> as distinct numbers,
+        and <span class="mono">main.py</span> subtracts the pipeline start time from each.</p>
+      </div>
+
+      <div class="why">
+        <span class="w-label">Returning timestamps rather than durations</span>
+        <p>This function doesn't know when <span class="mono">main.py</span> started. Returning raw wall-clock
+        timestamps and letting the caller subtract its own $t_0$ keeps the module ignorant of the pipeline it lives
+        in — which is why you can unit-test it in isolation.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="maps">Master map: step → lecture section → formula → code</h2>
+
+  <div class="summary">
+    <span class="summary-label">Every step, the lecture section it implements, and where it lives</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>#</th><th>What you're building</th><th>Lecture §</th><th>Formula / lecture idea</th><th>Code</th></tr>
+      <tr><td class="n">0</td><td>The contract</td><td>—</td><td>— (project PDF, FAQ #7)</td><td class="mono">docstring</td></tr>
+      <tr><td class="n">1</td><td>Named constants</td><td>10.1–10.3</td><td>$\rho,\ \sigma,\ r,\ |N(x)|$</td><td class="mono">65–72</td></tr>
+      <tr><td class="n">2</td><td>Structuring elements</td><td>10.1</td><td>$B_\rho(x)$, and $B_\rho(\Delta)=\bigcup_{x\in\Delta}B_\rho(x)$; rims = $\Omega_F, \Omega_B$</td><td class="mono">74–77</td></tr>
+      <tr><td class="n">3</td><td><span class="mono">_kde_3d</span></td><td>10.1 + 10.4</td><td>$f(c|F) \propto \sum_x K(c, c(x))$, joint 3-D, evaluated as $\Phi\Psi^T$: histogram ($a_i$) ∗ separable Gaussian ($\phi_i$)</td><td class="mono">80–88</td></tr>
+      <tr><td class="n">4</td><td><span class="mono">_posterior_fg</span></td><td>10.1</td><td>$P(F|c) = \dfrac{f(c|F)}{f(c|F)+f(c|B)}$ — Bayes, uniform priors</td><td class="mono">91–98</td></tr>
+      <tr><td class="n">5</td><td>ROI crop + empty guard</td><td>—</td><td>— (engineering)</td><td class="mono">152–164</td></tr>
+      <tr><td class="n">6</td><td>Trimap</td><td>10.1</td><td>$\alpha_T \in \{1, 0, \phi\}$; the binary mask <em>is</em> $V_F/V_B$, its contour is $\Delta$</td><td class="mono">166–177</td></tr>
+      <tr><td class="n">7</td><td>Local samples</td><td>10.2</td><td>Trimap refinement — "more samples on the boundary" → $\tilde P_F$</td><td class="mono">179–185</td></tr>
+      <tr><td class="n">8</td><td><span class="mono">_band_graph</span>, <span class="mono">_geodesic_dist</span></td><td>10.1–10.2</td><td>$L(p) = \int_p |\langle W, \dot p\rangle| dl$, $W = \nabla P(F|c)$; $D_F = d_L(x, \Omega_F)$ — multi-source Dijkstra, cost $|\Delta P| + \varepsilon\,dl$</td><td class="mono">101–127, 186–195</td></tr>
+      <tr><td class="n">9</td><td>Opacity map</td><td>10.2</td><td>$\alpha = \dfrac{w_F}{w_F + w_B},\ \ w_F = \tilde D_F^{-r}\tilde P_F,\ r = 2 \in (0,2]$</td><td class="mono">196–201</td></tr>
+      <tr><td class="n">10</td><td><span class="mono">_pure_composite</span></td><td>10.3</td><td>$(x_F^*, x_B^*) = \arg\min \|\alpha c(x_F) + (1{-}\alpha)c(x_B) - c(x)\|^2$; $J = \alpha\, c(x_F^*) + (1{-}\alpha) B_{\text{new}}$</td><td class="mono">130–149, 202–207</td></tr>
+      <tr><td class="n">11</td><td>I/O setup</td><td>—</td><td>— (engineering)</td><td class="mono">210–226</td></tr>
+      <tr><td class="n">12</td><td>Frame loop</td><td>—</td><td>— (convert, write, count)</td><td class="mono">228–239</td></tr>
+      <tr><td class="n">13</td><td>Timestamps</td><td>—</td><td>— (project requirement)</td><td class="mono">241–246</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="callout key">
+    <span class="lbl">The one adaptation, and why it's faithful</span>
+    The lecture's §10.1 derives the trimap from <em>sparse scribbles</em>: KDE → $P(F|c)$ → geodesic $D_F/D_B$ →
+    $V_F/V_B$ → boundary $\Delta$. In this project the background-subtraction stage already hands matting a dense
+    $V_F/V_B$ labelling (<span class="mono">binary.avi</span>), so re-deriving it would be circular. The mask's
+    contour <em>is</em> $\Delta$, and erosion/dilation by a disc of radius $\rho$ computes
+    $B_\rho(\Delta) = \bigcup_{x \in \Delta} B_\rho(x)$ character-for-character. Everything the scribble machinery
+    was for — KDE, Bayes, geodesic distances — still runs, exactly once, where the lecture uses it the second time:
+    on the refinement stage (§10.2) inside the band.
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="cases">Every edge case in the file, and the guard that handles it</h2>
+
+  <p>Eight guards. Each one exists because something specific goes wrong without it. Know what.</p>
+
+  <div class="summary">
+    <span class="summary-label">Guards in matting.py</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>#</th><th>Guard</th><th>Line</th><th>What happens without it</th></tr>
+      <tr>
+        <td class="n">1</td>
+        <td class="mono">if box is None: return alpha, matted</td>
+        <td class="mono">159–160</td>
+        <td><span class="mono">bbox_of_mask</span> returns <span class="mono">None</span> for an empty mask;
+        unpacking it raises <span class="mono">TypeError</span>. With the guard: $\alpha \equiv 0$, the matted
+        frame is the untouched background copy, and the tracker coasts on its Kalman prediction. Exactly right.</td>
+      </tr>
+      <tr>
+        <td class="n">2</td>
+        <td class="mono">return density + EPS</td>
+        <td class="mono">88</td>
+        <td>A colour that neither class has ever seen looks up 0 in <em>both</em> densities, and the Bayes ratio
+        is $0/0 = $ <span class="mono">nan</span> — black specks in the matted video. With the floor it's
+        $\text{EPS}/2\text{EPS} = 0.5$: "no evidence" becomes "coin flip", and the distance term decides.</td>
+      </tr>
+      <tr>
+        <td class="n">3</td>
+        <td class="mono">if band.any()</td>
+        <td class="mono">179</td>
+        <td>Degenerate frame where the mask fills the whole ROI, so erosion and dilation coincide and the band is
+        empty. Everything downstream then indexes with an empty boolean mask. Falls back to the hard binary matte
+        from <span class="mono">alpha_roi = fg_core</span>, with the frame pasted over the core.</td>
+      </tr>
+      <tr>
+        <td class="n">4</td>
+        <td class="mono">if fg_sample_px.any() and bg_sample_px.any()</td>
+        <td class="mono">184</td>
+        <td><strong>The important one.</strong> If the person is everywhere thinner than $2\rho = 14$ px, erosion
+        deletes <span class="mono">fg_core</span> and there are no foreground samples.
+        <span class="mono">_kde_3d</span> of an empty bag returns the all-EPS floor, the posterior collapses to
+        $\approx 0$, and $\alpha \equiv 0$: <strong>the person silently vanishes from the matted video.</strong>
+        The mirror case (no background samples) gives $\alpha \equiv 1$ and the new background never appears. No
+        crash, no <span class="mono">nan</span> — the guard falls back to the hard mask, which fails
+        <em>visibly</em>.</td>
+      </tr>
+      <tr>
+        <td class="n">5</td>
+        <td class="mono">if rim_f.any() and rim_b.any()</td>
+        <td class="mono">191, 199–200</td>
+        <td>No rim pixels ⇒ no Dijkstra sources; <span class="mono">indices=[]</span> would produce nonsense
+        distances. The <span class="mono">else</span> branch drops the geometric term and uses
+        $\alpha = \tilde P_F$ — still §10.1 Bayes, just colour-only.</td>
+      </tr>
+      <tr>
+        <td class="n">6</td>
+        <td class="mono">np.power(d_f, -DIST_R) with d ≥ GEO_EPS or ∞</td>
+        <td class="mono">196–197</td>
+        <td>Not an <span class="mono">if</span>, a construction: band pixels are never Dijkstra sources, so
+        $d \ge \text{GEO\_EPS} > 0$ and the power never divides by zero; unreachable pixels get
+        $d = \infty$ and $\infty^{-2} = 0$ quietly removes that side's vote. The lecture's
+        $\alpha \to 1$ boundary behaviour emerges from the $10^6$-fold dynamic range of $d^{-2}$, with no clamp.</td>
+      </tr>
+      <tr>
+        <td class="n">7</td>
+        <td class="mono">w_f / (w_f + w_b + EPS)</td>
+        <td class="mono">198</td>
+        <td>A band pixel unreachable from <em>both</em> rims has $w_F = w_B = 0$, and $0/0 = $
+        <span class="mono">nan</span>. With EPS it's $0/\text{EPS} = 0$ — the orphan speck defaults to
+        background.</td>
+      </tr>
+      <tr>
+        <td class="n">8</td>
+        <td class="mono">if kf == 0 or kb == 0 (in _pure_composite)</td>
+        <td class="mono">137–138</td>
+        <td>The §10.3 pair search needs at least one candidate on each side. With none, it degrades to blending
+        the observed colour — the naive formula, accepted knowingly for that band, on the same degenerate frames
+        that trip guard #5.</td>
+      </tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="callout note">
+    <span class="lbl">Two more guards that aren't <span class="mono">if</span> statements</span>
+    <p style="margin:6px 0 0"><span class="mono">(binary_frame[..., 0] &gt; 127)</span> on line 230 guards against
+    lossy-codec drift in <span class="mono">binary.avi</span>, and <span class="mono">np.clip(..., 0, 255)</span> on
+    lines 233 and 235 guards against NumPy's <em>wrapping</em> uint8 cast, where 255.3 becomes 0 rather than 255.
+    Both are silent-corruption bugs rather than crashes, which makes them the expensive kind.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <h2 id="debug">When it looks wrong: a debugging table</h2>
+
+  <p>Matting fails visually, not with exceptions. Match the symptom to the step.</p>
+
+  <div class="summary">
+    <span class="summary-label">Symptom → suspect → fix</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>What you see</th><th>Where it went wrong</th><th>What to check</th></tr>
+      <tr>
+        <td>Every frame is pure background; no person at all</td>
+        <td>Step 12 — the mask threshold</td>
+        <td><span class="mono">mask.sum()</span> is 0. Either <span class="mono">binary.avi</span> is empty, or you
+        wrote <span class="mono">== 255</span> instead of <span class="mono">&gt; 127</span> and the codec shaved
+        the values.</td>
+      </tr>
+      <tr>
+        <td>The person is a hard-edged cutout, no soft boundary at all</td>
+        <td>Step 7 — you fell through a guard</td>
+        <td>The band never got written, so <span class="mono">alpha_roi</span> is still the hard
+        <span class="mono">fg_core</span>. Print <span class="mono">band.sum()</span>,
+        <span class="mono">fg_sample_px.sum()</span>, <span class="mono">bg_sample_px.sum()</span>. Usually
+        <span class="mono">RHO</span> is too large for a thin limb.</td>
+      </tr>
+      <tr>
+        <td>Alpha is inverted — opaque on the wall, transparent on the person</td>
+        <td>Step 8 — the Dijkstra sources are swapped</td>
+        <td>You seeded <span class="mono">d_f</span> with <span class="mono">rim_b</span> or vice versa. Run the
+        Step 8 checkpoint: band pixels whose colour matches the person must have
+        <span class="mono">d_f &lt; d_b</span>.</td>
+      </tr>
+      <tr>
+        <td>Black or white specks scattered in the matted video</td>
+        <td>Steps 3, 9 — a <span class="mono">nan</span></td>
+        <td><span class="mono">np.isfinite(alpha).all()</span>. A missing <span class="mono">EPS</span> in
+        <span class="mono">_kde_3d</span> or in the alpha denominator.</td>
+      </tr>
+      <tr>
+        <td>A visible ring of the old corridor colour around the person</td>
+        <td>Step 10 — the halo, which <span class="mono">_pure_composite</span> exists to remove</td>
+        <td>That residue is $\alpha(1-\alpha)(b - f)$, and it should be gone. If you still see it, check that the
+        band is actually taking the <span class="mono">_pure_composite</span> path and not the
+        <span class="mono">kf == 0</span> fallback, and that <span class="mono">N_CAND</span> candidates reach
+        colours the local surface actually has (rims too thin → raise <span class="mono">_RIM_K</span>).</td>
+      </tr>
+      <tr>
+        <td>A limb goes semi-transparent when the person moves fast</td>
+        <td>Step 9 — genuinely mixed pixels, or a band too wide</td>
+        <td>Motion blur makes boundary pixels true mixtures, so mid α is <em>correct</em> matting behaviour there.
+        But if whole limbs dissolve, erosion at $\rho$ ate their core: the entire limb became band and the colour
+        model must carry it alone. Lower <span class="mono">RHO</span> — dropping 10 → 7 fixed exactly this on
+        our clip.</td>
+      </tr>
+      <tr>
+        <td>The band looks right but alpha is ~0.5 everywhere inside it</td>
+        <td>Step 4 — the colour model has collapsed</td>
+        <td>Foreground and background colours overlap, so $P(F|c) \approx 0.5$ and only the distance term is
+        doing work. Check that <span class="mono">lab_roi</span> really is Lab (not BGR), and that
+        <span class="mono">KDE_SIGMA</span> isn't so large that the two densities have merged.</td>
+      </tr>
+      <tr>
+        <td>Tracking's box explodes to the whole frame</td>
+        <td>Step 6 or 10 — the invariant broke</td>
+        <td>Where $\alpha = 0$ the matted frame must equal the background <em>exactly</em>. It holds because
+        <span class="mono">matted_roi</span> starts as a copy of <span class="mono">bg_roi</span> and only core and
+        band pixels are ever written over it — if you "optimised" that copy away or wrote outside the band, this is
+        what breaks. Run the Step 12 checkpoint.</td>
+      </tr>
+      <tr>
+        <td>The matted video has garbage colours / wraps to black</td>
+        <td>Step 12 — the uint8 cast</td>
+        <td>Missing <span class="mono">np.clip(..., 0, 255)</span> before <span class="mono">.astype(np.uint8)</span>.
+        NumPy wraps rather than saturating.</td>
+      </tr>
+      <tr>
+        <td><span class="mono">timing.json</span> reports alpha finishing before it exists on disk</td>
+        <td>Step 13 — timestamp placement</td>
+        <td><span class="mono">time.time()</span> must come after <span class="mono">writer.release()</span>, which
+        is what flushes the buffer and finalises the container.</td>
+      </tr>
+    </table>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <div class="callout key">
+    <span class="lbl">The shape of the whole thing, in one sentence</span>
+    Build pure array functions you can prove correct in a REPL (<span class="mono">_kde_3d</span>,
+    <span class="mono">_posterior_fg</span>, <span class="mono">_band_graph</span>,
+    <span class="mono">_geodesic_dist</span>, <span class="mono">_pure_composite</span>); wrap them in a per-frame
+    engine that crops to the person, morphology's a trimap, runs Dijkstra over the band, evaluates the
+    $D^{-r}\tilde P$ formula, and recomposites with recovered pure colours (<span class="mono">_process_frame</span>);
+    then wrap <em>that</em> in a loop that reads two videos in lockstep and writes two more
+    (<span class="mono">matting</span>). Every algorithmic piece is a lecture section — §10.1 trimap and Bayes,
+    §10.2 opacity, §10.3 matting, §10.4 fast KDE. Everything else in this document is a guard, a dtype, or a
+    reason.
+  </div>
+
+  <p class="muted" style="margin-top:34px">Theory and derivations, with the lecture text quoted verbatim:
+  <a href="Matting_From_Zero.html">Matting_From_Zero.html</a>. The implementation:
+  <a href="../Code/matting.py">Code/matting.py</a>; helpers it depends on
+  (<span class="mono">open_video</span>, <span class="mono">create_writer</span>,
+  <span class="mono">frames_of</span>, <span class="mono">bbox_of_mask</span>) live in
+  <a href="../Code/utils.py">Code/utils.py</a>. Pipeline context and the other three stages:
+  <a href="Final_Project_Report.html">Final_Project_Report.html</a>.</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matting, From Zero</title>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root {
+  --bg:        #0e1320;
+  --bg-2:      #151c2e;
+  --card:      #1b2336;
+  --ink:       #e6ecf7;
+  --ink-dim:   #9fb0cc;
+  --ink-faint: #6b7a99;
+  --accent:    #41d8c9;   /* teal   — verbatim lecture text */
+  --accent-2:  #6ea8ff;   /* blue   — explanation */
+  --accent-3:  #ffb454;   /* amber  — rules of thumb */
+  --accent-4:  #c792ea;   /* violet — zero-knowledge build-up */
+  --danger:    #ff6b81;   /* red    — traps */
+  --good:      #7ee787;   /* green  — worked examples */
+  --line:      #2c3650;
+  --shadow:    0 10px 30px rgba(0,0,0,.35);
+  --radius:    14px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 80% -10%, #1a2440 0%, var(--bg) 55%) fixed;
+  color: var(--ink);
+  line-height: 1.68;
+  font-size: 17px;
+}
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 22px;
+  background: rgba(14,19,32,.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .crumb { color: var(--ink-faint); font-size: 14px; }
+.topbar .crumb b { color: var(--accent); }
+.topbar .spacer { flex: 1; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 34px 22px 90px; }
+header.hero {
+  margin-bottom: 30px; padding: 26px 28px;
+  background: linear-gradient(135deg, var(--card) 0%, var(--bg-2) 100%);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+header.hero .eyebrow {
+  text-transform: uppercase; letter-spacing: .16em;
+  font-size: 12.5px; color: var(--accent); font-weight: 700;
+}
+header.hero h1 { margin: 6px 0 8px; font-size: 31px; line-height: 1.2; }
+header.hero p.lede { margin: 0; color: var(--ink-dim); font-size: 16.5px; }
+h2 {
+  font-size: 24px; margin: 44px 0 14px;
+  padding-left: 13px; border-left: 4px solid var(--accent);
+  scroll-margin-top: 70px;
+}
+h3 { font-size: 19px; margin: 30px 0 10px; color: var(--ink); scroll-margin-top: 70px; }
+p { margin: 12px 0; }
+ul, ol { padding-left: 22px; }
+li { margin: 7px 0; }
+strong { color: #fff; }
+code, .mono {
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  background: #0c1322; border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 6px; font-size: 14.5px; color: #cfe7ff;
+}
+
+/* ---- block types ---- */
+.pdf-block {
+  margin: 22px 0 6px; padding: 14px 18px;
+  background: linear-gradient(180deg, #13252a 0%, #0f1c20 100%);
+  border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  border-radius: 11px; box-shadow: var(--shadow);
+}
+.pdf-block .pdf-label {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 8px;
+}
+.pdf-block p, .pdf-block ul, .pdf-block ol { color: #d3e7e5; }
+
+.explain {
+  margin: 0 0 22px; padding: 14px 18px;
+  background: #161f33;
+  border: 1px solid var(--line); border-left: 4px solid var(--accent-2);
+  border-radius: 11px; box-shadow: var(--shadow);
+}
+.explain .explain-label {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent-2); margin-bottom: 8px;
+}
+.explain h4.mini { margin:16px 0 6px; color: var(--accent-2); font-size: 14.5px; text-transform: uppercase; letter-spacing: .08em; }
+
+.zero {
+  margin: 18px 0 22px; padding: 14px 18px;
+  background: linear-gradient(180deg,#211a2e 0%, #1a1526 100%);
+  border: 1px solid var(--line); border-left: 4px solid var(--accent-4);
+  border-radius: 11px; box-shadow: var(--shadow);
+}
+.zero .zero-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--accent-4); text-transform: uppercase; margin-bottom:8px;
+}
+.zero h4.mini { margin:16px 0 6px; color: var(--accent-4); font-size: 14.5px; text-transform: uppercase; letter-spacing: .08em; }
+
+.example {
+  margin: 18px 0; padding: 14px 18px;
+  background: #10231a; border: 1px solid var(--line); border-left: 4px solid var(--good);
+  border-radius: 11px;
+}
+.example .ex-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--good); text-transform: uppercase; margin-bottom:8px;
+}
+
+.gotcha {
+  margin: 18px 0; padding: 14px 18px;
+  background: #281720; border: 1px solid var(--line); border-left: 4px solid var(--danger);
+  border-radius: 11px;
+}
+.gotcha .g-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--danger); text-transform: uppercase; margin-bottom:8px;
+}
+
+.callout {
+  margin: 18px 0; padding: 14px 18px; border-radius: 11px;
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 4px solid var(--accent-3);
+}
+.callout.key  { border-left-color: var(--accent);   background: #13252a; }
+.callout.note { border-left-color: var(--accent-2); background: #161f33; }
+.callout .lbl { font-weight: 700; color: var(--ink); display:block; margin-bottom: 3px; }
+
+.eq {
+  margin: 16px 0; padding: 12px 16px;
+  background: #0c1322; border: 1px solid var(--line); border-radius: 10px;
+  overflow-x: auto;
+}
+.eq mjx-container[display="true"] { margin: 0 !important; }
+
+.rot {
+  margin: 26px 0 14px; padding: 16px 20px; border-radius: 12px;
+  background: linear-gradient(180deg,#2a1e10 0%, #1a1408 100%);
+  border: 1px solid var(--line); border-left: 4px solid var(--accent-3);
+  box-shadow: var(--shadow);
+}
+.rot .rot-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--accent-3); text-transform: uppercase; margin-bottom:8px;
+}
+
+.summary {
+  margin: 16px 0 30px; padding: 16px 20px; border-radius: 12px;
+  background: linear-gradient(180deg,#0f1d22 0%, #0a1418 100%);
+  border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+.summary .summary-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--accent); text-transform: uppercase; margin-bottom:8px;
+}
+.tablewrap { overflow-x: auto; }
+table { width:100%; border-collapse: collapse; font-size: 14.8px; margin-top:6px; }
+td, th { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--accent); font-weight: 700; }
+.summary td:first-child { color: var(--accent-2); font-weight: 600; }
+
+.decoder td:first-child { color: var(--accent-4); font-weight: 700; white-space: nowrap; font-family: "JetBrains Mono", Consolas, monospace; }
+.decoder td:nth-child(2) { color: #fff; white-space: nowrap; }
+
+.muted { color: var(--ink-faint); font-size: 14px; }
+hr.sep { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+
+pre.codeblock {
+  margin: 14px 0; padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+  background: #0a0f1c; border: 1px solid var(--line);
+  font-family: "JetBrains Mono", Consolas, monospace; font-size: 13.6px;
+  line-height: 1.55; color: #cfe7ff;
+}
+pre.codeblock .cm { color: var(--ink-faint); }
+pre.codeblock .kw { color: var(--accent-4); }
+pre.codeblock .fn { color: var(--accent); }
+
+.flow {
+  margin: 18px 0; padding: 16px; border-radius: 11px; overflow-x: auto;
+  background: #0c1322; border: 1px solid var(--line);
+  font-family: "JetBrains Mono", Consolas, monospace; font-size: 13.5px;
+  color: var(--ink-dim); white-space: pre; line-height: 1.5;
+}
+.flow b { color: var(--accent); }
+.flow i { color: var(--danger); font-style: normal; }
+
+/* ---- demos ---- */
+.demo {
+  margin: 22px 0; border-radius: 12px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.demo-head {
+  display:flex; align-items:center; gap:10px;
+  padding: 11px 16px; background: #141b2c; border-bottom: 1px solid var(--line);
+}
+.demo-head .dot { width:9px; height:9px; border-radius:50%; background: var(--accent-3); }
+.demo-head h4 { margin:0; font-size:15px; }
+.demo-head .tag {
+  margin-left:auto; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+  color: var(--accent-3); font-weight:700;
+}
+.demo-body { padding: 16px; }
+.demo canvas { width:100%; height:auto; border-radius:8px; background:#0a0f1c; display:block; }
+.controls { margin-top:14px; display:grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap:12px 20px; }
+.control label { display:flex; justify-content:space-between; font-size:13.5px; color:var(--ink-dim); margin-bottom:4px; }
+.control label .val { color:var(--accent); font-weight:700; font-family:"JetBrains Mono",Consolas,monospace; }
+.control input[type=range] { width:100%; accent-color: var(--accent); }
+.readout {
+  margin-top:14px; padding:10px 14px; border-radius:8px; background:#0a0f1c;
+  border:1px solid var(--line); font-family:"JetBrains Mono",Consolas,monospace;
+  font-size:13.6px; color:var(--ink-dim); line-height:1.75;
+}
+.readout b { color: var(--accent); font-weight:700; }
+.readout .hi { color: var(--good); font-weight:700; }
+.readout .lo { color: var(--danger); font-weight:700; }
+.btn {
+  background:#1d2740; color:var(--ink); border:1px solid var(--line);
+  border-radius:8px; padding:6px 14px; font-size:13.5px; cursor:pointer;
+}
+.btn:hover { background:#26324f; }
+
+/* ---- toc ---- */
+nav.toc {
+  margin: 26px 0 10px; padding: 16px 20px; border-radius: 12px;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+nav.toc .toc-label {
+  display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em;
+  color: var(--ink-faint); text-transform: uppercase; margin-bottom:8px;
+}
+nav.toc ol { margin:0; padding-left: 20px; column-count: 2; column-gap: 30px; }
+nav.toc li { margin: 5px 0; break-inside: avoid; }
+@media (max-width: 700px) { nav.toc ol { column-count: 1; } }
+
+.legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:18px 0; }
+.legend .item { padding:10px 14px; border-radius:9px; background:#0c1322; border:1px solid var(--line); font-size:14px; }
+.legend .item b { display:block; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:2px; }
+.legend .l1 { border-left:4px solid var(--accent);   } .legend .l1 b { color:var(--accent); }
+.legend .l2 { border-left:4px solid var(--accent-4); } .legend .l2 b { color:var(--accent-4); }
+.legend .l3 { border-left:4px solid var(--accent-2); } .legend .l3 b { color:var(--accent-2); }
+.legend .l4 { border-left:4px solid var(--good);     } .legend .l4 b { color:var(--good); }
+.legend .l5 { border-left:4px solid var(--danger);   } .legend .l5 b { color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Matting</b> · from absolutely zero · Video Processing 0512-4263</span>
+  <span class="spacer"></span>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Companion to the Final Project report — Section 3</div>
+    <h1>Matting, From Zero</h1>
+    <p class="lede">This document assumes you know nothing. Not the notation, not Bayes, not what $\alpha$ is.
+    Every piece of the lecture is quoted <em>verbatim</em> in teal so it stays a reference you can trust — and
+    every teal block is immediately followed by a build-up from first principles, a worked example with real
+    numbers, and a demo you can play with. By the end you will be able to read
+    <span class="mono">Video_Processing.pdf</span> pages 67–74 and <span class="mono">Code/matting.py</span>
+    and see that they say the same thing.</p>
+  </header>
+
+  <div class="legend">
+    <div class="item l1"><b>Teal</b>Exact lecture text. Never edited. Your ground truth.</div>
+    <div class="item l2"><b>Violet</b>Built from zero. Read this first if the teal made no sense.</div>
+    <div class="item l3"><b>Blue</b>What our code actually does, and why.</div>
+    <div class="item l4"><b>Green</b>Worked example with real numbers.</div>
+    <div class="item l5"><b>Red</b>Traps, typos in the PDF, and things that will confuse you.</div>
+  </div>
+
+  <nav class="toc">
+    <span class="toc-label">Reading order</span>
+    <ol>
+      <li><a href="#s1">The one idea the lecture never says out loud</a></li>
+      <li><a href="#s2">The compositing equation, and why matting is impossible</a></li>
+      <li><a href="#s3">Decoder ring: every symbol, in English</a></li>
+      <li><a href="#s4">The framework (lecture p. 67)</a></li>
+      <li><a href="#s5">Stage 1 — Trimap</a></li>
+      <li><a href="#s5a">— 1a. KDE: what a probability of a colour means</a></li>
+      <li><a href="#s5b">— 1b. Bayes: flipping the question around</a></li>
+      <li><a href="#s5c">— 1c. Distance maps and the narrow band</a></li>
+      <li><a href="#s6">Stage 2 — Opacity map</a></li>
+      <li><a href="#s7">Stage 3 — Matting, and the halo</a></li>
+      <li><a href="#s8">Making KDE fast (low rank)</a></li>
+      <li><a href="#s9">Our code, line by line</a></li>
+      <li><a href="#s10">Where we deviate from the lecture, honestly</a></li>
+      <li><a href="#s11">Cheatsheet &amp; exam answers</a></li>
+    </ol>
+  </nav>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s1">1 &nbsp; The one idea the lecture never says out loud</h2>
+
+  <div class="zero">
+    <span class="zero-label">Start here — a pixel is a bucket, not a point</span>
+    <p>You probably imagine a pixel as <em>the colour of the scene at one exact location</em>. It is not. A camera
+    sensor is a grid of tiny square wells. Each well collects <strong>all the light that lands anywhere inside its
+    square</strong> and reports the average. A pixel is a bucket, and its value is the average colour of everything
+    that fell in.</p>
+
+    <p>Now put a person in front of the camera. Take a pixel deep inside his jacket: everything that fell in the
+    bucket was jacket, so the value is pure jacket brown. Take a pixel far away on the wall: pure wall grey. Fine.
+    Now take a pixel <strong>exactly on the silhouette</strong> — the little square straddles the edge. Say 70% of
+    it saw jacket and 30% saw wall. The bucket reports</p>
+
+    <div class="eq">$$ \text{observed colour} = 0.7 \times (\text{jacket brown}) + 0.3 \times (\text{wall grey}) $$</div>
+
+    <p>That colour is <em>neither</em> jacket nor wall. It is a physically real, muddy in-between colour, and there
+    is nothing wrong with your camera. It happens to <strong>every</strong> pixel on the outline of every object in
+    every image ever taken. It happens even worse for hair, smoke, glass, motion blur and out-of-focus edges, where
+    a single pixel can be a mix across many strands.</p>
+
+    <h4 class="mini">This is the entire reason matting exists</h4>
+    <p>If you segment with a binary mask, you are forced to answer "jacket or wall?" for that pixel. Both answers
+    are wrong. Say "jacket" and you glue a fringe of wall-grey onto the person. Say "wall" and you shave a pixel
+    off his shoulder. Either way, when you drop him onto a new background you get a visible, ugly outline. Matting
+    refuses to answer the question. Instead it says: <strong>this pixel is 70% person</strong>, and it calls that
+    number $\alpha$ (alpha).</p>
+
+    <p>So: <span class="term" style="color:var(--accent-4);font-weight:700">$\alpha$ is the fraction of a pixel
+    that belongs to the foreground.</span> $\alpha = 1$ deep inside the person, $\alpha = 0$ out on the wall,
+    and something in between along the boundary. The <em>opacity map</em> is just the image of all the
+    $\alpha$ values. That's it. That's the whole vocabulary.</p>
+  </div>
+
+  <div class="callout key">
+    <span class="lbl">If you remember one sentence</span>
+    Binary segmentation asks "is this pixel the person?" — matting asks "<em>how much</em> of this pixel is the
+    person, and what colour would the person have been if the background hadn't leaked in?"
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s2">2 &nbsp; The compositing equation, and why matting is impossible</h2>
+
+  <div class="zero">
+    <span class="zero-label">Building the equation</span>
+    <p>Write down what the bucket does, as algebra. For a pixel at position $x$:</p>
+    <div class="eq">$$ \underbrace{c(x)}_{\substack{\text{what the camera} \\ \text{recorded}}} \;=\; \alpha(x)\,\underbrace{f(x)}_{\substack{\text{the pure} \\ \text{foreground colour}}} \;+\; \big(1-\alpha(x)\big)\,\underbrace{b(x)}_{\substack{\text{the pure} \\ \text{background colour}}} $$</div>
+    <p>This is called the <strong>compositing equation</strong>. It is the single most important line in the whole
+    chapter, and the lecture only writes it down on page 72, three sections in. Read it as: the recorded colour is
+    a weighted average of the true foreground colour and the true background colour, and $\alpha$ is the weight.</p>
+
+    <h4 class="mini">Now count</h4>
+    <p>The pixel is a colour, so $c(x)$ is 3 numbers (R, G, B). That gives you <strong>3 equations</strong>. What
+    don't you know? $f(x)$ is 3 numbers. $b(x)$ is 3 numbers. $\alpha(x)$ is 1 number. That's
+    <strong>7 unknowns</strong>.</p>
+
+    <div class="eq">$$ \underbrace{3 \text{ equations}}_{\text{R, G, B}} \quad\text{vs.}\quad \underbrace{7 \text{ unknowns}}_{f_R, f_G, f_B,\; b_R, b_G, b_B,\; \alpha} $$</div>
+
+    <p>Three equations cannot pin down seven unknowns. Matting is <strong>fundamentally under-determined</strong>,
+    at every single pixel, forever. No algorithm will ever "solve" it. This is not a limitation of the course's
+    method — it is arithmetic.</p>
+
+    <h4 class="mini">So what is the rest of the chapter?</h4>
+    <p>Once you accept the counting argument, everything that follows becomes obvious in purpose. Every stage of
+    the lecture is a way of <strong>injecting extra information</strong> to close the 4-unknown gap:</p>
+    <ul>
+      <li><strong>The trimap</strong> declares that for most pixels $\alpha$ is already known (exactly 0 or exactly
+      1). Now you only have to solve the thin uncertain band — maybe 2% of the image.</li>
+      <li><strong>The colour models (KDE)</strong> add a prior: "foreground colours tend to look like <em>this</em>,
+      background colours like <em>that</em>." That constrains $f$ and $b$.</li>
+      <li><strong>The distance maps</strong> add a spatial prior: "a pixel hugging the confident foreground is
+      probably mostly foreground," independent of its colour.</li>
+      <li><strong>The window search</strong> (Section 10.3) adds a locality prior: "$f(x)$ is probably equal to
+      the colour of some confidently-foreground pixel a few pixels away."</li>
+    </ul>
+    <p>Four sources of side information, one for each missing degree of freedom. That is the architecture of the
+    entire chapter, and now you can read it as a story instead of a list of formulas.</p>
+  </div>
+
+  <h3>2.1 &nbsp; Why you must not just blend the pixel you recorded</h3>
+
+  <div class="zero">
+    <span class="zero-label">The halo, derived</span>
+    <p>Suppose you have a perfect $\alpha$. You want to place the person on a new background $B$. The obvious
+    thing to write is</p>
+    <div class="eq">$$ J(x) = \alpha(x)\,c(x) + (1-\alpha(x))\,B(x) \qquad \text{(the naive blend)} $$</div>
+    <p>and the lecture says, flatly, "we won't do that." Here is exactly why. Substitute the compositing equation,
+    $c = \alpha f + (1-\alpha) b$, into the naive blend:</p>
+    <div class="eq">$$ J_{\text{naive}} = \alpha\big[\alpha f + (1-\alpha) b\big] + (1-\alpha) B = \alpha^2 f + \underbrace{\alpha(1-\alpha)\, b}_{\textbf{the old background!}} + (1-\alpha) B $$</div>
+    <p>Compare with what you actually wanted, which is the person's true colour mixed with the new background:</p>
+    <div class="eq">$$ J_{\text{correct}} = \alpha f + (1-\alpha) B $$</div>
+    <p>Subtract them:</p>
+    <div class="eq">$$ J_{\text{naive}} - J_{\text{correct}} = \alpha(1-\alpha)\,\big(b - f\big) $$</div>
+    <p>So the naive blend smears the <strong>old</strong> background colour $b$ into your result, with strength
+    $\alpha(1-\alpha)$. That coefficient is zero where $\alpha=0$ or $\alpha=1$ (good — the confident regions are
+    untouched) and <strong>largest exactly at $\alpha = 0.5$</strong>, where it equals $0.25$. In other words the
+    error is concentrated in a thin ring hugging the person's outline, which is precisely what a
+    <em>halo</em> is.</p>
+    <p>And note the error scales with $\|b - f\|$: the more the old background differs from the person, the worse
+    it gets. Light hair on a red wall is the worst case in the lecture because $b - f$ is enormous there.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — watch the halo appear</h4><span class="tag">drag α</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A single boundary pixel. The foreground is light hair, the
+      <em>old</em> background is a red wall, the <em>new</em> background is green. Slide $\alpha$ and compare the
+      naive blend against the correct composite.</p>
+      <canvas id="cvAlpha" width="900" height="240"></canvas>
+      <div class="controls">
+        <div class="control"><label>α — fraction of the pixel that is hair <span class="val" id="vA">0.50</span></label><input type="range" id="aSlide" min="0" max="100" value="50"></div>
+      </div>
+      <div class="readout" id="roAlpha"></div>
+    </div>
+  </div>
+
+  <div class="gotcha">
+    <span class="g-label">Notation trap #1 — the letter <i>f</i> means two different things</span>
+    <p>In the compositing equation, $f(x)$ is the <strong>pure foreground colour</strong> at pixel $x$ — a
+    3-vector of R,G,B.</p>
+    <p>Two pages earlier, $f(c|F)$ is a <strong>probability density over colours</strong> — a scalar function that
+    takes a colour and returns "how likely". Totally unrelated. The lecture reuses the letter. Tell them apart by
+    the argument: $f(x)$ takes a <em>position</em>, $f(c|F)$ takes a <em>colour</em>.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s3">3 &nbsp; Decoder ring: every symbol, in English</h2>
+
+  <p>Most of the pain in these three lecture pages is notation, not ideas. Keep this table open while you read the
+  teal blocks.</p>
+
+  <div class="summary">
+    <span class="summary-label">Every symbol on pages 67–74</span>
+    <div class="tablewrap">
+    <table class="decoder">
+      <tr><th>Symbol</th><th>Name</th><th>In English</th></tr>
+      <tr><td>$\Omega$</td><td>image domain</td><td>The set of all pixel <em>positions</em> in the image. Just "the image grid".</td></tr>
+      <tr><td>$x \in \Omega$</td><td>a pixel</td><td>One position, e.g. (row 40, col 91). <strong>Not a colour.</strong></td></tr>
+      <tr><td>$c(x)$</td><td>colour at $x$</td><td>3 numbers. The lecture also calls the whole image $c: \Omega \to \mathbb{R}^3$.</td></tr>
+      <tr><td>$\Omega_F,\ \Omega_B$</td><td>scribbles</td><td>The handful of pixels the user painted as "definitely person" / "definitely background".</td></tr>
+      <tr><td>$f(c|F)$</td><td>likelihood</td><td>"If I told you this pixel is foreground, how unsurprising is the colour $c$?" A density over colours.</td></tr>
+      <tr><td>$P(F|c)$</td><td>posterior</td><td>"Given that I see colour $c$, what's the probability this pixel is foreground?" A number in [0,1].</td></tr>
+      <tr><td>$P(F),\ P(B)$</td><td>priors</td><td>How much foreground do you expect before looking? We use $\tfrac12$ each.</td></tr>
+      <tr><td>$K(c,c')$</td><td>kernel</td><td>The "bell". How much a sample of colour $c'$ vouches for colour $c$.</td></tr>
+      <tr><td>$\sigma$</td><td>bandwidth</td><td>Width of the bell. Big $\sigma$ = smooth/blurry estimate.</td></tr>
+      <tr><td>$D_F(x),\ D_B(x)$</td><td>distance maps</td><td>Cost of walking from pixel $x$ to the nearest foreground / background scribble.</td></tr>
+      <tr><td>$V_F,\ V_B$</td><td>regions</td><td>Everything closer to the FG scribbles / to the BG scribbles. Two halves of the image.</td></tr>
+      <tr><td>$\Delta$</td><td>boundary</td><td>The curve where $D_F = D_B$. The dividing line between $V_F$ and $V_B$.</td></tr>
+      <tr><td>$B_\rho(x)$</td><td>ball</td><td>A disk of radius $\rho$ centred on $x$. Nothing fancier.</td></tr>
+      <tr><td>$B_\rho(\Delta)$</td><td>the band</td><td>All pixels within $\rho$ of the boundary curve. A ribbon hugging the silhouette.</td></tr>
+      <tr><td>$\rho$</td><td>band radius</td><td>Half the width of that ribbon. 5–15 px in practice; we use 7.</td></tr>
+      <tr><td>$\phi$</td><td>"undecided"</td><td>A <strong>label</strong>, not a number. It just means "I refuse to answer yet."</td></tr>
+      <tr><td>$\alpha_T(x)$</td><td>trimap</td><td>The three-valued map: $1$, $0$, or $\phi$. Subscript T = trimap.</td></tr>
+      <tr><td>$\alpha(x)$</td><td>opacity map</td><td>The real-valued answer in $[0,1]$ that fills in the $\phi$ pixels.</td></tr>
+      <tr><td>$f(x),\ b(x)$</td><td>pure colours</td><td>What the foreground / old background <em>would</em> have looked like alone at $x$.</td></tr>
+      <tr><td>$r$</td><td>distance exponent</td><td>How hard geometry overrules colour. $r \in (0,2]$.</td></tr>
+      <tr><td>$\tilde{D}_F, \tilde{P}_F$</td><td>tilde = refined</td><td>The tilde means "the local, stage-2 version, re-estimated near the boundary."</td></tr>
+      <tr><td>$B(x)$</td><td>new background</td><td>The image you're pasting the person onto. (Yes, $B$ is also used for "ball" and "background". Sorry.)</td></tr>
+      <tr><td>$J(x)$</td><td>the output</td><td>The final composited frame.</td></tr>
+      <tr><td>$\tau$</td><td>arclength</td><td>Distance travelled <em>along</em> the boundary curve. Used only to argue the problem is nearly 1-D.</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="gotcha">
+    <span class="g-label">Typos in the course PDF — you are not going crazy</span>
+    <ul>
+      <li>Page 67: "scribbles of the foreground ($\Omega_F \in \Omega$) and the background ($\Omega_F \in \Omega$)"
+      — the second one should be $\Omega_B$. Also $\in$ should be $\subset$: a scribble is a <em>set</em> of pixels,
+      not one pixel.</li>
+      <li>Page 71: "$\alpha() = \frac{w_F(x)}{x_F(x) + w_B(x)}$" — the $x_F$ in the denominator is a typo for
+      $w_F$, and the $\alpha()$ is missing its $x$. The formula is
+      $\alpha(x) = \frac{w_F(x)}{w_F(x) + w_B(x)}$.</li>
+      <li>Page 67: "brtween" = between. Page 72: "sutisfying" = satisfying, "ill-problem" = ill-posed problem.</li>
+      <li>Page 68: "dimention" = dimension. Page 73: "Fast multiple method" = Fast <strong>Multipole</strong>
+      Method.</li>
+    </ul>
+    <p>None of these change the maths. But if you're trying to learn from a document and it contradicts itself,
+    you assume the fault is yours. It isn't.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s4">4 &nbsp; The framework (lecture p. 67)</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF page 67)</span>
+    <p>The purpose of video matting is taking the foreground of an image and insert it to a new background. The
+    entire framework of video matting compromises:</p>
+    <p><strong>Input:</strong> A 3-channel image ($I : \Omega \to R^3$ or denoted as $c: \Omega \to R^3$) and
+    scribbles of the foreground ($\Omega_F \in \Omega$) and the background ($\Omega_F \in \Omega$). We can even
+    add more information to the input (such as optical flow for better segmentation), so the input image does not
+    necessarily belong to $R^3$.</p>
+    <p><strong>Trimap:</strong> This is essentially a map of only 3 values (hence the name): 1 - we confidently
+    know the pixel is foreground. 0 - we confidently know the pixel is background. Undecided value $\phi$ - we
+    are not sure if the pixel is foreground or background.</p>
+    <p><strong>Opacity map:</strong> It will fill the undecided region with values which are between 0 and 1.</p>
+    <p><strong>Matting:</strong> This process takes as input an opacity map and a new background, and performs the
+    final matting between the foreground of the original image and the new background. In regions where the
+    opacity map is 0, the new background is inserted, while in regions where the opacity map is 1, the original
+    foreground is preserved.</p>
+    <p>The question remains on what to insert to pixels where the opacity map was brtween 0 and 1. One possible
+    way is to implement $\alpha I + (1 - \alpha)B$, but we won't do that. The reason is because in all those
+    semi-transparent areas we will have a mix between the colors of the foreground and the background, which is
+    not desired. For example, if we had a light hair on a red background, the color of the hair will be mixed
+    with red.</p>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">Translated, with the "why" attached</span>
+    <p>Three stages, and now you know what each is <em>for</em>:</p>
+    <div class="flow">
+<b>image + scribbles</b>
+      │
+      ▼  <i>Stage 1: TRIMAP</i>         "which pixels can I answer instantly?"
+      │                          output: a map of 1 / 0 / φ
+      ▼  <i>Stage 2: OPACITY MAP</i>    "for the φ pixels, what is the real α?"
+      │                          output: α(x) ∈ [0,1] on the band
+      ▼  <i>Stage 3: MATTING</i>        "now composite — without dragging the old bg along"
+      │                          output: J(x), the final frame
+      ▼
+   <b>new frame</b></div>
+
+    <h4 class="mini">Why three stages and not one</h4>
+    <p>Solving 7 unknowns per pixel over a million pixels is hopeless. Stage 1's job is to shrink the problem: it
+    declares 98% of pixels solved ($\alpha = 0$ or $1$, and $f = c$ or $b = c$) and hands stage 2 only the thin
+    ribbon where the answer is genuinely ambiguous. Stage 2 spends its entire budget on that ribbon. Stage 3 then
+    does the actual pasting, and is the only stage that needs the new background at all.</p>
+
+    <h4 class="mini">"Scribbles"?</h4>
+    <p>In the classic setup a human drags a few strokes with a mouse — a green stroke on the person, a red stroke
+    on the wall — and that's <em>all</em> the algorithm is told. Everything else is inferred. The scribbles exist
+    only because the lecture assumes no other source of segmentation.</p>
+    <p><strong>We do not have this problem.</strong> Our background-subtraction stage already produced a full
+    binary mask of the person for every frame. So in our project the binary mask replaces the scribbles — it is
+    a vastly richer input than a couple of mouse strokes. Keep this in mind: it lets us skip most of Stage 1.</p>
+
+    <h4 class="mini">"so the input image does not necessarily belong to $R^3$"</h4>
+    <p>Meaning: a pixel doesn't have to be described by 3 numbers. You can staple extra channels onto it — for
+    example the 2 numbers of its optical-flow vector, giving a 5-channel pixel. Then the "colour" model also knows
+    about motion, and a person walking in front of a static wall is separable even if he's wearing wall-coloured
+    clothes. All the maths below is unchanged; only the dimensionality of $c$ changes.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s5">5 &nbsp; Stage 1 — Trimap</h2>
+
+  <div class="zero">
+    <span class="zero-label">What we're trying to produce</span>
+    <p>A picture the same size as the frame, where every pixel is stamped with one of three things:
+    <strong>1</strong> ("definitely person"), <strong>0</strong> ("definitely not"), or <strong>$\phi$</strong>
+    ("ask me later"). The $\phi$ pixels form a ribbon around the person's outline.</p>
+    <p>The lecture builds this ribbon <em>from scratch</em>, starting from nothing but a few scribbles. That takes
+    three sub-steps — a colour model (5a), Bayes (5b), and distance maps (5c) — and it's the longest part of the
+    chapter. Follow it, because the same machinery gets reused in Stage 2 where you genuinely need it.</p>
+  </div>
+
+  <h3 id="s5a">5a &nbsp; KDE — what "the probability of a colour" even means</h3>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 68–70, first part)</span>
+    <p>If we had a light foreground and dark background, the most simple approach would be creating a histogram,
+    dividing the values to bins and finding a threshold for which bins belong to the background. However, we are
+    working with at least 3-channel images, so making for example 10 bins in each dimention, we will have in total
+    1000 bins which is a lot.</p>
+    <p>We will, therefore, work with what is called <strong>Kernel Density Estimation (KDE)</strong>. This is a
+    method to estimate a distribution from a finite sample set. What we have is the color value $c \in R^3$ for
+    every pixel, and we want to find the color distribution of foreground and background. The scribles themselves
+    indicate we have conditional probability: we have a color given the scribble is foreground or background.
+    More formally: $\forall x \in \Omega_F : c(x) \in f_{C|F}$ and $\forall x \in \Omega_B : c(x) \in f_{C|B}$.</p>
+    <p>We will start with an example in 1-D. Usually, if we want to create a histogram, we would divide the axis
+    to bins and count how many pixels we had at every bin. Instead, we would draw around each pixel a "bell".</p>
+    <p>We estimate:</p>
+    <div class="eq">$$ f(c|F) \propto \sum_{x \in \Omega_F} K(c, c(x)) $$</div>
+    <p>The same will be done with the background. This is sometimes called Parzen window. Usually the function K
+    is: $K(c, c') \propto e^{-\frac{\|c - c'\|_2^2}{2\sigma^2}}$. An ideal histogram would look like: [two
+    non-overlapping bumps]</p>
+    <p>However, in most cases, we will have a very large overlap. The complexity would be for calculating $f(c|F)$
+    is $O(|\Omega| \cdot |\Omega_F|)$ since K gets two parameters c and c'. This is too large, and as a result we
+    will do something else. We will assume for now we have calculated them, and later introduce a practical
+    approach for them.</p>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — you have 40 sample colours. Now what?</span>
+    <p>The user scribbled on the person. You now hold a bag of, say, 400 colours that you know are foreground.
+    You want to turn that bag into a <strong>function</strong> that answers, for <em>any</em> colour anyone hands
+    you: "how foreground-ish is this colour?" That function is $f(c|F)$.</p>
+
+    <h4 class="mini">Attempt 1: a histogram</h4>
+    <p>Chop the colour axis into bins, count how many samples fall in each, done. Two problems, and the lecture
+    names the second one:</p>
+    <ul>
+      <li><strong>Hard edges.</strong> Two colours a hair's breadth apart can land in different bins and get wildly
+      different answers. The estimate is a staircase, and reality isn't.</li>
+      <li><strong>Emptiness in 3-D.</strong> Colour is 3-dimensional. 10 bins per channel = $10^3 = 1000$ bins. With
+      400 samples, at least 600 bins are <em>empty</em>. A histogram assigns probability exactly <strong>zero</strong>
+      to every empty bin. So a colour you plausibly should accept — one you just happened not to sample — gets
+      $f(c|F) = 0$, and later, when you divide by it, everything explodes. And 10 bins per channel is already
+      coarse; at a realistic 32 bins you have 32 768 bins and 400 samples. The histogram is basically all zeros.</li>
+    </ul>
+    <p>This is the curse of dimensionality, and it's why the lecture waves the histogram away in one sentence.</p>
+
+    <h4 class="mini">Attempt 2: put a bell on every sample</h4>
+    <p>Instead of dropping each sample into a rigid bin, let each sample deposit a small smooth Gaussian bump —
+    a "bell" — centred on its own colour. Then <strong>add up all the bells</strong>. Where samples cluster, many
+    bells overlap and the sum is tall. Where you had no samples but you're near some, the tails of nearby bells
+    still give you a small positive value instead of zero. Far away from everything, it decays smoothly to
+    near-zero.</p>
+    <div class="eq">$$ f(c|F) \;\propto\; \sum_{x \in \Omega_F} K\big(c,\, c(x)\big), \qquad K(c,c') \propto e^{-\frac{\|c-c'\|^2}{2\sigma^2}} $$</div>
+    <p>Read the sum literally: <em>"to score the colour $c$, walk over every foreground sample $c(x)$, ask how
+    close it is to $c$, and add up the votes — where a vote decays like a Gaussian with distance."</em> That's it.
+    That's Kernel Density Estimation. It is also called a <strong>Parzen window</strong>, after the guy who
+    published it; the two names mean the same thing and the lecture uses both.</p>
+
+    <h4 class="mini">The $\propto$ ("proportional to") signs</h4>
+    <p>A probability density has to integrate to 1. Neither the kernel nor the sum does, out of the box, so you'd
+    have to divide by a normalising constant. The lecture writes $\propto$ to say "and there's a constant here I'm
+    not going to bother writing." It genuinely doesn't matter, because in the next step the constant cancels in a
+    ratio. (Our code does normalise, one line: <span class="mono">lut /= lut.sum()</span>.)</p>
+
+    <h4 class="mini">What $\sigma$ controls</h4>
+    <p>$\sigma$ is the width of each bell. Too small, and each bell is a needle: your density is a spiky mess that
+    has memorised your samples and generalises to nothing (overfitting). Too large, and everything smears into one
+    featureless mound that can't tell foreground colours from background ones (underfitting). It is the same
+    bias–variance dial as every other smoothing parameter you've ever met.</p>
+
+    <h4 class="mini">The complexity remark</h4>
+    <p>To evaluate $f(c|F)$ at <em>one</em> colour you sum over all $|\Omega_F|$ samples. To evaluate it at every
+    pixel of the image you do that $|\Omega|$ times: $O(|\Omega|\cdot|\Omega_F|)$. For a 1-megapixel image and
+    10 000 scribble pixels that's $10^{10}$ kernel evaluations, per frame. That's the "too large" the lecture
+    mentions, and Section 10.4 (our §8) is entirely about fixing it.</p>
+  </div>
+
+  <div class="example">
+    <span class="ex-label">Worked example — KDE by hand, in 1-D</span>
+    <p>Foreground samples (say, the L channel of three scribble pixels): $\{100,\ 102,\ 140\}$. Take $\sigma = 5$.
+    What is $f(c|F)$ at $c = 101$, and at $c = 120$?</p>
+    <div class="eq">$$ f(101|F) \propto e^{-\frac{(101-100)^2}{2\cdot 25}} + e^{-\frac{(101-102)^2}{2\cdot 25}} + e^{-\frac{(101-140)^2}{2\cdot 25}} = 0.980 + 0.980 + \approx 0 = 1.960 $$</div>
+    <div class="eq">$$ f(120|F) \propto e^{-\frac{400}{50}} + e^{-\frac{324}{50}} + e^{-\frac{400}{50}} = 0.00034 + 0.0016 + 0.00034 = 0.0023 $$</div>
+    <p>The colour 101 scores ~850× higher than 120 — as it should, since two samples sit right on top of it. But
+    notice that 120 is <strong>not zero</strong>. A histogram with bins of width 10 would have put 120 in an empty
+    bin and returned a hard 0. The bells' tails keep the estimate alive everywhere, which is exactly what saves you
+    when you later divide by it.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — KDE: bells, their sum, and the histogram</h4><span class="tag">click to add samples</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Grey bars = the raw histogram of the samples. Faint curves = one
+      Gaussian bell per sample. Teal curve = their sum, which <em>is</em> $f(c|F)$. Click anywhere on the canvas
+      to drop a new sample; drag $\sigma$ to see overfitting (spiky) vs underfitting (one blob).</p>
+      <canvas id="cvKde" width="900" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>σ — bell width <span class="val" id="vSig">6</span></label><input type="range" id="kdeSig" min="1" max="40" value="6"></div>
+        <div class="control" style="display:flex;align-items:flex-end;gap:10px">
+          <button class="btn" id="kdeReset">reset samples</button>
+          <button class="btn" id="kdeClear">clear all</button>
+        </div>
+      </div>
+      <div class="readout" id="roKde"></div>
+    </div>
+  </div>
+
+  <div class="callout key">
+    <span class="lbl">The identity that makes our code work</span>
+    <p style="margin:6px 0 0">Summing a bell centred on every sample is <em>mathematically identical</em> to taking
+    the histogram of the samples and blurring it with that bell. Formally, a histogram is a sum of spikes,
+    $h(c) = \sum_i \delta(c - c_i)$, and convolution with a kernel slides the kernel onto every spike:</p>
+    <div class="eq">$$ (K * h)(c) = \sum_i K(c - c_i) = f(c|F) $$</div>
+    <p style="margin:0">So <strong>histogram + Gaussian blur = KDE</strong>. Exactly, not approximately. Look at
+    Demo 2: the teal curve is literally the grey bars blurred. This one line is why
+    <span class="mono">matting.py</span> can compute KDE in two calls
+    (<span class="mono">np.bincount</span>, then <span class="mono">cv2.GaussianBlur</span>).</p>
+  </div>
+
+  <h3 id="s5b">5b &nbsp; Bayes — flipping the question around</h3>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 68–70, continued)</span>
+    <p>We will develop the equations:</p>
+    <div class="eq">$$ P(F|c) = \frac{f(c|F) P(F)}{f(c)} = \frac{f(c|F) P(F)}{f(c|F) P(F) + f(c|B) P(B)} $$</div>
+    <div class="eq">$$ P(B|c) = \frac{f(c|B) P(B)}{f(c)} = \frac{f(c|B) P(B)}{f(c|F) P(F) + f(c|B) P(B)} $$</div>
+    <p>The main parameters unkown to us here are P(F) and P(B). In worst case, we can assume uniform distribution:
+    $P(F) = P(B) = \frac{1}{2}$, $\implies P(F|c) = \frac{f(c|F)}{f(c|F) + f(c|B)}$.</p>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — two different questions that look the same</span>
+    <p>KDE gave you $f(c|F)$: <em>given that a pixel is foreground, how likely is its colour to be $c$?</em></p>
+    <p>But standing at a pixel, that is not your question. You are <em>looking</em> at the colour. You want:
+    <em>given that the colour is $c$, how likely is the pixel to be foreground?</em> That is $P(F|c)$. Different
+    question. Bayes' rule is the machine that turns one into the other.</p>
+
+    <h4 class="mini">Why they're different — the classic illustration</h4>
+    <p>$P(\text{has four legs} \mid \text{is a dog}) \approx 1$. $P(\text{is a dog} \mid \text{has four legs})$ is
+    small — most four-legged things are not dogs. The conditional bar is not symmetric, and confusing the two
+    directions is the single most common probability error there is.</p>
+
+    <h4 class="mini">Bayes, assembled</h4>
+    <p>The rule itself: $P(F|c) = \dfrac{f(c|F)\,P(F)}{f(c)}$. Every piece has a name and a job:</p>
+    <ul>
+      <li>$f(c|F)$ — the <strong>likelihood</strong>. From KDE. "Does this colour fit the foreground model?"</li>
+      <li>$P(F)$ — the <strong>prior</strong>. Before looking at any colour, what fraction of pixels are foreground?</li>
+      <li>$f(c)$ — the <strong>evidence</strong>. How likely is this colour at all, from any source? Its only job is
+      to make the numbers sum to 1.</li>
+      <li>$P(F|c)$ — the <strong>posterior</strong>. The answer.</li>
+    </ul>
+    <p>You never compute $f(c)$ directly. A pixel is either foreground or background, so its colour came from one
+    of the two: $f(c) = f(c|F)P(F) + f(c|B)P(B)$. That is the "law of total probability", and substituting it is
+    the only step between the first equality and the second one in the teal block.</p>
+
+    <h4 class="mini">The uniform prior</h4>
+    <p>Setting $P(F) = P(B) = \tfrac12$ means "I refuse to assume anything about how much of the image is person."
+    Then the halves cancel top and bottom and you get the clean form the lecture ends on:</p>
+    <div class="eq">$$ P(F|c) = \frac{f(c|F)}{f(c|F) + f(c|B)} $$</div>
+    <p>Look at the shape of it: <strong>each side gets a vote whose loudness is how well the colour matches its
+    model, and $P(F|c)$ is the foreground's share of the total vote.</strong> Because it's a share, it's
+    automatically in $[0,1]$ and you never have to clamp it. Remember this shape — the opacity-map formula in
+    Stage 2 is the exact same shape with the votes made louder or quieter by distance.</p>
+
+    <p>Also note this is where the $\propto$ from before stops mattering: any constant multiplying <em>both</em>
+    $f(c|F)$ and $f(c|B)$ cancels in the ratio.</p>
+  </div>
+
+  <div class="example">
+    <span class="ex-label">Worked example — Bayes with real numbers</span>
+    <p>A pixel on the person's shoulder has colour $c$. Your foreground KDE returns $f(c|F) = 0.030$; your
+    background KDE returns $f(c|B) = 0.010$. Uniform priors.</p>
+    <div class="eq">$$ P(F|c) = \frac{0.030}{0.030 + 0.010} = 0.75, \qquad P(B|c) = \frac{0.010}{0.040} = 0.25 $$</div>
+    <p>Three-to-one in favour of foreground — and they sum to 1, for free. Now a pixel on a brown jacket in front
+    of a brown sofa: $f(c|F) = 0.021$, $f(c|B) = 0.019$. Then $P(F|c) = 0.525$. The colour model has essentially
+    shrugged. That coin-flip is exactly the situation the distance maps in the next section exist to break.</p>
+  </div>
+
+  <div class="gotcha">
+    <span class="g-label">Notation trap #2 — lowercase <i>f</i> vs uppercase <i>P</i></span>
+    <p>The lecture writes $f(\cdot)$ for things over <strong>colours</strong> (continuous — these are densities,
+    they can exceed 1 and only integrate to 1) and $P(\cdot)$ for things over <strong>labels</strong> F/B
+    (discrete — genuine probabilities in $[0,1]$ that sum to 1). It's a real convention, consistently applied, and
+    once you see it the equations stop looking arbitrary.</p>
+  </div>
+
+  <h3 id="s5c">5c &nbsp; Distance maps and the narrow band</h3>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 68–70, continued)</span>
+    <p>Now we will do distance maps similar to video colorization. We had a path $p \in \Omega$ but now:</p>
+    <div class="eq">$$ L(p) = \int_p |\langle W(p(t)), \dot{p}(t) \rangle| dl, \qquad W(x) = \nabla_x p(F|c(x)) $$</div>
+    <p>We have taken this function because it will be consistently larger in the foreground and smaller in the
+    background. Next:</p>
+    <div class="eq">$$ x, y \in \Omega: d_L(x, y) = \min_{p \in [x, y]} L(p) $$</div>
+    <p>Where we go over all the points p from x to y and find the minimum. Next:</p>
+    <div class="eq">$$ D_F(x) = d_L(x, \Omega_F) = \min_{y \in \Omega_F} d_L(x, y), \qquad D_B(x) = d_L(x, \Omega_B) = \min_{y \in \Omega_B} d_L(x, y) $$</div>
+    <p>This will eventually create two regions: the first region would be for the foreground and the second would
+    be for the background.</p>
+    <p>Within each region, pixels will have similar distance values, whereas crossing between regions leads to a
+    sharp change in distance. Consequently, in each distance map, one region will exhibit relatively small values
+    while the other will have larger values. By comparing the two distance maps, we can determine whether a given
+    pixel belongs to the foreground or the background:</p>
+    <div class="eq">$$ V_F = (x \in \Omega: D_F(x) &lt; D_B(x)), \quad V_B = (x \in \Omega: D_F(x) &gt; D_B(x)) $$</div>
+    <p>And we can also define the boundary: $\Delta = (x \in \Omega: D_F(x) = D_B(x))$.</p>
+    <p>Usually, this set will be empty because the probabilty for the distance to be equal is very low. As a
+    result, the boundary can be found using interpolation. Now, we will create a narrow band around the boundary:</p>
+    <div class="eq">$$ B_p(\Delta) = \bigcup_{x \in \Delta} B_\rho(x) $$</div>
+    <p>Where $B_\rho(x)$ is a ball around x with radius $\rho$. We can also write this as:</p>
+    <div class="eq">$$ x \in B_\rho(\Delta) \iff \exists y \in \Delta : \|x - y\| &lt;= \rho $$</div>
+    <p>Finally, the Trimap will be:</p>
+    <div class="eq">$$ \forall x \in V_F \setminus B_\rho(\Delta): \alpha_T(x) = 1 $$</div>
+    <div class="eq">$$ \forall x \in V_B \setminus B_\rho(\Delta): \alpha_T(x) = 0 $$</div>
+    <div class="eq">$$ \forall x \in B_\rho(\Delta): \alpha_T(x) = \phi $$</div>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — why colour alone is not enough</span>
+    <p>End of §5b you had $P(F|c)$ at every pixel. Why not just threshold it at 0.5 and call it a trimap?</p>
+    <p>Because of the brown jacket on the brown sofa. When foreground and background share colours, the two KDE
+    bumps overlap and $P(F|c) \approx 0.5$ over huge regions — the lecture's own remark, "in most cases we will
+    have a very large overlap." Colour has told you everything it knows and it isn't enough. You need a second,
+    independent kind of evidence, and the obvious one is <strong>where the pixel is</strong>. A pixel in the middle
+    of the person's chest is foreground even if its colour is ambiguous, simply because it's surrounded by
+    foreground.</p>
+
+    <h4 class="mini">Ordinary distance vs geodesic distance</h4>
+    <p>The naive spatial evidence is "how many pixels away is the nearest scribble?" — straight-line, ruler
+    distance. But a ruler happily walks straight through the person's silhouette, as if the edge weren't there. We
+    want a distance that says: <em>going around the edge is cheap, crossing it is expensive.</em></p>
+    <p>So define a <strong>cost of walking</strong> instead. Picture $P(F|c)$ as a landscape: high plateau over the
+    person, low plain over the wall, and a cliff at the silhouette. Now charge yourself for altitude change. Walking
+    along the plateau is free (no altitude change). Walking off the cliff costs a fortune. That is precisely what
+    the integral says:</p>
+    <div class="eq">$$ L(p) = \int_p \big|\langle \underbrace{W(p(t))}_{\nabla P(F|c)},\ \underbrace{\dot{p}(t)}_{\text{your direction}} \rangle\big|\, dl $$</div>
+    <p>Piece by piece: $p$ is a path you walk. $\dot p$ is the direction you're stepping. $W = \nabla P(F|c)$ is the
+    gradient — it points uphill, and is <strong>big only at the cliff</strong>, near zero on flat plateau or plain.
+    The inner product $\langle W, \dot p\rangle$ is the altitude change of your step. Absolute value, because
+    climbing and descending both cost. Integrate along the path: $L(p)$ = total altitude you gained and lost.</p>
+    <p>Then $d_L(x,y) = \min_p L(p)$ is the <strong>cheapest</strong> route from $x$ to $y$ — the smart route that
+    detours around the cliff if it can. That's a <em>geodesic</em> distance: shortest path in a world where some
+    ground is expensive.</p>
+
+    <h4 class="mini">Turning it into the two maps</h4>
+    <p>$D_F(x)$ = cheapest walk from $x$ to <em>any</em> foreground scribble. $D_B(x)$ = same to any background
+    scribble. Two full images of numbers.</p>
+    <p>Here's the payoff. If $x$ is on the person, you can reach the FG scribble without ever crossing the cliff:
+    $D_F(x)$ is small. To reach a BG scribble you <em>must</em> cross: $D_B(x)$ is large. On the wall, the reverse.
+    So the comparison is trivially informative:</p>
+    <div class="eq">$$ V_F = \{x : D_F(x) &lt; D_B(x)\}, \qquad V_B = \{x : D_F(x) &gt; D_B(x)\}, \qquad \Delta = \{x : D_F(x) = D_B(x)\} $$</div>
+    <p>Every pixel is now assigned. $\Delta$ is the tie: the ridge line between the two, which is the silhouette.</p>
+    <p>The lecture's aside — "usually this set will be empty" — is a floating-point remark. $D_F$ and $D_B$ are
+    reals; asking for exact equality on a discrete grid almost never fires. In practice you find where the sign of
+    $D_F - D_B$ flips between neighbouring pixels and interpolate to get a sub-pixel curve.</p>
+
+    <h4 class="mini">The band — a formula that looks scarier than it is</h4>
+    <div class="eq">$$ B_\rho(\Delta) = \bigcup_{x \in \Delta} B_\rho(x) $$</div>
+    <p>Take every point $x$ on the boundary curve. Stamp a disk of radius $\rho$ on it. Union of all those disks =
+    a ribbon of width $2\rho$ following the silhouette. The second form,
+    "$x \in B_\rho(\Delta) \iff \exists y \in \Delta: \|x-y\| \le \rho$", says the identical thing backwards: a
+    pixel is in the band iff <em>some</em> boundary point is within $\rho$ of it.</p>
+    <p>Now stamp the trimap: inside $V_F$ and outside the band $\Rightarrow \alpha_T = 1$. Inside $V_B$ and outside
+    the band $\Rightarrow \alpha_T = 0$. Anywhere in the band $\Rightarrow \alpha_T = \phi$. Done — Stage 1
+    complete.</p>
+
+    <h4 class="mini">Choosing $\rho$</h4>
+    <p>$\rho$ too small: the band is one pixel wide, there's no room to represent a soft hair edge, and you're back
+    to a binary mask. $\rho$ too big: half the image is "undecided" and Stage 2 — which is the expensive stage — has
+    to work everywhere, plus the "nearly 1-D" assumption it relies on collapses. 5–15 px. We use 10.</p>
+  </div>
+
+  <div class="callout note">
+    <span class="lbl">Where this reappears</span>
+    Note the lecture says "distance maps similar to video colorization." That's the point: the exact same geodesic
+    machinery from Chapter 9 is reused here, with only the cost field swapped — luminance gradient there,
+    foreground-probability gradient here. Learn it once, use it twice.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — the trimap band, and what ρ does</h4><span class="tag">slide ρ</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A mock silhouette. <span style="color:#7ee787">Green</span> = confident
+      foreground $\alpha_T = 1$. <span style="color:#808090">Grey</span> = confident background $\alpha_T = 0$.
+      <span style="color:#ffb454">Amber</span> = the band $B_\rho(\Delta)$, where $\alpha_T = \phi$ and Stage 2 has
+      to do real work. At $\rho = 0$ you have an ordinary binary mask — and no way to express a soft edge.</p>
+      <canvas id="cvTri" width="900" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>ρ — band radius (px) <span class="val" id="vRho">10</span></label><input type="range" id="rho" min="0" max="40" value="10"></div>
+      </div>
+      <div class="readout" id="roTri"></div>
+    </div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">What our code does instead — and why it's allowed</span>
+    <p>Everything in §5a–§5c exists to <strong>find the silhouette</strong> starting from a few mouse strokes. We
+    already have the silhouette: the background-subtraction stage handed us a clean binary mask of the person, per
+    frame. So the trimap is built directly from the mask with two morphological operations — the KDE, Bayes and
+    geodesic machinery of §5a–§5b doesn't disappear, it moves to the refinement stage (§6), where the lecture runs
+    it a second time anyway:</p>
+    <pre class="codeblock"><span class="cm"># matting.py — _process_frame()</span>
+fg_core = cv2.<span class="fn">erode</span>(mask_roi, _ERODE_K)   <span class="cm"># shrink  → confident foreground, α=1</span>
+dilated = cv2.<span class="fn">dilate</span>(mask_roi, _ERODE_K)  <span class="cm"># grow    → outside this, confident bg, α=0</span>
+band_u8 = dilated - fg_core                <span class="cm"># the ribbon → α=φ</span>
+band    = band_u8.astype(bool)</pre>
+    <p>And this is not an analogy, it is the lecture's formula. <span class="mono">_ERODE_K</span> is an
+    <em>ellipse</em> structuring element of size $(2\rho+1) \times (2\rho+1)$ — a discrete disk, i.e. exactly
+    $B_\rho(x)$. And morphological dilation of a set $S$ by a disk is, by definition,
+    $\bigcup_{x \in S} B_\rho(x)$ — character for character the lecture's band formula. Eroding by $\rho$ and
+    dilating by $\rho$ and taking the difference gives you every pixel within $\rho$ of the mask's contour. That
+    ribbon <strong>is</strong> $B_\rho(\Delta)$, with the mask contour playing the role of $\Delta$.</p>
+    <p>What we gave up: nothing that matters. The geodesic construction's <em>only</em> output is the boundary
+    curve $\Delta$. We were handed a better one. Skipping the derivation of a thing you already possess isn't
+    cutting a corner.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s6">6 &nbsp; Stage 2 — Opacity map</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 71–72)</span>
+    <p>Let's draw only the area that is interesting for us:</p>
+    <p>At this stage, we now have a much richer set of data. Previously, we only had a few scribbles indicating
+    foreground and background, which were the sole sources of information for the entire image, despite its large
+    color variability. Now, our focus is on a specific region with much more limited color variation. We have a
+    lot more samples of the foreground and background on the <strong>boundary</strong>.</p>
+    <p>Thus, we will estimate again the distribution functions for refinement. And since we have a curve, we can
+    put a coordinate system and measure the length of the curve. We will denote that as $\tau$. Every point we
+    can denote as $(\tau, c(x))$. Since the boundary in very narrow, this problem is nearly 1-D. Now we can
+    develop the equations:</p>
+    <div class="eq">$$ \forall x \in B_\rho(\Delta): \quad \alpha() = \frac{w_F(x)}{x_F(x) + w_B(x)} $$</div>
+    <div class="eq">$$ w_F(x) = \tilde{D}_F(x)^{-r} \tilde{P}_F(x), \qquad r \in (0, 2] $$</div>
+    <p>Here $\tilde{P}_F(x)$ is computed based on previous step. The equation of $w_F(x)$ was chosen intuitively
+    in the paper.</p>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — why redo the KDE you already did</span>
+    <p>This paragraph confuses everyone, because it looks like the lecture forgot it already built colour models.
+    It didn't. The point is that the <strong>first</strong> KDE was global and therefore mediocre, and now you can
+    afford a much better one.</p>
+    <p>Think about it. A global foreground model has to describe the person's <em>whole</em> body: dark hair,
+    pale skin, blue jeans, white shoes. That's a wide, multi-humped, low-confidence distribution. Ditto the
+    background: bright window, dark door, beige wall. The two overlap heavily and $P(F|c)$ is mush.</p>
+    <p>But now zoom into a 20-pixel-tall patch of band next to the person's <em>elbow</em>. Within that patch the
+    foreground is only ever "sleeve blue" and the background is only ever "wall beige." Two tight, well-separated
+    bumps. A KDE fitted only to <em>these</em> pixels is dramatically sharper than the global one. That's the
+    "much more limited color variation" sentence, and the tilde in $\tilde P_F$ is the lecture's way of writing
+    "the good local version."</p>
+    <p>The $\tau$ business is the same observation made formal: parameterise the band by arclength along the
+    boundary curve, and at each $\tau$ the colour problem is one-dimensional (just "how far across the ribbon are
+    you?"). A hard 3-D segmentation problem has become a stack of easy 1-D ones.</p>
+
+    <h4 class="mini">Now read the $\alpha$ formula (with the typo fixed)</h4>
+    <div class="eq">$$ \alpha(x) = \frac{w_F(x)}{w_F(x) + w_B(x)}, \qquad w_F(x) = \tilde{D}_F(x)^{-r}\,\tilde{P}_F(x), \qquad w_B(x) = \tilde{D}_B(x)^{-r}\,\tilde{P}_B(x) $$</div>
+    <p>You have seen this shape before — it's the Bayes formula from §5b, "foreground's share of the total vote."
+    The only change is what makes a vote loud:</p>
+    <div class="eq">$$ \underbrace{w_F(x)}_{\substack{\text{how loudly foreground} \\ \text{claims this pixel}}} = \underbrace{\tilde{D}_F(x)^{-r}}_{\substack{\text{proximity:} \\ \text{closer} \Rightarrow \text{louder}}} \times \underbrace{\tilde{P}_F(x)}_{\substack{\text{colour evidence:} \\ \text{better match} \Rightarrow \text{louder}}} $$</div>
+    <p>Two independent kinds of evidence, <strong>multiplied</strong>. Multiplication means both must agree: if
+    either the colour says "definitely not foreground" ($\tilde P_F \approx 0$) or the pixel is miles from any
+    confident foreground ($\tilde D_F$ huge, so $\tilde D_F^{-r} \approx 0$), the foreground's vote dies. And
+    because $\alpha$ is a normalised share, it lands in $[0,1]$ with no clamping.</p>
+
+    <h4 class="mini">Why the negative exponent, and why $r \le 2$</h4>
+    <p>$D^{-r} = 1/D^r$ — so small distance means a <em>big</em> number. Nearness = loudness. The exponent tunes
+    how brutally geometry overrules colour:</p>
+    <ul>
+      <li>$r \to 0$: $D^{-r} \to 1$, distance is ignored, $\alpha$ becomes pure colour classification.</li>
+      <li>$r = 2$: distance dominates hard; a pixel twice as far has a quarter of the vote.</li>
+      <li>$r &gt; 2$ (excluded): geometry annihilates colour completely, and $\alpha$ degenerates into a plain
+      distance ratio across the band — a linear ramp that ignores the image. That's why the paper caps it at 2.</li>
+    </ul>
+
+    <h4 class="mini">The beautiful part: the formula glues itself to the trimap</h4>
+    <p>Walk to the <em>inner</em> edge of the band, right against the confident foreground. There
+    $\tilde D_F(x) = 0$, so $w_F = 0^{-r} = \infty$, and</p>
+    <div class="eq">$$ \alpha = \frac{\infty}{\infty + w_B} = 1 $$</div>
+    <p>Walk to the <em>outer</em> edge: $\tilde D_B = 0$, $w_B = \infty$, $\alpha = 0$. So the opacity map
+    automatically agrees with the trimap at both edges of the band, and varies smoothly in between. No seams. This
+    is what the lecture means by "chosen intuitively in the paper" — it wasn't derived from a probabilistic model,
+    it was <em>designed</em> to have exactly these boundary conditions. Knowing that, you could have invented it
+    yourself.</p>
+  </div>
+
+  <div class="example">
+    <span class="ex-label">Worked example — three band pixels, $r = 2$</span>
+    <p><strong>Pixel A</strong>, hugging the person: $\tilde D_F = 2$ px, $\tilde D_B = 8$ px, colour is
+    ambiguous ($\tilde P_F = 0.6$).</p>
+    <div class="eq">$$ w_F = 2^{-2}(0.6) = 0.150, \quad w_B = 8^{-2}(0.4) = 0.00625, \quad \alpha = \frac{0.150}{0.15625} = \mathbf{0.96} $$</div>
+    <p>Geometry wins: almost fully opaque, as it should be. Colour barely mattered.</p>
+
+    <p><strong>Pixel B</strong>, dead centre of the band: $\tilde D_F = \tilde D_B = 5$ px, same
+    $\tilde P_F = 0.6$.</p>
+    <div class="eq">$$ w_F = 5^{-2}(0.6) = 0.024, \quad w_B = 5^{-2}(0.4) = 0.016, \quad \alpha = \frac{0.024}{0.040} = \mathbf{0.60} $$</div>
+    <p>Distances cancel exactly, so $\alpha = \tilde P_F$. <strong>When geometry is neutral, colour decides —
+    all of it.</strong> That's the design working as intended.</p>
+
+    <p><strong>Pixel C</strong>, centre of the band but colour clearly says wall ($\tilde P_F = 0.1$).</p>
+    <div class="eq">$$ w_F = 5^{-2}(0.1) = 0.004, \quad w_B = 5^{-2}(0.9) = 0.036, \quad \alpha = \frac{0.004}{0.040} = \mathbf{0.10} $$</div>
+    <p>Mostly transparent. Two pixels at identical positions got $\alpha = 0.60$ and $\alpha = 0.10$ purely from
+    colour. This is how wisps of hair survive: they sit in the middle of the band geometrically, but their colour
+    votes foreground.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 4 — the opacity formula, as a vote</h4><span class="tag">drag anything</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Set the two distances and the colour posterior, and watch the two votes
+      $w_F$, $w_B$ fight. Try $D_F = D_B$ and confirm that $\alpha$ collapses to $\tilde P_F$. Then set $r = 0$ and
+      confirm that distance stops mattering at all.</p>
+      <canvas id="cvOpa" width="900" height="200"></canvas>
+      <div class="controls">
+        <div class="control"><label>$\tilde D_F$ — distance to confident FG <span class="val" id="vDf">2</span></label><input type="range" id="dF" min="0" max="20" value="2"></div>
+        <div class="control"><label>$\tilde D_B$ — distance to confident BG <span class="val" id="vDb">8</span></label><input type="range" id="dB" min="0" max="20" value="8"></div>
+        <div class="control"><label>$\tilde P_F$ — colour says foreground <span class="val" id="vPf">0.60</span></label><input type="range" id="pF" min="0" max="100" value="60"></div>
+        <div class="control"><label>$r$ — distance exponent <span class="val" id="vR">2.0</span></label><input type="range" id="rr" min="0" max="20" value="20"></div>
+      </div>
+      <div class="readout" id="roOpa"></div>
+    </div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">What our code does — Code/matting.py</span>
+    <p>Line for line, this is the lecture's formula, including the geodesic distances:</p>
+    <pre class="codeblock"><span class="cm"># 1. the LOCAL sample sets — the lecture's "more samples on the boundary"</span>
+near_band    = cv2.<span class="fn">dilate</span>(band_u8, _SAMPLE_K).astype(bool)   <span class="cm"># within 25 px of the band</span>
+fg_sample_px = fg_bool &amp; near_band            <span class="cm"># confident FG pixels, but only near the band</span>
+bg_sample_px = (dilated == 0) &amp; near_band     <span class="cm"># confident BG pixels, but only near the band</span>
+p_fg = <span class="fn">_posterior_fg</span>(lab_roi, lab_roi[fg_sample_px], lab_roi[bg_sample_px])   <span class="cm"># = P̃_F</span>
+
+<span class="cm"># 2. the GEODESIC distance maps D̃_F, D̃_B — W = ∇P(F|c), multi-source Dijkstra</span>
+<span class="cm">#    edge cost between neighbours u,v:  |P(u) − P(v)| + GEO_EPS·step   (= |⟨W, ṗ⟩| dl)</span>
+near  = cv2.<span class="fn">dilate</span>(band_u8, _RIM_K).astype(bool)   <span class="cm"># ~2 px around the band</span>
+rim_f = fg_bool &amp; near            <span class="cm"># Ω_F: confident FG touching the band  (sources of D̃_F)</span>
+rim_b = (dilated == 0) &amp; near     <span class="cm"># Ω_B: confident BG touching the band  (sources of D̃_B)</span>
+domain = band | rim_f | rim_b
+ids, graph = <span class="fn">_band_graph</span>(p_fg, domain)
+d_f = <span class="fn">_geodesic_dist</span>(ids, graph, rim_f)[ids[band]]
+d_b = <span class="fn">_geodesic_dist</span>(ids, graph, rim_b)[ids[band]]
+
+<span class="cm"># 3. the lecture's formula, with r = DIST_R = 2 — no fudge terms</span>
+w_f = np.<span class="fn">power</span>(d_f, -DIST_R) * p_fg[band]
+w_b = np.<span class="fn">power</span>(d_b, -DIST_R) * (1.0 - p_fg[band])
+a_band = w_f / (w_f + w_b + EPS)</pre>
+
+    <h4 class="mini">How the path integral becomes a graph</h4>
+    <p>Along one step from pixel $u$ to a neighbour $v$, the lecture's integrand
+    $|\langle \nabla P, \dot p\rangle|\,dl$ is just the change in posterior across the step, $|P(v) - P(u)|$.
+    Summing steps gives the path cost; minimising over paths is shortest-path; shortest-path with non-negative
+    costs is Dijkstra (multi-source: seed <em>all</em> rim pixels at distance 0, grow one wavefront). The tiny
+    $\text{GEO\_EPS}\cdot dl$ regularizer handles flat regions, where the lecture's cost would be 0 for every path:
+    there the distance gracefully falls back to scaled Euclidean. The graph only spans
+    <span class="mono">band ∪ rims</span> — exact, since any path to the confident interior crosses the rim first —
+    which is what keeps Dijkstra fast enough to run twice per frame.</p>
+
+    <h4 class="mini">Why $d^{-2}$ needs no guard, and why there is no blur or clamp</h4>
+    <p>The lecture's boundary condition — $\tilde D_F \to 0 \Rightarrow w_F \to \infty \Rightarrow \alpha = 1$,
+    seamlessly joining the trimap — used to require fudges when the distances could be exactly 0 inside the map.
+    Here the sources are the rims, not band pixels, so every band distance is at least one step:
+    $d \ge \text{GEO\_EPS} > 0$, always finite, yet spanning ~6 orders of magnitude of $d^{-2}$ across the band.
+    α snaps to 1 against the core and 0 against the background on its own. The old de-speckling blur and the two
+    boundary clamps became dead code and were removed: the geodesic α is smooth because the distance field itself
+    is smooth, and the confident regions are never written over ($\alpha_{roi}$ starts as
+    <span class="mono">fg_core</span> and only <span class="mono">band</span> pixels are assigned).</p>
+
+    <h4 class="mini">Why Lab colour space</h4>
+    <p>The kernel $K(c,c') \propto e^{-\|c-c'\|^2/2\sigma^2}$ measures colour difference with a Euclidean norm and
+    <em>one</em> $\sigma$ for all directions. That's only sane if equal distances look equally different to a human
+    eye. In BGR they don't — a distance of 6 is a big change in the dark and imperceptible in the bright. CIE-Lab
+    is designed to be roughly perceptually uniform, so a single $\sigma$ means the same thing everywhere. Bonus:
+    it splits lightness (L) from chroma (a, b), which is exactly the split the background-subtraction stage used
+    to kill shadows.</p>
+
+    <h4 class="mini">The ROI crop</h4>
+    <p>All of the above runs inside <span class="mono">bbox_of_mask(mask)</span> padded by
+    $\text{SAMPLE\_RADIUS} + \rho + 5$ pixels, not on the full frame. The band lives near the person; there is no
+    reason to run distance transforms over a wall. This is the single biggest speedup in the file, and it's free
+    — the alpha outside the box is 0 by construction.</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s7">7 &nbsp; Stage 3 — Matting, and the halo</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 72–73)</span>
+    <p>Now we are given:<br>
+    B - new background<br>
+    $\alpha$ - opacity map<br>
+    c - original image.<br>
+    As said earlier, we could do: $J(x) = \alpha c(x) + (1 - \alpha(x)) B(x)$.</p>
+    <p>This will be done on the foreground and background, but not on the boundary. That is because the colors
+    will mix and we even may get a halo around the foreground. We will do something else then. Suppose we have
+    the point x:</p>
+    <p>We can write down the value of the pixel as:</p>
+    <div class="eq">$$ c(x) = \alpha f(x) + (1 - \alpha(x)) b(x) $$</div>
+    <p>Where in this case f(x) and b(x) are some unkown foreground and background values respectively. Our goal
+    would be to estimate them. This is an ill-problem (one equation with 2 unknowns), but we have a lot of colors
+    around the pixel that we know they are foreground and background. We will open a window around the pixel, and
+    claim that there are two pixels in the window sutisfying the equation above.</p>
+    <p>On a very small area this assumption most of the time works. What we will do is each time take two pixels
+    in the window, compute the value according to the equasion earlier, substract c(x), calculate the norm and
+    find those which minimize the result:</p>
+    <div class="eq">$$ (x_F^*, x_B^*) = \arg\min_{\substack{x_F \in N(x) \cap \{x:\alpha(x)=1\} \\ x_B \in N(x) \cap \{x:\alpha(x)=0\}}} \|\alpha(x) c(x_F) + (1 - \alpha(x)) c(x_B) - c(x)\|^2 $$</div>
+    <p>With that we can take the color in $x_F^*$ as the value of the foreground object than c(x):</p>
+    <div class="eq">$$ J(x) = \alpha c(x_F^*) + (1 - \alpha(x)) B(x) $$</div>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — you already derived this in §2</span>
+    <p>The compositing equation reappears, and now the lecture calls it what it is: <em>one equation, two unknown
+    colours.</em> (Really 3 equations and 7 unknowns as we counted, but $\alpha$ is now known from Stage 2, leaving
+    3 equations and 6 unknowns. Still hopeless on its own.)</p>
+    <p>The trick is a <strong>locality prior</strong>. You don't know $f(x)$, but you're standing one or two pixels
+    from a mob of pixels that are confidently pure foreground. The person's sleeve doesn't change colour over two
+    pixels. So: <em>whatever $f(x)$ is, it's probably the colour of one of those neighbours.</em> Same for $b(x)$
+    and the confident background neighbours. That converts an impossible continuous estimation into a
+    <strong>finite search</strong> over pairs you can actually enumerate.</p>
+
+    <h4 class="mini">Reading the $\arg\min$ out loud</h4>
+    <p>Open a window $N(x)$ around the pixel. Inside it:</p>
+    <ul>
+      <li>List the confident-foreground pixels: $N(x) \cap \{\alpha = 1\}$. Say 30 of them.</li>
+      <li>List the confident-background pixels: $N(x) \cap \{\alpha = 0\}$. Say 30 of them.</li>
+      <li>For each of the $30 \times 30 = 900$ pairs $(x_F, x_B)$, <em>pretend</em> those are the true pure colours
+      and predict what the camera would have recorded:
+      $\hat c = \alpha\, c(x_F) + (1-\alpha)\, c(x_B)$.</li>
+      <li>Compare with the colour you actually recorded: $\|\hat c - c(x)\|^2$.</li>
+      <li>Keep the pair with the smallest error. Call them $x_F^*, x_B^*$.</li>
+    </ul>
+    <p>You have found the pair of real, pure, nearby colours that <strong>best explains</strong> the muddy pixel you
+    observed. That's the whole idea, and $\arg\min$ just means "the arguments that minimise", i.e. return the
+    winning pair rather than the winning error value.</p>
+
+    <h4 class="mini">The payoff line</h4>
+    <div class="eq">$$ J(x) = \alpha\, c(x_F^*) + (1-\alpha)\, B(x) $$</div>
+    <p>Compare it to the naive blend, $J = \alpha\,\mathbf{c(x)} + (1-\alpha)B$. <strong>One symbol changed.</strong>
+    Instead of the contaminated pixel $c(x)$, you composite the <em>pure recovered foreground colour</em>
+    $c(x_F^*)$. And from §2 you know exactly what that buys you: the naive version carried an error term
+    $\alpha(1-\alpha)(b - f)$, the old background bleeding through, peaking at $\alpha = 0.5$ along a ring around
+    the person. That ring is the halo. Composite the pure colour and the term vanishes identically.</p>
+    <p>"Light hair on a red background": $c(x)$ at a hair pixel is pinkish. Paste pinkish onto green grass and the
+    hair looks sunburnt. Search the window, find a pure-white hair pixel and a pure-red wall pixel that together
+    explain the pinkish value, throw away the red, and composite the pure white onto the grass.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">What our code does — the window search, implemented</span>
+    <p>This is <span class="mono">_pure_composite()</span> in <a href="../Code/matting.py">Code/matting.py</a>,
+    run on the band pixels of every frame (confident regions don't need it: there $J = c$ or $J = B$ exactly):</p>
+    <pre class="codeblock"><span class="cm"># the window N(x): the N_CAND nearest confident pixels of each kind, via a k-d tree</span>
+band_yx = np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(band))
+idx_f = <span class="fn">cKDTree</span>(np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(rim_f))).query(band_yx, k=kf)[1]   <span class="cm"># N(x) ∩ {α=1}</span>
+idx_b = <span class="fn">cKDTree</span>(np.<span class="fn">column_stack</span>(np.<span class="fn">nonzero</span>(rim_b))).query(band_yx, k=kb)[1]   <span class="cm"># N(x) ∩ {α=0}</span>
+cand_f = frame_f[rim_f][idx_f].reshape(n, kf, 3)
+cand_b = frame_f[rim_b][idx_b].reshape(n, kb, 3)
+
+<span class="cm"># try all kf×kb pairs: which pure colours best explain the observed mixture?</span>
+recon = a * cand_f[:, :, <span class="kw">None</span>, :] + (1.0 - a) * cand_b[:, <span class="kw">None</span>, :, :]
+err = ((recon - frame_f[band][:, <span class="kw">None</span>, <span class="kw">None</span>, :]) ** 2).<span class="fn">sum</span>(-1)
+best_f = err.reshape(n, -1).argmin(1) // kb          <span class="cm"># x_F* — the argmin's FG member</span>
+pure_f = cand_f[np.<span class="fn">arange</span>(n), best_f]                <span class="cm"># c(x_F*) — the recovered pure colour</span>
+<span class="kw">return</span> a1 * pure_f + (1.0 - a1) * bg_roi[band]       <span class="cm"># J = α·c(x_F*) + (1−α)·B_new</span></pre>
+    <p>Reading it against the lecture: the k-d tree query <em>is</em> "open a window around the pixel" — the
+    nearest confident FG/BG pixels, 7 of each, for every band pixel at once. The broadcast builds all
+    $7 \times 7 = 49$ candidate reconstructions per pixel, the argmin picks the pair that best explains the
+    observed colour, and the composite uses the recovered pure $c(x_F^*)$ — so the halo term
+    $\alpha(1-\alpha)(b_{\text{old}} - f)$ from §2 vanishes identically instead of being argued away.</p>
+    <p>Two implementation notes. The search and the blend run in <strong>BGR</strong>, not Lab: the compositing
+    equation $c = \alpha f + (1-\alpha)b$ is a physical statement about how light mixes, true in the sensor's
+    (linear-ish) colour space and false after Lab's non-linear warp. And $x_B^*$ is found but never used — the
+    lecture composites onto the <em>new</em> background, so the best background candidate's only job was to help
+    explain the mixture.</p>
+    <div class="callout note" style="margin-bottom:0">
+      <span class="lbl">If you are asked this in the exam</span>
+      Say: <em>"Naive blending leaves $\alpha(1-\alpha)(b-f)$ of the old background in the result — a halo,
+      maximal at $\alpha = 0.5$. Fix it by searching a local window for the pair of confident FG/BG pixels that
+      best explains the observed mixed colour, then compositing the recovered pure foreground colour $c(x_F^*)$
+      instead of the observed $c(x)$."</em> — which is exactly what the code does.
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s8">8 &nbsp; Making KDE fast (low rank)</h2>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Original text (PDF pages 73–74)</span>
+    <p>Now we are only left to calculate KDE efficiently. We want to calculate $\forall x \in \Omega$:</p>
+    <div class="eq">$$ f(x) = \sum_{y \in \Omega'} k(x, y) w(y) $$</div>
+    <p>The computation efficiency here is $O(|\Omega| \cdot |\Omega'|)$. We assume the kernel is low-rank. To
+    understand this, lets assume we have:</p>
+    <div class="eq">$$ f_{n \times 1} = K_{n \times m} w_{m \times 1} $$</div>
+    <p>Low rank means: $\text{rank}(K) = p \ll m, n$.</p>
+    <p>The computation efficiency here is O(mn). We can write this as a sum of matrices with rank 1:</p>
+    <div class="eq">$$ K = \sum_{i=1}^p \phi_i \psi_i^T = \Phi_{n \times p} \Psi_{m \times p}^T $$</div>
+    <p>The rank of this matrix is maximum p. Now we will insert this to previous equation: $f = \Phi \Psi^T w$.</p>
+    <p>The computation time of $\Psi^T w$ is $O(pm)$, where p is very small. If we denote $a = \Psi^T w$, then
+    $f = \Phi a$ will take $O(pn)$. In total we will have $O(p(m+n))$. Insead of quadratic complexity, we have
+    linear complexity. If we say that our kernel $K(x,y)$ is low rank, then: $p \ll |\Omega|, |\Omega'|$.</p>
+    <p>we can write it as:</p>
+    <div class="eq">$$ K(x, y) = \sum_{i=1}^p \phi_i(x) \psi_i^T(y), \qquad a_i = \sum_{y \in \Omega'} \Psi_i(y) w(y), \qquad f(x) = \sum_{i=1}^p a_i \phi_i(x) $$</div>
+    <p>The calculation of $a_i$ takes $O(|\Omega'|p)$, the calculation of the last equation also takes
+    $O(|\Omega|p)$ - in total $O((|\Omega| + |\Omega'|)p)$. Thus there is a lot of consideration when choosing the
+    kernel and to pick one which is low rank. Gaussian kernel is for example infinite-rank, but if we take its
+    singular values we will see they decay to 0. We will not discuss this in the course, but the methods for
+    factorizing kernels is called <strong>Fast multiple method</strong>.</p>
+  </div>
+
+  <div class="zero">
+    <span class="zero-label">From zero — this whole section is one matrix trick</span>
+    <p>Forget KDE for a second. The sum $f(x) = \sum_{y} k(x,y) w(y)$ is <em>literally a matrix–vector product</em>.
+    Stack the $n$ output values into a vector $f$, the $m$ sample weights into $w$, and put $k(x_i, y_j)$ in row
+    $i$, column $j$ of a matrix $K$. Then $f = Kw$. And a dense $n \times m$ matrix–vector product costs $O(nm)$
+    multiplications. With $n$ = a million pixels and $m$ = ten thousand samples, that's $10^{10}$. Too slow.</p>
+
+    <h4 class="mini">What "low rank" means, concretely</h4>
+    <p>A rank-1 matrix is one you can write as a column times a row: $\phi\psi^T$. It has $n \times m$ entries but
+    only $n + m$ numbers of actual content — every column is a rescaling of the same $\phi$. A rank-$p$ matrix is a
+    sum of $p$ of those. "Low rank" means $p \ll n, m$: a huge matrix with very little real information in it.</p>
+
+    <h4 class="mini">Why that makes it fast — the associativity trick</h4>
+    <p>Suppose $K = \Phi \Psi^T$ with $\Phi$ being $n \times p$ and $\Psi$ being $m \times p$. Then</p>
+    <div class="eq">$$ f = Kw = \underbrace{\Phi\,\big(\Psi^T w\big)}_{\text{cheap}} \quad\text{instead of}\quad \underbrace{\big(\Phi \Psi^T\big)\, w}_{\text{expensive}} $$</div>
+    <p>Same answer — matrix multiplication is associative. Utterly different cost:</p>
+    <ul>
+      <li>Compute $a = \Psi^T w$ first. That's $(p \times m)(m \times 1)$: costs $O(pm)$. The result $a$ is only
+      $p$ numbers long.</li>
+      <li>Then $f = \Phi a$. That's $(n \times p)(p \times 1)$: costs $O(pn)$.</li>
+      <li>Total $O(p(n+m))$ instead of $O(nm)$. With $p = 5$, $n = 10^6$, $m = 10^4$: five million operations
+      instead of ten billion. Two thousand times faster.</li>
+    </ul>
+    <p>The physical reading: $a_i = \sum_y \psi_i(y) w(y)$ is a <strong>summary</strong> of all the samples — $p$
+    numbers that capture everything the samples have to say. Then each output pixel consults the summary instead of
+    the raw samples. Summarise once, reuse a million times.</p>
+
+    <h4 class="mini">The catch, and the punchline</h4>
+    <p>Is the Gaussian kernel low rank? Strictly, no — as a continuous operator it has infinite rank. But its
+    singular values <em>decay to zero fast</em>, so truncating after $p$ of them gives a near-perfect
+    approximation. That's the lecture's last sentence. The family of algorithms that finds such factorisations
+    on the fly is the <strong>Fast Multipole Method</strong> (the PDF's "Fast multiple method" is a typo), one of
+    the top-10 algorithms of the 20th century, and safely out of scope.</p>
+
+    <h4 class="mini">The general lesson</h4>
+    <p>Whenever a computation looks like "every output touches every input," check whether the coupling matrix has
+    low effective rank. If it does, $O(nm) \to O((n+m)p)$. The same trick shows up in low-rank texture models,
+    PCA, separable filters (a 2-D Gaussian blur is rank-1, which is why every library does it as two 1-D passes),
+    and the attention mechanism in transformers.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">What our code does — this exact scheme, with bins as the basis</span>
+    <p>We implement the lecture's factorisation, choosing the $\psi_i$ basis pragmatically: <strong>colour is
+    already quantised.</strong> Bin the Lab cube into $64^3$ voxels and let $\psi_i$ be the indicator of voxel
+    $i$. Then $a_i = \sum_y \psi_i(y)$ is just the <strong>3-D histogram</strong> of the samples, and the second
+    half, $f = \sum_i a_i\,\phi_i$ with $\phi_i(c) = K(c, \text{bin}_i)$, is a convolution of that histogram with
+    the Gaussian bell:</p>
+    <pre class="codeblock"><span class="kw">def</span> <span class="fn">_kde_3d</span>(lab_samples):
+    <span class="cm">"""Joint 3-D KDE over Lab from uint8 samples (N, 3), evaluated with the</span>
+    <span class="cm">binned low-rank scheme of lecture 10.4. Returns a KDE_BINS^3 density."""</span>
+    q = (lab_samples &gt;&gt; 2).astype(np.int32)                     <span class="cm"># 256 levels → 64 bins/channel</span>
+    idx = (q[:, 0] * KDE_BINS + q[:, 1]) * KDE_BINS + q[:, 2]
+    hist = np.<span class="fn">bincount</span>(idx, minlength=KDE_BINS ** 3).astype(np.float32)   <span class="cm"># aᵢ = Ψᵀw  — O(m)</span>
+    density = <span class="fn">gaussian_filter</span>(hist.reshape(KDE_BINS, KDE_BINS, KDE_BINS), KDE_SIGMA)  <span class="cm"># Φa — O(bins)</span>
+    density /= density.<span class="fn">sum</span>() + EPS
+    <span class="kw">return</span> density + EPS         <span class="cm"># never return 0 — we divide by (f_F + f_B) later</span></pre>
+    <p>And here the low-rank story closes on itself: the reason
+    <span class="mono">scipy.ndimage.gaussian_filter</span> can process a $64^3$ volume in milliseconds is that the
+    3-D Gaussian <strong>is itself rank-1 along each axis</strong> —
+    $e^{-\|d\|^2/2\sigma^2} = e^{-d_L^2/2\sigma^2}\,e^{-d_a^2/2\sigma^2}\,e^{-d_b^2/2\sigma^2}$ — so it runs as
+    three 1-D passes. The separable-filter trick the lecture cites as an <em>example</em> of low-rank structure is
+    the very thing that makes our evaluation cheap. Total cost per class per frame:
+    $O(|\Omega'| + \text{bins})$, the lecture's promised linear complexity.</p>
+
+    <h4 class="mini">Per pixel, evaluation is one index</h4>
+    <pre class="codeblock">q  = lab_roi &gt;&gt; 2                             <span class="cm"># same quantisation as the grid</span>
+pf = f_f[q[..., 0], q[..., 1], q[..., 2]]     <span class="cm"># fancy-index: whole image in one lookup</span>
+pb = f_b[q[..., 0], q[..., 1], q[..., 2]]
+<span class="kw">return</span> pf / (pf + pb)                         <span class="cm"># Bayes, uniform priors</span></pre>
+    <p>Because the density is <em>joint</em>, there is no per-channel product, hence no underflow to fight and no
+    log-sum-exp machinery — the ratio of two floored densities is numerically safe as written. (An earlier version
+    of this code used three 1-D KDEs multiplied together — naive Bayes. That silently assumes the Lab channels are
+    independent given the class, an assumption the lecture never makes, and it needed a page of log-space
+    stabilisation to work. The joint density is both more faithful and simpler.)</p>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s9">9 &nbsp; Our code, line by line</h2>
+
+  <div class="explain">
+    <span class="explain-label">Code/matting.py, top to bottom</span>
+    <p>Now that every concept is in place, the file reads as a transcript of the lecture. Follow along in
+    <a href="../Code/matting.py">Code/matting.py</a>.</p>
+
+    <h4 class="mini">The constants (lines 65–77)</h4>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Constant</th><th>Value</th><th>Lecture symbol</th><th>Why this value</th></tr>
+      <tr><td><span class="mono">RHO</span></td><td>7</td><td>$\rho$</td><td>Band half-width. The lecture's "5–15 px." Wide enough to hold a soft edge, narrow enough that a motion-blurred limb keeps a confident core.</td></tr>
+      <tr><td><span class="mono">SAMPLE_RADIUS</span></td><td>25</td><td>—</td><td>How far from the band we collect colour samples. Big enough for stable statistics, small enough to stay "local" as §6 demands.</td></tr>
+      <tr><td><span class="mono">KDE_BINS</span></td><td>64</td><td>—</td><td>Bins per Lab channel of the §8 low-rank evaluation — a colour step of 4 uint8 levels, below what the bell can resolve.</td></tr>
+      <tr><td><span class="mono">KDE_SIGMA</span></td><td>2.0</td><td>$\sigma$</td><td>Bell width, in <em>bin</em> units (= 8 uint8 levels, ~3% of the range): smooths sensor noise without merging distinct colours.</td></tr>
+      <tr><td><span class="mono">DIST_R</span></td><td>2.0</td><td>$r$</td><td>Top of the lecture's allowed range $(0,2]$ — the band is narrow, so we want geometry to speak loudly.</td></tr>
+      <tr><td><span class="mono">GEO_EPS</span></td><td>1e-3</td><td>—</td><td>Cost of a geodesic step through flat $P(F|c)$: keeps path costs strictly positive, falls back to scaled Euclidean where colour says nothing.</td></tr>
+      <tr><td><span class="mono">N_CAND</span></td><td>7</td><td>$|N(x)|$</td><td>Confident FG/BG candidates per band pixel in the §7 pair search — $7\times7 = 49$ pairs, enough variety, still one broadcast.</td></tr>
+      <tr><td><span class="mono">EPS</span></td><td>1e-8</td><td>—</td><td>Guards every division. Also what stops the histogram's empty bins from being true zeros.</td></tr>
+      <tr><td><span class="mono">_ERODE_K</span></td><td>ellipse $(2\rho{+}1)^2$</td><td>$B_\rho(x)$</td><td>A discrete disk of radius $\rho$. Literally the lecture's ball, as a structuring element.</td></tr>
+      <tr><td><span class="mono">_RIM_K</span></td><td>ellipse $5\times5$</td><td>—</td><td>Extracts the ~2-px rims of confident FG/BG touching the band: the $\Omega_F$, $\Omega_B$ of the distance maps and the candidate pools of $N(x)$.</td></tr>
+    </table>
+    </div>
+
+    <h4 class="mini">The per-frame flow</h4>
+    <div class="flow">
+<b>_process_frame(frame, mask, background_f)</b>
+  │
+  ├─ <b>bbox_of_mask</b> + pad          crop to a window around the person        <i>speed only</i>
+  │
+  ├─ <b>erode / dilate</b>              fg_core, dilated, band                    <i>= TRIMAP  (α_T ∈ {1, 0, φ})</i>
+  │
+  ├─ <b>cvtColor → Lab</b>              perceptually-uniform colour space
+  │
+  ├─ <b>dilate(band, 25px)</b>          near_band → collect fg/bg colour samples  <i>= "more samples on the boundary"</i>
+  │
+  ├─ <b>_posterior_fg</b>               2 × _kde_3d (joint, §8) → Bayes → P(F|c)  <i>= KDE + BAYES  (P̃_F)</i>
+  │
+  ├─ <b>dilate(band, _RIM_K)</b>        rim_f, rim_b                              <i>= Ω_F , Ω_B</i>
+  │
+  ├─ <b>_band_graph + Dijkstra</b> ×2   d_f, d_b   (cost |ΔP| + ε·dl, W = ∇P)     <i>= geodesic D̃_F , D̃_B</i>
+  │
+  ├─ <b>w_f, w_b → α</b>                α = w_F / (w_F + w_B),  r = 2             <i>= OPACITY MAP</i>
+  │
+  ├─ <b>_pure_composite</b>             k-d tree N(x) → argmin pair → c(x_F*)     <i>= MATTING (§7, halo-free)</i>
+  │
+  └─▶ returns full-frame float32 α ∈ [0,1]  and  matted J (float32 BGR)
+
+<b>matting(...)</b>
+  │
+  ├─ read background.jpg, <b>resize</b> to frame size
+  ├─ per frame:  α → alpha.avi (×255, uint8, 3 channels)     <i>FAQ #5</i>
+  └─ per frame:  J → matted.avi (clip → uint8)</div>
+
+    <h4 class="mini">Small things worth knowing</h4>
+    <ul>
+      <li><span class="mono">mask = (binary_frame[..., 0] &gt; 127)</span> — the binary video was saved as
+      3-channel 0/255, but a video codec is lossy, so a "255" can come back as 251. Thresholding at the midpoint is
+      robust; testing <span class="mono">== 255</span> would not be.</li>
+      <li><span class="mono">zip(frames_of(stab), frames_of(binary))</span> — walks both videos in lockstep, one
+      frame in memory at a time. The stabilized frame supplies the colours $c(x)$; the binary frame supplies the
+      trimap seed.</li>
+      <li><span class="mono">if box is None: return alpha</span> — a frame where the person is absent yields
+      $\alpha \equiv 0$, i.e. the matted frame is pure new background. Correct by construction, and the tracking
+      stage exploits exactly this.</li>
+      <li><span class="mono">cv2.merge([alpha_u8]*3)</span> — $\alpha$ is one channel, but the AVI writer wants
+      three. Replicating it makes a grey video where brightness = opacity.</li>
+      <li>The background is resized with <span class="mono">INTER_AREA</span>, which is the correct filter for
+      downscaling (it averages, so it doesn't alias).</li>
+    </ul>
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s10">10 &nbsp; Where we deviate from the lecture, honestly</h2>
+
+  <p>Four deviations. Three are free; one is a real simplification. Know which is which — this is exactly the kind
+  of thing you get asked about.</p>
+
+  <div class="summary">
+    <span class="summary-label">Lecture vs. our implementation</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Lecture does</th><th>We do</th><th>Cost of the swap</th></tr>
+      <tr>
+        <td>Scribbles → KDE → geodesic distances → $V_F/V_B$ → boundary $\Delta$ → band</td>
+        <td>Take the binary mask from Stage 2 of the project; erode/dilate by $\rho$</td>
+        <td><strong>None.</strong> All that machinery exists only to <em>find</em> $\Delta$. We were handed a
+        better $\Delta$ by the background subtractor. Note the erode/dilate band literally equals
+        $\bigcup_{x\in\Delta} B_\rho(x)$.</td>
+      </tr>
+      <tr>
+        <td>Geodesic distance $d_L$ under the cost field $W = \nabla P(F|c)$</td>
+        <td>Euclidean distance transform (<span class="mono">cv2.distanceTransform</span>)</td>
+        <td><strong>Negligible here.</strong> Geodesic ≠ Euclidean only when there's a cliff to route around. Inside
+        a 20-px band hugging the contour there is no room for a detour — the two agree. In a wide band, or with
+        holes/fingers in the silhouette, they would not.</td>
+      </tr>
+      <tr>
+        <td>A joint 3-D KDE over colour, made tractable by low-rank kernel factorisation (FMM)</td>
+        <td>Three 1-D KDEs (histogram + Gaussian blur) multiplied — naive Bayes — as 256-entry LUTs</td>
+        <td><strong>A real assumption.</strong> We assume Lab channels are conditionally independent. Defensible
+        (Lab is near-decorrelated) and it drops the table from $256^3$ to $3\times 256$. But it <em>is</em> an
+        approximation, unlike the other two.</td>
+      </tr>
+      <tr>
+        <td>Recover the pure foreground colour by window search, then $J = \alpha\,c(x_F^*) + (1-\alpha)B$</td>
+        <td>Direct blend, $J = \alpha\,c(x) + (1-\alpha)B$</td>
+        <td><strong>Accepts a halo of magnitude $\alpha(1-\alpha)\|b-f\|$.</strong> Invisible in <em>this</em> clip
+        (near-neutral corridor background, hard clothing edges, so few pixels sit near $\alpha = 0.5$). Would be
+        clearly visible with flyaway hair or a saturated original background.</td>
+      </tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="callout key">
+    <span class="lbl">The meta-lesson</span>
+    Three of the four deviations are the same move: <em>the lecture solves a harder problem than we have.</em> It
+    assumes only scribbles, so it must infer the silhouette. It assumes continuous colour, so it must factorise
+    kernels. When your inputs are richer, whole sections of an algorithm evaporate. Recognising that is a large
+    part of what implementation skill actually is — and it is also why you must understand the general version
+    before you're allowed to skip it.
+  </div>
+
+  <hr class="sep">
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <h2 id="s11">11 &nbsp; Cheatsheet &amp; exam answers</h2>
+
+  <div class="rot">
+    <span class="rot-label">Rules of thumb (from the lecture)</span>
+    <ul>
+      <li><strong>Scribble inside each colour region of FG and BG.</strong> One per region is the minimum; more is
+      safer. A stroke straddling two regions is worse than useless.</li>
+      <li><strong>Boundary band radius $\rho \approx 5$–$15$ px.</strong> Smaller = sharper but misses hair;
+      larger = smoother but expensive, and breaks the near-1-D assumption.</li>
+      <li><strong>Use BOTH local KDE refinement and distance</strong> for the opacity map. Colour alone fails on
+      brown-on-brown; distance alone fails on hair. Multiplied, they cover for each other.</li>
+      <li><strong>Don't blend the original pixel directly at the boundary</strong> — recover the pure foreground
+      colour first, or accept a halo of size $\alpha(1-\alpha)\|b-f\|$.</li>
+      <li><strong>Add optical flow as an extra channel</strong> in video. It separates a moving person from a
+      static background even when their colours coincide.</li>
+      <li><strong>Quantised data kills the complexity problem.</strong> If your kernel's input has 256 possible
+      values, precompute all 256 answers. The low-rank story is for continuous domains.</li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">The whole chapter in one table</span>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Stage</th><th>Input</th><th>Output</th><th>Core method</th><th>Which unknown it kills</th></tr>
+      <tr><td>1. Trimap</td><td>image + scribbles</td><td>map of $1 / 0 / \phi$</td><td>KDE + Bayes + geodesic distance + band of radius $\rho$</td><td>Fixes $\alpha \in \{0,1\}$ on 98% of pixels</td></tr>
+      <tr><td>2. Opacity map</td><td>trimap + image</td><td>$\alpha \in [0,1]$ on the band</td><td>Local KDE refinement × distance weighting, $\alpha = \frac{w_F}{w_F + w_B}$</td><td>Solves $\alpha$ on the band</td></tr>
+      <tr><td>3. Matting</td><td>$\alpha$ + image + new BG</td><td>composited frame $J(x)$</td><td>Window search for $(x_F^*, x_B^*)$, then composite the pure colour</td><td>Solves $f(x)$ (and $b(x)$)</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Likely questions, and what to say</span>
+
+    <h4 class="mini">"Why can't you just use a binary mask?"</h4>
+    <p>Because a pixel on the silhouette physically <em>is</em> a mixture: a sensor well averages all light landing
+    in it, and at an edge it collects both foreground and background. Forcing a binary answer either glues a fringe
+    of old background onto the subject or shaves pixels off it. $\alpha$ is the mixing fraction, and matting is the
+    problem of estimating it.</p>
+
+    <h4 class="mini">"Why is matting ill-posed?"</h4>
+    <p>The compositing equation $c = \alpha f + (1-\alpha)b$ gives 3 equations per pixel (one per colour channel)
+    and has 7 unknowns ($f$: 3, $b$: 3, $\alpha$: 1). Under-determined at every pixel. Every stage of the algorithm
+    is a prior that supplies missing information: the trimap fixes $\alpha$ where it's obvious, the colour models
+    constrain $f$ and $b$, the distance maps add spatial evidence, the window search supplies $f$ from neighbours.</p>
+
+    <h4 class="mini">"What is KDE and why not a histogram?"</h4>
+    <p>KDE estimates a density by placing a Gaussian bell on each sample and summing:
+    $f(c|F) \propto \sum_{x\in\Omega_F} K(c, c(x))$. A histogram has hard bin edges and, in 3-D, ~$10^3$ mostly-empty
+    bins, so it assigns probability exactly zero to unseen colours — fatal, since we later divide by it. KDE is
+    smooth and strictly positive everywhere. Implementation note: summing bells on samples is <em>identical</em> to
+    convolving the sample histogram with the bell, so "histogram + Gaussian blur" computes KDE exactly.</p>
+
+    <h4 class="mini">"Why do you need distance maps if you have $P(F|c)$?"</h4>
+    <p>Colour distributions overlap. A brown jacket in front of a brown sofa gives $P(F|c) \approx 0.5$ everywhere
+    — the colour model has no information. Distance supplies independent, spatial evidence. The geodesic distance
+    specifically measures "cheapest walk," where crossing a foreground-probability cliff is expensive, so it routes
+    around object boundaries rather than through them.</p>
+
+    <h4 class="mini">"Explain $w_F = \tilde D_F^{-r}\tilde P_F$ and why $r \in (0,2]$."</h4>
+    <p>It's a vote. Loudness = colour evidence × proximity. The negative exponent makes near pixels loud. $\alpha$ is
+    the foreground's share of the total vote, so it's automatically in $[0,1]$. At the band's inner edge
+    $\tilde D_F = 0$ so $w_F = \infty$ and $\alpha = 1$; at the outer edge $\alpha = 0$ — so the opacity map joins
+    the trimap continuously, which is why this particular form was chosen. As $r \to 0$ distance is ignored and
+    $\alpha$ becomes pure colour classification; beyond $r = 2$ geometry annihilates colour and $\alpha$ degenerates
+    into a linear distance ramp that ignores the image.</p>
+
+    <h4 class="mini">"Why the low-rank trick?"</h4>
+    <p>$f = Kw$ with a dense $n \times m$ kernel matrix costs $O(nm)$. If $K = \Phi\Psi^T$ with rank $p \ll n,m$,
+    reassociate: compute $a = \Psi^T w$ once in $O(pm)$ — a $p$-number summary of all the samples — then
+    $f = \Phi a$ in $O(pn)$. Total $O(p(n+m))$: linear, not quadratic. The Gaussian is formally infinite-rank but
+    its singular values decay, so a small $p$ suffices. The algorithms that do this are Fast Multipole Methods.</p>
+
+    <h4 class="mini">"Why does the naive blend produce a halo? Show it."</h4>
+    <p>Substitute $c = \alpha f + (1-\alpha) b$ into $J = \alpha c + (1-\alpha)B$ and compare with the correct
+    $\alpha f + (1-\alpha)B$. The difference is $\alpha(1-\alpha)(b-f)$: the old background survives, weighted by
+    $\alpha(1-\alpha)$, which is zero in the confident regions and maximal ($0.25$) at $\alpha = 0.5$ — a ring
+    around the subject. Fix: recover pure $f$ via the window search and composite that instead.</p>
+  </div>
+
+  <p class="muted" style="margin-top:34px">All teal blocks are quoted verbatim from the course lecture notes,
+  <span class="mono">Video_Processing.pdf</span> pages 67–74, mirrored in
+  <a href="../../html_book/ch10_video_matting.html">html_book chapter 10</a>. Implementation:
+  <a href="../Code/matting.py">Code/matting.py</a>. Project-level context and the other three stages:
+  <a href="Final_Project_Report.html">Final_Project_Report.html</a>.</p>
+
+</div>
+
+<script>
+/* ─────────────────────────  Demo 1 — the halo  ───────────────────────── */
+(function(){
+  const cv = document.getElementById('cvAlpha'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const F = [230, 220, 200];   // pure hair
+  const Bold = [200, 30, 40];  // old red wall
+  const Bnew = [40, 160, 90];  // new green background
+  const rgb = a => 'rgb(' + a.map(v => Math.round(Math.max(0, Math.min(255, v)))).join(',') + ')';
+  const mix = (p, q, t) => [0,1,2].map(i => t * p[i] + (1 - t) * q[i]);
+
+  function swatch(x, y, w, h, col, title, sub) {
+    ctx.fillStyle = col; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#2c3650'; ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+    ctx.fillStyle = '#e6ecf7'; ctx.font = '600 14px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, x + w / 2, y + h + 22);
+    if (sub) { ctx.fillStyle = '#6b7a99'; ctx.font = '12px "JetBrains Mono", Consolas, monospace';
+               ctx.fillText(sub, x + w / 2, y + h + 40); }
+  }
+
+  function draw() {
+    const a = +document.getElementById('aSlide').value / 100;
+    document.getElementById('vA').textContent = a.toFixed(2);
+    ctx.fillStyle = '#0a0f1c'; ctx.fillRect(0, 0, W, H);
+
+    const c      = mix(F, Bold, a);            // what the camera recorded
+    const naive  = mix(c, Bnew, a);            // α·c + (1-α)·B
+    const correct= mix(F, Bnew, a);            // α·f + (1-α)·B
+    const err    = [0,1,2].map(i => Math.abs(naive[i] - correct[i]));
+    const errMag = Math.round(Math.hypot(err[0], err[1], err[2]));
+
+    const w = 118, h = 96, y = 22, gap = 26;
+    let x = 30;
+    swatch(x, y, w, h, rgb(F),       'f — pure hair',    '(230,220,200)'); x += w + gap;
+    swatch(x, y, w, h, rgb(Bold),    'b — OLD bg',       '(200,30,40)');   x += w + gap;
+    swatch(x, y, w, h, rgb(c),       'c — recorded',     'αf+(1-α)b');     x += w + gap;
+    swatch(x, y, w, h, rgb(Bnew),    'B — NEW bg',       '(40,160,90)');   x += w + gap + 14;
+
+    // the two results, bigger
+    ctx.fillStyle = rgb(naive);  ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#ff6b81'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.fillStyle = '#ff6b81'; ctx.font = '700 14px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('naive  αc+(1-α)B', x + w / 2, y + h + 22);
+    x += w + gap;
+    ctx.fillStyle = rgb(correct); ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#7ee787'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.fillStyle = '#7ee787'; ctx.fillText('correct  αf+(1-α)B', x + w / 2, y + h + 22);
+
+    // error curve α(1-α)
+    const gx = 30, gy = 178, gw = W - 60, gh = 46;
+    ctx.strokeStyle = '#2c3650'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, gy + gh); ctx.lineTo(gx + gw, gy + gh); ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const t = i / 200, v = t * (1 - t) / 0.25;
+      const px = gx + t * gw, py = gy + gh - v * gh;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.strokeStyle = '#ff6b81'; ctx.lineWidth = 2; ctx.stroke();
+    const px = gx + a * gw, py = gy + gh - (a * (1 - a) / 0.25) * gh;
+    ctx.fillStyle = '#ffb454'; ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#6b7a99'; ctx.font = '12px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('halo strength  α(1-α)   — zero at the confident ends, maximal at α = 0.5', gx, gy - 6);
+
+    document.getElementById('roAlpha').innerHTML =
+      'recorded  <b>c</b> = α·f + (1-α)·b = (' + c.map(v=>Math.round(v)).join(', ') + ')<br>' +
+      'error of the naive blend = α(1-α)·(b − f) = (' + err.map(v=>Math.round(v)).join(', ') + ')' +
+      '  →  magnitude <span class="' + (errMag > 40 ? 'lo' : 'hi') + '">' + errMag + '</span> / 255' +
+      (a > 0.25 && a < 0.75 ? '  ← <span class="lo">this is the halo</span>' : '');
+  }
+  document.getElementById('aSlide').addEventListener('input', draw);
+  draw();
+})();
+
+/* ─────────────────────────  Demo 2 — KDE  ───────────────────────── */
+(function(){
+  const cv = document.getElementById('cvKde'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, padL = 40, padR = 20, padT = 24, padB = 34;
+  const DEFAULT = [70, 74, 78, 82, 88, 92, 150, 158, 164, 170];
+  let samples = DEFAULT.slice();
+  const X = v => padL + v / 255 * (W - padL - padR);
+  const invX = px => Math.round((px - padL) / (W - padL - padR) * 255);
+
+  function draw() {
+    const s = +document.getElementById('kdeSig').value;
+    document.getElementById('vSig').textContent = s;
+    ctx.fillStyle = '#0a0f1c'; ctx.fillRect(0, 0, W, H);
+    const top = padT, bot = H - padB, gh = bot - top;
+
+    // axis
+    ctx.strokeStyle = '#2c3650'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, bot); ctx.lineTo(W - padR, bot); ctx.stroke();
+    ctx.fillStyle = '#6b7a99'; ctx.font = '12px "JetBrains Mono", Consolas, monospace'; ctx.textAlign = 'center';
+    for (let v = 0; v <= 255; v += 51) ctx.fillText(v, X(v), bot + 18);
+    ctx.textAlign = 'left';
+    ctx.fillText('colour value  c  (one channel, 0–255)', padL, H - 6);
+
+    if (!samples.length) {
+      ctx.fillStyle = '#6b7a99'; ctx.font = '15px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('click anywhere to drop a sample', W / 2, H / 2);
+      document.getElementById('roKde').innerHTML = 'samples: <b>0</b>';
+      return;
+    }
+
+    // histogram (bin width 8)
+    const BW = 8, nb = Math.ceil(256 / BW), hist = new Array(nb).fill(0);
+    for (const m of samples) hist[Math.min(nb - 1, Math.floor(m / BW))]++;
+    const hmax = Math.max(...hist);
+    ctx.fillStyle = 'rgba(159,176,204,0.20)';
+    for (let i = 0; i < nb; i++) {
+      if (!hist[i]) continue;
+      const bh = hist[i] / hmax * gh * 0.55;
+      ctx.fillRect(X(i * BW), bot - bh, X(BW) - X(0) - 1, bh);
+    }
+
+    // bells + sum
+    const N = 256, sum = new Float64Array(N), bells = [];
+    for (const m of samples) {
+      const b = new Float64Array(N);
+      for (let i = 0; i < N; i++) { const d = i - m; b[i] = Math.exp(-d * d / (2 * s * s)); }
+      bells.push(b);
+      for (let i = 0; i < N; i++) sum[i] += b[i];
+    }
+    let mx = 0; for (let i = 0; i < N; i++) mx = Math.max(mx, sum[i]);
+    if (mx <= 0) mx = 1;
+    const Y = v => bot - v / mx * gh * 0.88;
+
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(199,146,234,0.42)';
+    for (const b of bells) {
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) { const px = X(i), py = Y(b[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+    }
+    ctx.lineWidth = 2.4; ctx.strokeStyle = '#41d8c9';
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) { const px = X(i), py = Y(sum[i]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.stroke();
+
+    // sample ticks
+    ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 1.6;
+    for (const m of samples) { ctx.beginPath(); ctx.moveTo(X(m), bot); ctx.lineTo(X(m), bot - 11); ctx.stroke(); }
+
+    ctx.fillStyle = '#41d8c9'; ctx.font = '600 13px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('f(c|F)  =  Σ bells  =  histogram ∗ bell', W - padR, padT - 6);
+
+    const note = s <= 3 ? '<span class="lo">σ too small → spiky, memorises the samples (overfit)</span>'
+              : s >= 25 ? '<span class="lo">σ too large → one featureless mound (underfit)</span>'
+              : '<span class="hi">σ reasonable → smooth, and strictly positive everywhere</span>';
+    document.getElementById('roKde').innerHTML =
+      'samples: <b>' + samples.length + '</b> &nbsp;·&nbsp; σ = <b>' + s + '</b><br>' + note;
+  }
+
+  cv.addEventListener('click', e => {
+    const r = cv.getBoundingClientRect();
+    const v = invX((e.clientX - r.left) * (cv.width / r.width));
+    if (v >= 0 && v <= 255) { samples.push(v); draw(); }
+  });
+  document.getElementById('kdeSig').addEventListener('input', draw);
+  document.getElementById('kdeReset').addEventListener('click', () => { samples = DEFAULT.slice(); draw(); });
+  document.getElementById('kdeClear').addEventListener('click', () => { samples = []; draw(); });
+  draw();
+})();
+
+/* ─────────────────────────  Demo 3 — trimap band  ───────────────────────── */
+(function(){
+  const cv = document.getElementById('cvTri'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  function sdf(x, y) {                       // signed distance: >0 inside the silhouette
+    const cx = W / 2, cy = H / 2 - 14;
+    const head = 62 - Math.hypot(x - cx, y - cy);
+    const bodyDx = Math.abs(x - cx) - 26, bodyDy = Math.abs(y - (cy + 92)) - 78;
+    const body = -Math.max(bodyDx, bodyDy);
+    return Math.max(head, body);
+  }
+  function draw() {
+    const rho = +document.getElementById('rho').value;
+    document.getElementById('vRho').textContent = rho;
+    const img = ctx.createImageData(W, H), d = img.data;
+    let nBand = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4, s = sdf(x, y);
+      let r, g, b;
+      if (Math.abs(s) <= rho)      { r=255; g=180; b=84;  nBand++; }
+      else if (s > 0)              { r=126; g=231; b=135; }
+      else                         { r=68;  g=76;  b=94;  }
+      d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+    }
+    ctx.putImageData(img, 0, 0);
+    ctx.fillStyle = '#e6ecf7'; ctx.font = '600 13.5px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('α_T = 1  (green)      α_T = φ  (amber band)      α_T = 0  (grey)', 18, 26);
+    const pct = (100 * nBand / (W * H)).toFixed(1);
+    document.getElementById('roTri').innerHTML =
+      'ρ = <b>' + rho + '</b> px &nbsp;·&nbsp; band covers <b>' + pct + '%</b> of the image — that is all Stage 2 has to solve<br>' +
+      (rho === 0 ? '<span class="lo">ρ = 0 → a plain binary mask. No band, no soft edge, nothing for the opacity map to do.</span>'
+       : rho > 24 ? '<span class="lo">ρ too large → the band is no longer "narrow", so Euclidean ≈ geodesic breaks and Stage 2 gets expensive.</span>'
+       : '<span class="hi">ρ in the lecture\'s 5–15 px range. We use 10.</span>');
+  }
+  document.getElementById('rho').addEventListener('input', draw);
+  draw();
+})();
+
+/* ─────────────────────────  Demo 4 — the opacity vote  ───────────────────────── */
+(function(){
+  const cv = document.getElementById('cvOpa'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const g = id => document.getElementById(id);
+
+  function draw() {
+    const dF = +g('dF').value, dB = +g('dB').value;
+    const pF = +g('pF').value / 100, r = +g('rr').value / 10;
+    g('vDf').textContent = dF; g('vDb').textContent = dB;
+    g('vPf').textContent = pF.toFixed(2); g('vR').textContent = r.toFixed(1);
+
+    const wF = Math.pow(dF + 1, -r) * pF;
+    const wB = Math.pow(dB + 1, -r) * (1 - pF);
+    const a  = wF / (wF + wB + 1e-12);
+
+    ctx.fillStyle = '#0a0f1c'; ctx.fillRect(0, 0, W, H);
+
+    // vote bars
+    const bx = 40, bw = W - 80, by = 34, bh = 30;
+    const share = wF / (wF + wB + 1e-12);
+    ctx.fillStyle = '#7ee787'; ctx.fillRect(bx, by, bw * share, bh);
+    ctx.fillStyle = '#4a5470'; ctx.fillRect(bx + bw * share, by, bw * (1 - share), bh);
+    ctx.strokeStyle = '#2c3650'; ctx.strokeRect(bx + .5, by + .5, bw, bh);
+    ctx.fillStyle = '#0a0f1c'; ctx.font = '700 13px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'left';
+    if (share > 0.13) ctx.fillText('w_F  (foreground votes)', bx + 10, by + 20);
+    ctx.fillStyle = '#e6ecf7'; ctx.textAlign = 'right';
+    if (share < 0.87) ctx.fillText('w_B  (background votes)', bx + bw - 10, by + 20);
+    ctx.fillStyle = '#6b7a99'; ctx.font = '12px "Segoe UI", system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('α is the foreground\'s share of the total vote', bx, by - 10);
+
+    // alpha as a checkerboard-backed swatch
+    const sx = 40, sy = 100, sw = W - 80, sh = 56;
+    for (let y = 0; y < sh; y += 8) for (let x = 0; x < sw; x += 8) {
+      ctx.fillStyle = ((x / 8 + y / 8) % 2) ? '#171d2c' : '#0f1422';
+      ctx.fillRect(sx + x, sy + y, 8, 8);
+    }
+    ctx.fillStyle = 'rgba(230,220,200,' + a.toFixed(3) + ')';
+    ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeStyle = '#2c3650'; ctx.strokeRect(sx + .5, sy + .5, sw, sh);
+    ctx.fillStyle = a > 0.55 ? '#0a0f1c' : '#e6ecf7';
+    ctx.font = '700 20px "JetBrains Mono", Consolas, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('α = ' + a.toFixed(3), sx + sw / 2, sy + 35);
+
+    let msg;
+    if (r === 0)        msg = '<span class="hi">r = 0 → distance ignored entirely. α = P̃_F exactly. Pure colour classification.</span>';
+    else if (dF === dB) msg = '<span class="hi">D̃_F = D̃_B → the distance terms cancel, so α = P̃_F = ' + pF.toFixed(2) + '. Geometry neutral ⇒ colour decides.</span>';
+    else if (dF === 0)  msg = '<span class="hi">D̃_F = 0 → touching the confident foreground. In the lecture w_F = ∞ and α = 1 exactly (our code uses (d+1) then clamps).</span>';
+    else if (dB === 0)  msg = '<span class="hi">D̃_B = 0 → touching the confident background, so α → 0.</span>';
+    else                msg = 'Both kinds of evidence are multiplied, so <b>either</b> can veto: a far pixel or a wrong-coloured pixel loses its vote.';
+
+    document.getElementById('roOpa').innerHTML =
+      'w_F = (D̃_F+1)<sup>-r</sup> · P̃_F = ' + Math.pow(dF+1,-r).toFixed(4) + ' × ' + pF.toFixed(2) + ' = <b>' + wF.toFixed(5) + '</b><br>' +
+      'w_B = (D̃_B+1)<sup>-r</sup> · P̃_B = ' + Math.pow(dB+1,-r).toFixed(4) + ' × ' + (1-pF).toFixed(2) + ' = <b>' + wB.toFixed(5) + '</b><br>' +
+      'α = w_F / (w_F + w_B) = <b>' + a.toFixed(3) + '</b><br>' + msg;
+  }
+  ['dF','dB','pF','rr'].forEach(id => g(id).addEventListener('input', draw));
+  draw();
+})();
+</script>
+</body>
+</html>
