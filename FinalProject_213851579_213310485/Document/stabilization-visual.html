@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Stabilization — How It Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f10;
+    --surface: #1a1a1d;
+    --border: #2a2a2d;
+    --text: #ffffff;
+    --text2: #a0a0a0;
+    --accent: #D97757;
+    --accent-muted: rgba(217, 119, 87, 0.15);
+    --green: #4ade80;
+    --green-muted: rgba(74, 222, 128, 0.12);
+    --red: #f87171;
+    --red-muted: rgba(248, 113, 113, 0.12);
+    --blue: #60a5fa;
+    --blue-muted: rgba(96, 165, 250, 0.12);
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 80px 0 0 0; }
+  section:last-of-type { padding-bottom: 80px; }
+
+  header { padding: 72px 0 0 0; text-align: center; }
+  .eyebrow {
+    display: inline-block; font-size: 13px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-muted);
+    padding: 6px 14px; border-radius: 999px; margin-bottom: 20px;
+  }
+  h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  .sub { color: var(--text2); font-size: 18px; max-width: 660px; margin: 16px auto 0; }
+  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+  .badge {
+    font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+  }
+  .badge b { color: var(--text); font-weight: 600; }
+
+  h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .lede { color: var(--text2); font-size: 16px; max-width: 720px; margin-bottom: 32px; }
+  .kicker {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .card .icon { font-size: 26px; margin-bottom: 12px; display: block; }
+  .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .card p { font-size: 14px; color: var(--text2); }
+  .card code { color: var(--accent); font-size: 13px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px; text-align: center;
+  }
+  .stat .num { font-size: 34px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; }
+  .stat .lbl { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 20px; }
+  .step-rail { display: flex; flex-direction: column; align-items: center; }
+  .step-num {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent-muted); border: 2px solid var(--accent);
+    color: var(--accent); font-weight: 700; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step-line { width: 2px; flex: 1; background: var(--border); min-height: 24px; }
+  .step-body { padding-bottom: 32px; flex: 1; }
+  .step-body h3 { font-size: 17px; font-weight: 600; margin-top: 8px; }
+  .step-body h3 code { color: var(--accent); font-size: 14px; font-weight: 500; }
+  .step-body p { font-size: 14px; color: var(--text2); margin-top: 6px; max-width: 640px; }
+
+  .callout {
+    background: var(--accent-muted); border-left: 4px solid var(--accent);
+    border-radius: 0 var(--radius) var(--radius) 0; padding: 18px 22px;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .callout.green { background: var(--green-muted); border-left-color: var(--green); }
+  .callout.blue { background: var(--blue-muted); border-left-color: var(--blue); }
+  .callout.red { background: var(--red-muted); border-left-color: var(--red); }
+  .callout .ci { font-size: 20px; line-height: 1.4; }
+  .callout p { font-size: 14px; color: var(--text); }
+  .callout p span { color: var(--text2); }
+
+  pre {
+    background: #101012; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.7;
+  }
+  code, pre { font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; }
+  pre .c { color: #6b7280; }
+  pre .k { color: #c084fc; }
+  pre .f { color: #60a5fa; }
+  pre .n { color: #fbbf24; }
+
+  .math {
+    background: #101012; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px; text-align: center; font-size: 17px;
+    font-family: 'Cambria Math', Georgia, serif; letter-spacing: 0.02em;
+  }
+  .math i { color: var(--accent); font-style: italic; }
+  .math .dim { color: var(--text2); font-size: 13px; font-family: 'Inter', sans-serif; display: block; margin-top: 10px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  th {
+    text-align: left; padding: 14px 18px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2);
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 14px 18px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+  td code { color: var(--accent); font-size: 13px; }
+  .win { background: var(--accent-muted) !important; }
+  .win-tag {
+    display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent);
+    border: 1px solid var(--accent); padding: 1px 8px; border-radius: 999px;
+    margin-left: 8px; vertical-align: 1px;
+  }
+  .ok { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .meh { color: #fbbf24; font-weight: 600; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+  }
+  .panel svg { width: 100%; height: auto; display: block; }
+  .panel .cap { font-size: 13px; color: var(--text2); text-align: center; margin-top: 14px; }
+
+  footer {
+    border-top: 1px solid var(--border); margin-top: 80px; padding: 32px 0;
+    text-align: center; color: var(--text2); font-size: 13px;
+  }
+
+  @media (max-width: 720px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    section { padding-top: 56px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <span class="eyebrow">Final Project · Stage 1 of 4</span>
+  <h1>How the Video Stabilization Works</h1>
+  <p class="sub">Turning a shaky handheld video into one with a virtually static camera — anchored KLT corner tracking, a robust homography fitted directly to the first frame, one warp per frame.</p>
+  <div class="badges">
+    <span class="badge">Anchored <b>KLT chains</b></span>
+    <span class="badge"><b>Homography</b> + RANSAC</span>
+    <span class="badge">Direct fit to <b>frame 0</b></span>
+    <span class="badge">Drift-free <b>by construction</b></span>
+  </div>
+</header>
+
+<!-- ============ 1. WHERE IT SITS ============ -->
+<section class="wrap">
+  <div class="kicker">Context</div>
+  <h2>Where stabilization sits in the project</h2>
+  <p class="lede">It is the first block of the pipeline. Every later stage inherits its output — so its job is to make the background as static as possible.</p>
+
+  <div class="panel">
+    <svg viewBox="0 0 960 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Project pipeline: INPUT.avi into Stabilization, then Background Subtraction, Matting, Tracking, producing OUTPUT.avi">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#a0a0a0"/>
+        </marker>
+      </defs>
+      <rect x="10" y="55" width="110" height="44" rx="8" fill="rgba(248,113,113,0.12)" stroke="#f87171"/>
+      <text x="65" y="82" fill="#f87171" font-size="14" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">INPUT.avi</text>
+      <line x1="122" y1="77" x2="152" y2="77" stroke="#a0a0a0" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="155" y="45" width="150" height="64" rx="10" fill="rgba(217,119,87,0.18)" stroke="#D97757" stroke-width="2"/>
+      <text x="230" y="73" fill="#ffffff" font-size="15" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">Stabilization</text>
+      <text x="230" y="93" fill="#D97757" font-size="11" text-anchor="middle" font-family="Inter,sans-serif">← you are here</text>
+      <line x1="307" y1="77" x2="337" y2="77" stroke="#a0a0a0" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="368" y="60" fill="#a0a0a0" font-size="11" text-anchor="middle" font-family="Inter,sans-serif">stabilize.avi</text>
+      <rect x="340" y="55" width="150" height="44" rx="8" fill="#1a1a1d" stroke="#2a2a2d"/>
+      <text x="415" y="82" fill="#a0a0a0" font-size="13" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">Bg Subtraction</text>
+      <line x1="492" y1="77" x2="522" y2="77" stroke="#a0a0a0" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="525" y="55" width="120" height="44" rx="8" fill="#1a1a1d" stroke="#2a2a2d"/>
+      <text x="585" y="82" fill="#a0a0a0" font-size="13" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">Matting</text>
+      <line x1="647" y1="77" x2="677" y2="77" stroke="#a0a0a0" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="680" y="55" width="120" height="44" rx="8" fill="#1a1a1d" stroke="#2a2a2d"/>
+      <text x="740" y="82" fill="#a0a0a0" font-size="13" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">Tracking</text>
+      <line x1="802" y1="77" x2="832" y2="77" stroke="#a0a0a0" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="835" y="55" width="115" height="44" rx="8" fill="rgba(248,113,113,0.12)" stroke="#f87171"/>
+      <text x="892" y="82" fill="#f87171" font-size="13" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">OUTPUT.avi</text>
+    </svg>
+    <div class="cap">The four project blocks. Stabilization runs first and feeds everything downstream.</div>
+  </div>
+
+  <div class="callout">
+    <div class="ci">🎯</div>
+    <p><b>Why quality matters here:</b> <span>background subtraction models the background over time. If the camera still shakes — or slowly drifts — background pixels move and get misclassified as foreground. A rock-solid, drift-free stabilization makes every later stage easier.</span></p>
+  </div>
+</section>
+
+<!-- ============ 2. CORE IDEA ============ -->
+<section class="wrap">
+  <div class="kicker">Core idea</div>
+  <h2>Align every frame directly to the first frame</h2>
+  <p class="lede">Instead of smoothing the camera path (classic stabilization), we cancel camera motion entirely: each frame is warped into the coordinate system of frame&nbsp;0. The background freezes; only the person moves.</p>
+
+  <div class="panel">
+    <svg viewBox="0 0 960 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shaky frames on the left get warped and align into a single stack on the right">
+      <defs>
+        <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#D97757"/>
+        </marker>
+      </defs>
+      <text x="180" y="30" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">Shaky input frames</text>
+      <rect x="60"  y="60"  width="200" height="120" rx="6" fill="none" stroke="#f87171" stroke-width="1.5" transform="rotate(-4 160 120)"/>
+      <rect x="80"  y="75"  width="200" height="120" rx="6" fill="none" stroke="#fbbf24" stroke-width="1.5" transform="rotate(3 180 135)"/>
+      <rect x="70"  y="90"  width="200" height="120" rx="6" fill="none" stroke="#60a5fa" stroke-width="1.5" transform="rotate(-2 170 150)"/>
+      <text x="180" y="240" fill="#a0a0a0" font-size="12" text-anchor="middle" font-family="Inter,sans-serif">camera jitters: shift + rotation + slight keystone each frame</text>
+
+      <line x1="330" y1="140" x2="470" y2="140" stroke="#D97757" stroke-width="2.5" marker-end="url(#arr2)"/>
+      <text x="400" y="120" fill="#D97757" font-size="13" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">warpPerspective</text>
+      <text x="400" y="165" fill="#a0a0a0" font-size="11" text-anchor="middle" font-family="Inter,sans-serif">cur → frame-0 coords</text>
+
+      <text x="680" y="30" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle" font-family="Inter,sans-serif">Stabilized output</text>
+      <rect x="578" y="78" width="204" height="124" rx="6" fill="none" stroke="#f87171" stroke-width="1"/>
+      <rect x="579" y="79" width="202" height="122" rx="6" fill="none" stroke="#fbbf24" stroke-width="1"/>
+      <rect x="580" y="80" width="200" height="120" rx="6" fill="rgba(74,222,128,0.06)" stroke="#4ade80" stroke-width="2"/>
+      <circle cx="640" cy="120" r="10" fill="none" stroke="#4ade80" stroke-width="1.5"/>
+      <text x="640" y="150" fill="#4ade80" font-size="10" text-anchor="middle" font-family="Inter,sans-serif">background static</text>
+      <circle cx="700" cy="130" r="6" fill="#D97757"/>
+      <line x1="700" y1="136" x2="700" y2="158" stroke="#D97757" stroke-width="2.5"/>
+      <line x1="700" y1="145" x2="690" y2="153" stroke="#D97757" stroke-width="2"/>
+      <line x1="700" y1="145" x2="710" y2="153" stroke="#D97757" stroke-width="2"/>
+      <line x1="700" y1="158" x2="693" y2="172" stroke="#D97757" stroke-width="2"/>
+      <line x1="700" y1="158" x2="708" y2="172" stroke="#D97757" stroke-width="2"/>
+      <line x1="718" y1="150" x2="740" y2="150" stroke="#D97757" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <text x="700" y="240" fill="#a0a0a0" font-size="12" text-anchor="middle" font-family="Inter,sans-serif">all frames share frame 0's coordinate system — only the person moves</text>
+    </svg>
+    <div class="cap">Warp-to-first-frame: cancel camera motion instead of smoothing it.</div>
+  </div>
+
+  <div class="grid grid-3">
+    <div class="card"><span class="icon">🧊</span><h3>Frozen background</h3><p>Ideal input for temporal-median background modeling in the next stage.</p></div>
+    <div class="card"><span class="icon">🖤</span><h3>Black borders — fine</h3><p>Warping reveals pixels outside the frame. Spec FAQ #1 explicitly allows them.</p></div>
+    <div class="card"><span class="icon">🎨</span><h3>Color preserved</h3><p>Motion is estimated on grayscale internally, but the warp is applied to the full BGR frame. Exactly one bilinear warp per frame — no quality lost for matting.</p></div>
+  </div>
+</section>
+
+<!-- ============ 3. WHAT IS A HOMOGRAPHY ============ -->
+<section class="wrap">
+  <div class="kicker">Background</div>
+  <h2>What is a homography?</h2>
+  <p class="lede">A homography (projective transform) is the most general mapping between two images of the same <b>plane</b> — or between any two images taken by a camera that only <b>rotated</b>. It is a 3×3 matrix acting on homogeneous coordinates.</p>
+
+  <div class="math">
+    [&thinsp;x&prime;, y&prime;, w&thinsp;]<sup>T</sup> = <i>H</i> · [&thinsp;x, y, 1&thinsp;]<sup>T</sup>
+    &nbsp;&nbsp;&nbsp;&rArr;&nbsp;&nbsp;&nbsp;
+    x<sub>new</sub> = x&prime;/w ,&nbsp;&nbsp; y<sub>new</sub> = y&prime;/w
+    <span class="dim">The perspective divide by w is what similarity/affine transforms don't have — it lets far parts of the image shrink and near parts grow (keystone). H has 9 entries but scale doesn't matter (H and 3H map identically), so 8 degrees of freedom → 4 point correspondences determine it.</span>
+  </div>
+  <div style="height:16px"></div>
+
+  <div class="panel">
+    <svg viewBox="0 0 960 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A square mapped by similarity stays a square, by affine becomes a parallelogram, by homography becomes a general quadrilateral">
+      <g font-family="Inter,sans-serif">
+        <text x="130" y="40" fill="#ffffff" font-size="13" font-weight="700" text-anchor="middle">original</text>
+        <rect x="80" y="70" width="100" height="100" fill="rgba(96,165,250,0.1)" stroke="#60a5fa" stroke-width="2"/>
+        <text x="130" y="260" fill="#a0a0a0" font-size="11" text-anchor="middle">unit square</text>
+
+        <text x="380" y="40" fill="#ffffff" font-size="13" font-weight="700" text-anchor="middle">similarity — 4 DOF</text>
+        <rect x="330" y="75" width="95" height="95" fill="rgba(160,160,160,0.08)" stroke="#a0a0a0" stroke-width="2" transform="rotate(12 377 122)"/>
+        <text x="380" y="245" fill="#a0a0a0" font-size="11" text-anchor="middle">shift + rotate + uniform scale</text>
+        <text x="380" y="262" fill="#a0a0a0" font-size="11" text-anchor="middle">square stays a square</text>
+
+        <text x="620" y="40" fill="#ffffff" font-size="13" font-weight="700" text-anchor="middle">affine — 6 DOF</text>
+        <polygon points="570,80 690,95 665,185 545,170" fill="rgba(251,191,36,0.08)" stroke="#fbbf24" stroke-width="2"/>
+        <text x="620" y="245" fill="#a0a0a0" font-size="11" text-anchor="middle">+ shear, non-uniform scale</text>
+        <text x="620" y="262" fill="#a0a0a0" font-size="11" text-anchor="middle">parallel lines stay parallel</text>
+
+        <text x="850" y="40" fill="#ffffff" font-size="13" font-weight="700" text-anchor="middle">homography — 8 DOF</text>
+        <polygon points="805,85 910,70 895,180 785,160" fill="rgba(217,119,87,0.1)" stroke="#D97757" stroke-width="2.5"/>
+        <text x="850" y="245" fill="#D97757" font-size="11" font-weight="600" text-anchor="middle">+ perspective (keystone)</text>
+        <text x="850" y="262" fill="#a0a0a0" font-size="11" text-anchor="middle">any quadrilateral; straight lines stay straight</text>
+      </g>
+    </svg>
+    <div class="cap">Transform hierarchy. Each step adds freedom; only the homography can make one side of the image shrink relative to the other.</div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <span class="icon">📐</span><h3>When is it exact?</h3>
+      <p>Two cases: (1) the scene is a plane (wall, floor); (2) the camera only rotates around its center — no translation. Handheld shake is almost pure rotation with tiny translation, and our background is wall-dominated → a homography describes the frame-to-frame background motion almost perfectly.</p>
+    </div>
+    <div class="card">
+      <span class="icon">🤳</span><h3>Why we need the 8th DOF here</h3>
+      <p>Tilting the camera up/down or left/right (out-of-plane rotation) makes one edge of the image shrink — keystone. Similarity/affine cannot represent that, so a residual misalignment remains at the image edges. We measured this: see the benchmark section.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. PER-FRAME PIPELINE ============ -->
+<section class="wrap">
+  <div class="kicker">The algorithm</div>
+  <h2>Anchored KLT tracking — what happens every frame</h2>
+  <p class="lede">A pool of corners is tracked continuously through the video. Each corner remembers its <b>anchor</b>: the frame-0 position it corresponds to. The fit is always current&nbsp;frame&nbsp;→&nbsp;frame&nbsp;0, directly.</p>
+
+  <div class="flow">
+    <div class="step">
+      <div class="step-rail"><div class="step-num">1</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <h3>Track the pool &nbsp;·&nbsp; <code>cv2.calcOpticalFlowPyrLK</code></h3>
+        <p>Pyramidal Lucas-Kanade moves every corner from the previous frame into the current one (same algorithm we implemented in ex2 — coarse-to-fine pyramid, iterative refinement — the OpenCV version is used for runtime). Corners that fail to track are dropped, and their anchors with them.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-rail"><div class="step-num">2</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <h3>Fit homography to the anchors &nbsp;·&nbsp; <code>cv2.findHomography + RANSAC</code></h3>
+        <p>One robust fit maps current corner positions onto their frame-0 anchors. This is the whole trick: the transform to frame 0 is estimated <b>directly</b>, not assembled from 204 consecutive steps — so per-frame estimation errors have nothing to accumulate into. Drift is impossible by construction.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-rail"><div class="step-num">3</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <h3>Prune outliers &nbsp;·&nbsp; RANSAC inlier mask</h3>
+        <p>Points that disagree with the consensus motion — corners on the walking person, badly tracked corners — are removed from the pool. The person cannot poison future fits: his corners survive at most a frame or two.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-rail"><div class="step-num">4</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <h3>Warp the color frame &nbsp;·&nbsp; <code>cv2.warpPerspective</code></h3>
+        <p>The original BGR frame is warped once, bilinearly, into frame-0 coordinates. Out-of-frame regions become black (allowed). If any step above failed, the previous frame's transform is reused — graceful degradation, no crash on the secret test video.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-rail"><div class="step-num">5</div></div>
+      <div class="step-body">
+        <h3>Replenish the pool &nbsp;·&nbsp; <code>cv2.goodFeaturesToTrack</code> with a mask</h3>
+        <p>When fewer than 200 corners survive, fresh Shi-Tomasi corners are detected away from existing ones. A new corner's anchor is its position mapped to frame-0 coordinates through the current fit — it immediately joins the voting pool.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. WHY NO DRIFT ============ -->
+<section class="wrap">
+  <div class="kicker">The key design choice</div>
+  <h2>Direct fit vs composed chain</h2>
+  <p class="lede">The naive approach estimates frame-to-frame motion and multiplies 204 matrices. Every estimate carries ~0.1&nbsp;px of noise — integrated over the video it becomes visible drift that slowly smears the background.</p>
+
+  <div class="panel">
+    <svg viewBox="0 0 960 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Top: chain of composed transforms accumulating error. Bottom: anchored corners fitted directly to frame 0, no accumulation">
+      <defs>
+        <marker id="arrR3" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#f87171"/></marker>
+        <marker id="arrG3" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#4ade80"/></marker>
+      </defs>
+      <g font-family="Inter,sans-serif">
+        <text x="30" y="35" fill="#f87171" font-size="13" font-weight="700">composed chain (naive): errors add up</text>
+        <g font-size="12">
+          <rect x="30"  y="55" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="70"  y="83" fill="#a0a0a0" text-anchor="middle">frame 0</text>
+          <rect x="230" y="55" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="270" y="83" fill="#a0a0a0" text-anchor="middle">frame 1</text>
+          <rect x="430" y="55" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="470" y="83" fill="#a0a0a0" text-anchor="middle">frame 2</text>
+          <rect x="630" y="55" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="670" y="83" fill="#a0a0a0" text-anchor="middle">frame 3</text>
+          <text x="750" y="83" fill="#a0a0a0" font-size="16">…</text>
+        </g>
+        <g stroke="#f87171" stroke-width="1.5">
+          <line x1="228" y1="78" x2="115" y2="78" marker-end="url(#arrR3)"/>
+          <line x1="428" y1="78" x2="315" y2="78" marker-end="url(#arrR3)"/>
+          <line x1="628" y1="78" x2="515" y2="78" marker-end="url(#arrR3)"/>
+        </g>
+        <text x="171" y="70" fill="#f87171" font-size="11" text-anchor="middle">±ε</text>
+        <text x="371" y="70" fill="#f87171" font-size="11" text-anchor="middle">±ε</text>
+        <text x="571" y="70" fill="#f87171" font-size="11" text-anchor="middle">±ε</text>
+        <text x="30" y="135" fill="#a0a0a0" font-size="12">total error after t frames ~ ε·√t &nbsp;→&nbsp; slow visible wander of the "static" background</text>
+
+        <text x="30" y="185" fill="#4ade80" font-size="13" font-weight="700">anchored fit (ours): every frame measured against frame 0 itself</text>
+        <g font-size="12">
+          <rect x="30"  y="205" width="80" height="46" rx="7" fill="rgba(74,222,128,0.1)" stroke="#4ade80" stroke-width="2"/><text x="70"  y="233" fill="#4ade80" text-anchor="middle">frame 0</text>
+          <rect x="330" y="205" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="370" y="233" fill="#a0a0a0" text-anchor="middle">frame t</text>
+          <rect x="630" y="205" width="80" height="46" rx="7" fill="#1a1a1d" stroke="#2a2a2d"/><text x="670" y="233" fill="#a0a0a0" text-anchor="middle">frame t+1</text>
+        </g>
+        <circle cx="60" cy="220" r="3" fill="#4ade80"/><circle cx="85" cy="240" r="3" fill="#4ade80"/>
+        <circle cx="360" cy="220" r="3" fill="#4ade80"/><circle cx="385" cy="240" r="3" fill="#4ade80"/>
+        <circle cx="660" cy="220" r="3" fill="#4ade80"/><circle cx="685" cy="240" r="3" fill="#4ade80"/>
+        <g stroke="#4ade80" stroke-width="1.5">
+          <path d="M 330 228 C 250 228, 190 228, 115 228" fill="none" marker-end="url(#arrG3)"/>
+          <path d="M 630 240 C 450 285, 250 275, 112 240" fill="none" marker-end="url(#arrG3)"/>
+        </g>
+        <text x="222" y="218" fill="#4ade80" font-size="11" text-anchor="middle">fit: pts → anchors, error ±ε</text>
+        <text x="371" y="290" fill="#4ade80" font-size="11" text-anchor="middle">fit: pts → anchors, error still ±ε — nothing accumulates</text>
+      </g>
+    </svg>
+    <div class="cap">Corners are tracked frame-to-frame, but the FIT is always against frame-0 anchors — tracking chains carry the correspondence, not the transform.</div>
+  </div>
+
+  <div class="callout green">
+    <div class="ci">⚓</div>
+    <p><b>Why this beats a "drift-correction" pass:</b> <span>an alternative we tested estimates frame-to-frame motion, composes it, then corrects the drift by re-registering each warped frame to frame 0 — two LK passes and two warps per frame. The anchored fit achieves better alignment with half the work, because it never creates drift in the first place.</span></p>
+  </div>
+</section>
+
+<!-- ============ 6. LUCAS-KANADE ============ -->
+<section class="wrap">
+  <div class="kicker">Deep dive 1</div>
+  <h2>Lucas-Kanade in one minute</h2>
+  <p class="lede">LK assumes a pixel keeps its brightness as it moves, and that all pixels in a small window move together.</p>
+
+  <div class="math">
+    I<sub>x</sub>·<i>u</i> + I<sub>y</sub>·<i>v</i> + I<sub>t</sub> = 0
+    <span class="dim">Brightness constancy, linearized. One equation, two unknowns (u, v) — underdetermined for a single pixel.</span>
+  </div>
+  <div style="height:16px"></div>
+  <div class="grid grid-3">
+    <div class="card">
+      <span class="icon">🪟</span><h3>Window assumption</h3>
+      <p>Take a 21×21 window around the point: 441 equations, still 2 unknowns. Solve by least squares. This is exactly the ex2 <code>lucas_kanade_step</code>.</p>
+    </div>
+    <div class="card">
+      <span class="icon">🔺</span><h3>Pyramid for big motion</h3>
+      <p>Linearization only holds for ~1px motion. Downscale the image repeatedly, solve at the coarsest level, propagate and refine level by level. Handles the large jitters of handheld video.</p>
+    </div>
+    <div class="card">
+      <span class="icon">📍</span><h3>Corners only</h3>
+      <p>Flow is fully determined only where the gradient is strong in two directions (no aperture problem) — Shi-Tomasi corners. ~600 points instead of 2M pixels: ~1000× less work than the dense ex2 flow, and all the global fit needs.</p>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="callout blue">
+    <div class="ci">📚</div>
+    <p><b>For the report:</b> <span>pyramidal LK is course material (ex2) — mention it, no explanation required. <code>findHomography</code> + RANSAC and the anchored-tracking design must be explained (spec page 6: explain anything not studied or modified) — the homography and RANSAC sections of this page are that explanation.</span></p>
+  </div>
+</section>
+
+<!-- ============ 7. RANSAC ============ -->
+<section class="wrap">
+  <div class="kicker">Deep dive 2</div>
+  <h2>RANSAC: ignoring the walking person</h2>
+  <p class="lede">The person moves differently from the background. Averaging all motion vectors lets him drag the estimate. RANSAC votes him out — and our pool pruning then evicts his corners entirely.</p>
+
+  <div class="panel">
+    <svg viewBox="0 0 960 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A field of motion vectors: coherent green background vectors pointing one way, red outlier vectors on the person pointing another way">
+      <defs>
+        <marker id="arrG" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#4ade80"/></marker>
+        <marker id="arrR" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#f87171"/></marker>
+      </defs>
+      <rect x="40" y="30" width="880" height="220" rx="10" fill="#101012" stroke="#2a2a2d"/>
+      <g stroke="#4ade80" stroke-width="2">
+        <line x1="110" y1="80"  x2="92"  y2="68"  marker-end="url(#arrG)"/>
+        <line x1="220" y1="60"  x2="202" y2="48"  marker-end="url(#arrG)"/>
+        <line x1="340" y1="90"  x2="322" y2="78"  marker-end="url(#arrG)"/>
+        <line x1="470" y1="55"  x2="452" y2="43"  marker-end="url(#arrG)"/>
+        <line x1="610" y1="85"  x2="592" y2="73"  marker-end="url(#arrG)"/>
+        <line x1="740" y1="60"  x2="722" y2="48"  marker-end="url(#arrG)"/>
+        <line x1="860" y1="90"  x2="842" y2="78"  marker-end="url(#arrG)"/>
+        <line x1="130" y1="200" x2="112" y2="188" marker-end="url(#arrG)"/>
+        <line x1="260" y1="170" x2="242" y2="158" marker-end="url(#arrG)"/>
+        <line x1="380" y1="215" x2="362" y2="203" marker-end="url(#arrG)"/>
+        <line x1="700" y1="200" x2="682" y2="188" marker-end="url(#arrG)"/>
+        <line x1="830" y1="170" x2="812" y2="158" marker-end="url(#arrG)"/>
+        <line x1="180" y1="130" x2="162" y2="118" marker-end="url(#arrG)"/>
+        <line x1="760" y1="130" x2="742" y2="118" marker-end="url(#arrG)"/>
+      </g>
+      <g>
+        <ellipse cx="510" cy="160" rx="52" ry="75" fill="rgba(248,113,113,0.07)" stroke="#f87171" stroke-dasharray="5 4" stroke-width="1.5"/>
+        <g stroke="#f87171" stroke-width="2">
+          <line x1="490" y1="130" x2="514" y2="130" marker-end="url(#arrR)"/>
+          <line x1="500" y1="165" x2="524" y2="165" marker-end="url(#arrR)"/>
+          <line x1="488" y1="195" x2="512" y2="195" marker-end="url(#arrR)"/>
+        </g>
+        <text x="510" y="258" fill="#f87171" font-size="12" font-weight="600" text-anchor="middle" font-family="Inter,sans-serif">person's vectors = outliers → rejected + evicted from pool</text>
+      </g>
+      <text x="150" y="278" fill="#4ade80" font-size="12" font-weight="600" font-family="Inter,sans-serif">background vectors = inliers → define camera motion</text>
+    </svg>
+    <div class="cap">One frame's motion field. RANSAC finds the homography most corners agree on; the person's few vectors can't win the vote.</div>
+  </div>
+
+  <div class="grid grid-3">
+    <div class="card"><span class="icon">🎲</span><h3>1 · Sample</h3><p>Pick a minimal random subset of correspondences (4 pairs fix a homography) and fit a candidate.</p></div>
+    <div class="card"><span class="icon">🗳️</span><h3>2 · Vote</h3><p>Count how many other correspondences agree with the candidate within 3 px (inliers).</p></div>
+    <div class="card"><span class="icon">🏆</span><h3>3 · Refit</h3><p>Repeat many times, keep the candidate with the most inliers, then least-squares refit on all inliers only.</p></div>
+  </div>
+</section>
+
+<!-- ============ 8. BENCHMARK ============ -->
+<section class="wrap">
+  <div class="kicker">How we chose</div>
+  <h2>Measured, not guessed</h2>
+  <p class="lede">Every design variant was benchmarked on INPUT.avi with three metrics: mean absolute difference between consecutive frames (central crop — lower = steadier), variance of Laplacian of the temporal mean frame (higher = background more static), and runtime.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Variant</th><th>Interframe&nbsp;↓</th><th>Mean-frame sharpness&nbsp;↑</th><th>Runtime</th><th>Verdict</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Raw input</b> (no stabilization)</td>
+          <td>5.45</td><td>2.7</td><td>—</td>
+          <td class="bad">Baseline</td>
+        </tr>
+        <tr>
+          <td><b>Composed similarity chain</b><br>consecutive fits, multiplied together</td>
+          <td>3.25</td><td>11.9</td><td>16.0 s</td>
+          <td class="meh">Steady but drifts — 204 composed estimates integrate noise into slow background wander</td>
+        </tr>
+        <tr>
+          <td><b>+ drift-correction pass</b><br>re-register each warped frame to frame 0 (similarity)</td>
+          <td>4.23–4.50</td><td>18–22</td><td>~25 s</td>
+          <td class="bad">Jitters: the residual vs frame 0 contains keystone that 4 DOF can't represent — the fit hops between image regions</td>
+        </tr>
+        <tr>
+          <td><b>Anchored KLT, similarity fit</b><br>direct fit to frame-0 anchors</td>
+          <td>3.34</td><td>26.5</td><td>6.9 s</td>
+          <td class="meh">Drift halved, jitter gone — but the 4-DOF ceiling remains</td>
+        </tr>
+        <tr class="win">
+          <td class="win"><b>Anchored KLT, homography fit</b><span class="win-tag">CHOSEN</span></td>
+          <td class="win ok">2.91</td><td class="win ok">71.3</td><td class="win ok">5.2 s</td>
+          <td class="win ok">Best steadiness, 6× sharper background than the chain, fastest</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="height:16px"></div>
+
+  <div class="callout">
+    <div class="ci">🔬</div>
+    <p><b>The decisive experiment:</b> <span>swapping only the model in the anchored tracker (similarity → homography) moved sharpness 26.5 → 71.3. That isolates the cause: handheld shake contains out-of-plane rotation, whose keystone residual needs the homography's 8th degree of freedom. Every other knob (corner count, block size, corner source) moved the numbers by almost nothing.</span></p>
+  </div>
+</section>
+
+<!-- ============ 9. NUMBERS + SAFETY ============ -->
+<section class="wrap">
+  <div class="kicker">Engineering</div>
+  <h2>Budget, robustness, spec compliance</h2>
+  <p class="lede">The whole project must finish in 20 minutes. Stabilization takes ~5 seconds of it.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">600</div><div class="lbl">max corners in the tracked pool (replenished under 200)</div></div>
+    <div class="stat"><div class="num">8</div><div class="lbl">degrees of freedom (homography)</div></div>
+    <div class="stat"><div class="num">3 px</div><div class="lbl">RANSAC inlier threshold</div></div>
+    <div class="stat"><div class="num">5.2 s</div><div class="lbl">runtime for 205 frames @ 1920×1080</div></div>
+  </div>
+  <div style="height:24px"></div>
+
+  <div class="grid grid-2">
+    <div class="callout green">
+      <div class="ci">🛡️</div>
+      <p><b>Fallbacks everywhere:</b> <span>tracking failure, too few corners, or RANSAC returning nothing → the previous transform is reused and the pool is re-seeded. The frame passes through; no crash on the secret test video.</span></p>
+    </div>
+    <div class="callout green">
+      <div class="ci">💧</div>
+      <p><b>Streaming, single warp:</b> <span>frames are read, warped once (bilinear), and written one at a time — no full-video buffer in RAM, no repeated resampling → no quality loss for matting.</span></p>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+
+  <div class="callout red">
+    <div class="ci">⚠️</div>
+    <p><b>Model assumption to state in the report:</b> <span>a single homography is exact only for a planar scene or a purely rotating camera. Our background has multiple depths, so tiny parallax exists; RANSAC locks onto the dominant background plane and treats parallax as outlier noise. The benchmark shows this approximation costs nothing measurable on this footage.</span></p>
+  </div>
+  <div style="height:16px"></div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Function in code</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>utils.open_video / get_video_parameters / create_video</code></td><td>I/O plumbing shared across all project stages</td></tr>
+        <tr><td><code>detect_corners(gray, existing)</code></td><td>Shi-Tomasi corners, masked away from surviving pool points</td></tr>
+        <tr><td><code>stabilize_video(input_path, output_path)</code></td><td>Track pool → fit homography to frame-0 anchors → prune outliers → warp color frame → replenish pool → write <code>stabilize_ID1_ID2.avi</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  Video Processing Final Project · Stabilization stage · Anchored KLT + homography + RANSAC, drift-free by construction
+</footer>
+
+</body>
+</html>
