@@ -159,6 +159,13 @@ own suggested range of $0.7$--$0.9$. The departures from the lecture version:
     keeping every connected component at least 20\% of the largest one (dark clothing can split
     a limb off the torso; keeping only the largest deletes real body parts), hole filling, and a
     smooth upscale of the mask back to full resolution.
+    \item \emph{Border exclusion from two signals.} The warp leaves a black border whose size
+    changes every frame as the camera drifts, so no single fixed crop describes it. We re-warp a
+    blank canvas with the same per-frame transform stage~1 used, which gives the exact valid
+    region for that frame, and combine it with each pixel's own trained color history: a pixel
+    that is border on most frames stays excluded even on the rare frame where it briefly shows
+    real content, since the model never learned that content as background. A pixel counts as
+    person only when both agree.
 \end{itemize}
 
 \noindent
