@@ -6,8 +6,8 @@ import time
 from utils import path_from_root
 from stabilization import stabilize_video
 from background_subtraction import background_subtraction
-# from matting import matting      # TODO: uncomment once matting.py is implemented
-# from tracking import tracking    # TODO: uncomment once tracking.py is implemented
+from matting import matting
+from tracking import tracking
 
 ID1 = '213851579'
 ID2 = '213310485'
@@ -46,9 +46,15 @@ def main():
 
     # Step 3: Matting
     print('Step 3: Matting')
+    matting(stabilize_path, binary_path, background_image, matted_path, alpha_path)
+    timing['alpha'] = time.time() - start_time
+    timing['matted'] = time.time() - start_time
 
     # Step 4: Tracking
     print('Step 4: Tracking')
+    tracking_json_path = os.path.join(outputs_dir, 'tracking.json')
+    tracking(matted_path, binary_path, output_path, tracking_json_path)
+    timing['output'] = time.time() - start_time
 
     timing_path = os.path.join(outputs_dir, 'timing.json')
     with open(timing_path, 'w') as f:

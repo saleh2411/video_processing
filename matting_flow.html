@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html{color-scheme:light dark}*{box-sizing:border-box}body{margin:0}</style>
+<title>matting.py — flow diagram</title>
+<style>
+  :root {
+    --bg: #F2F4F6;
+    --panel: #FFFFFF;
+    --ink: #1B2530;
+    --muted: #5B6774;
+    --line: #D8DEE4;
+    --fg-acc: #0B8A6A;
+    --fg-soft: #E0F1EB;
+    --bg-acc: #3E63C4;
+    --bg-soft: #E6EBF8;
+    --band-acc: #B97E14;
+    --band-soft: #F6ECD8;
+    --code-bg: #EDF0F3;
+    --shadow: 0 1px 2px rgba(27, 37, 48, 0.06), 0 4px 14px rgba(27, 37, 48, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151B;
+      --panel: #171E26;
+      --ink: #E7ECF1;
+      --muted: #93A0AD;
+      --line: #2A333E;
+      --fg-acc: #2FB68F;
+      --fg-soft: #12312A;
+      --bg-acc: #7C97E8;
+      --bg-soft: #1C2740;
+      --band-acc: #D9A03C;
+      --band-soft: #33290F;
+      --code-bg: #1F2833;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151B;
+    --panel: #171E26;
+    --ink: #E7ECF1;
+    --muted: #93A0AD;
+    --line: #2A333E;
+    --fg-acc: #2FB68F;
+    --fg-soft: #12312A;
+    --bg-acc: #7C97E8;
+    --bg-soft: #1C2740;
+    --band-acc: #D9A03C;
+    --band-soft: #33290F;
+    --code-bg: #1F2833;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] {
+    --bg: #F2F4F6;
+    --panel: #FFFFFF;
+    --ink: #1B2530;
+    --muted: #5B6774;
+    --line: #D8DEE4;
+    --fg-acc: #0B8A6A;
+    --fg-soft: #E0F1EB;
+    --bg-acc: #3E63C4;
+    --bg-soft: #E6EBF8;
+    --band-acc: #B97E14;
+    --band-soft: #F6ECD8;
+    --code-bg: #EDF0F3;
+    --shadow: 0 1px 2px rgba(27, 37, 48, 0.06), 0 4px 14px rgba(27, 37, 48, 0.05);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Seravek", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .formula, .chip, .const-name, .pass {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  /* ---------- header ---------- */
+  header h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 0.4rem;
+  }
+  header h1 code {
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 6px;
+    font-size: 0.92em;
+  }
+  .sub {
+    color: var(--muted);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .io-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.1rem;
+  }
+  .io {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 0.28em 0.85em;
+    font-size: 0.82rem;
+  }
+  .io .dir {
+    font-weight: 700;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .io.out .dir { color: var(--fg-acc); }
+
+  /* ---------- section titles ---------- */
+  .sec-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.75rem;
+  }
+  .sec-label b { color: var(--ink); font-weight: 700; }
+
+  /* ---------- driver strip ---------- */
+  .driver-scroll { overflow-x: auto; padding-bottom: 0.5rem; }
+  .driver {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: max-content;
+  }
+  .dstep {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 0.7rem 0.95rem;
+    width: 168px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .dstep h4 { margin: 0; font-size: 0.85rem; font-weight: 600; }
+  .dstep p { margin: 0; font-size: 0.76rem; color: var(--muted); }
+  .dstep code { font-size: 0.72rem; color: var(--bg-acc); }
+  .dstep.loop { border-color: var(--band-acc); border-style: dashed; }
+  .darr {
+    flex: none;
+    align-self: center;
+    width: 30px;
+    height: 2px;
+    background: var(--line);
+    position: relative;
+  }
+  .darr::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border-left: 7px solid var(--line);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  /* ---------- legend ---------- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.45em; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .swatch.f { background: var(--fg-acc); }
+  .swatch.b { background: var(--bg-acc); }
+  .swatch.u { background: var(--band-acc); }
+
+  /* ---------- pipeline stages ---------- */
+  .pipeline { display: flex; flex-direction: column; align-items: stretch; }
+
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 1.4rem 1.6rem;
+  }
+  .stage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+  }
+  .stage-num {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--panel);
+    background: var(--ink);
+    border-radius: 6px;
+    padding: 0.15em 0.5em;
+    letter-spacing: 0.03em;
+  }
+  .stage-head h3 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+  .lect {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--band-acc);
+  }
+  .stage p.desc { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.9rem; max-width: 68ch; }
+  .stage p.desc code { background: var(--code-bg); padding: 0.08em 0.3em; border-radius: 4px; font-size: 0.85em; color: var(--ink); }
+
+  .stage-cols {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.25rem;
+    align-items: start;
+  }
+  @media (max-width: 700px) {
+    .stage-cols { grid-template-columns: 1fr; }
+  }
+
+  .formula-box { overflow-x: auto; }
+  .formula {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.84rem;
+    line-height: 1.9;
+    white-space: nowrap;
+    width: max-content;
+    min-width: 100%;
+    box-sizing: border-box;
+  }
+  .formula sub, .formula sup { font-size: 0.7em; }
+  .formula .hi-f { color: var(--fg-acc); font-weight: 600; }
+  .formula .hi-b { color: var(--bg-acc); font-weight: 600; }
+  .formula .hi-u { color: var(--band-acc); font-weight: 600; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
+  .chip {
+    font-size: 0.72rem;
+    border: 1px solid var(--line);
+    background: var(--code-bg);
+    border-radius: 6px;
+    padding: 0.18em 0.55em;
+    color: var(--ink);
+  }
+  .chip.fn { border-color: var(--bg-acc); color: var(--bg-acc); background: var(--bg-soft); }
+
+  .fallback {
+    margin-top: 0.9rem;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .fallback b {
+    color: var(--band-acc);
+    font-weight: 700;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 0.5em;
+  }
+  .fallback code { background: var(--code-bg); padding: 0.06em 0.3em; border-radius: 4px; font-size: 0.92em; }
+
+  /* ---------- source references ---------- */
+  .src {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  .loc {
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  details.src-code { margin-top: 0.9rem; }
+  details.src-code summary {
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--bg-acc);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  details.src-code summary::marker { color: var(--muted); }
+  pre.code {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    overflow-x: auto;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    margin: 0.5rem 0 0;
+  }
+  pre.code code { font-family: inherit; }
+  pre.code .ln {
+    display: inline-block;
+    width: 2.8em;
+    color: var(--muted);
+    user-select: none;
+  }
+  pre.code .cm { color: var(--muted); font-style: italic; }
+  pre.code .skip { color: var(--muted); }
+
+  /* connectors between stages */
+  .connect {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0;
+  }
+  .connect .stem { width: 2px; height: 16px; background: var(--line); }
+  .connect .stem.tail { position: relative; height: 20px; }
+  .connect .stem.tail::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: -5px;
+    border-top: 7px solid var(--line);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+  }
+  .pass {
+    font-size: 0.72rem;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 0.2em 0.8em;
+    max-width: 100%;
+    text-align: center;
+  }
+  .pass em { font-style: normal; color: var(--fg-acc); }
+
+  /* trimap svg labels */
+  .trimap-fig { flex: none; width: 250px; max-width: 100%; }
+  .trimap-fig figcaption {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.3rem;
+  }
+  .trimap-fig svg { width: 100%; height: auto; display: block; }
+
+  /* candidate-pair svg */
+  .pairs-fig { flex: none; width: 250px; max-width: 100%; }
+  .pairs-fig svg { width: 100%; height: auto; display: block; }
+  .pairs-fig figcaption {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.3rem;
+  }
+
+  /* ---------- constants ---------- */
+  .consts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.6rem;
+  }
+  .const {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .const-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--bg-acc);
+    font-variant-numeric: tabular-nums;
+  }
+  .const-name b { color: var(--ink); font-weight: 700; }
+  .const p { margin: 0; font-size: 0.74rem; color: var(--muted); }
+
+  footer {
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 1rem;
+  }
+  footer code { background: var(--code-bg); padding: 0.08em 0.3em; border-radius: 4px; }
+
+  :focus-visible { outline: 2px solid var(--bg-acc); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <h1><code>matting.py</code> — per-frame matting pipeline</h1>
+    <p class="sub">Replaces the video background behind the tracked person. Every frame runs the
+    lecture-10 chain: <strong>trimap → KDE color model → geodesic opacity map → pure-color
+    compositing</strong>, all inside a region of interest around the person.</p>
+    <div class="io-row">
+      <span class="io"><span class="dir">in</span> stabilized video</span>
+      <span class="io"><span class="dir">in</span> binary (mask) video</span>
+      <span class="io"><span class="dir">in</span> new background image</span>
+      <span class="io out"><span class="dir">out</span> <code>alpha_*.avi</code> — α in [0,255], 3-channel</span>
+      <span class="io out"><span class="dir">out</span> <code>matted_*.avi</code> — composited video</span>
+    </div>
+  </header>
+
+  <section aria-label="driver flow">
+    <p class="sec-label">Driver — <b>matting()</b>, runs once per video · matting.py:240–275</p>
+    <div class="driver-scroll">
+      <div class="driver">
+        <div class="dstep">
+          <h4>Read params</h4>
+          <p>width, height, fps, frame count from the stabilized video</p>
+          <code>utils.open_video</code>
+          <span class="loc">matting.py:244–248</span>
+        </div>
+        <div class="darr" aria-hidden="true"></div>
+        <div class="dstep">
+          <h4>Prepare background</h4>
+          <p>load image, resize to frame size, cast to float32</p>
+          <code>cv2.imread · resize</code>
+          <span class="loc">matting.py:250–255</span>
+        </div>
+        <div class="darr" aria-hidden="true"></div>
+        <div class="dstep">
+          <h4>Open writers</h4>
+          <p>alpha video + matted video, same fps and size</p>
+          <code>utils.create_video ×2</code>
+          <span class="loc">matting.py:258–259</span>
+        </div>
+        <div class="darr" aria-hidden="true"></div>
+        <div class="dstep loop">
+          <h4>Per-frame loop</h4>
+          <p>zip stabilized + binary frames; threshold mask at 127; run the pipeline below</p>
+          <code>process_frame</code>
+          <span class="loc">matting.py:261–266</span>
+        </div>
+        <div class="darr" aria-hidden="true"></div>
+        <div class="dstep">
+          <h4>Write outputs</h4>
+          <p>α × 255 → uint8, replicated to 3 channels; matted clipped to [0,255]</p>
+          <code>out.write ×2</code>
+          <span class="loc">matting.py:268–271</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="per-frame pipeline">
+    <p class="sec-label">Per frame — <b>process_frame()</b> · matting.py:171–237, cropped to a ROI around the person’s bounding box (:177–184)</p>
+
+    <div class="legend" style="margin-bottom:1rem;">
+      <span><span class="swatch f"></span> confident foreground</span>
+      <span><span class="swatch b"></span> confident background</span>
+      <span><span class="swatch u"></span> undecided band φ</span>
+    </div>
+
+    <div class="pipeline">
+
+      <article class="stage">
+        <div class="stage-head">
+          <span class="stage-num">1</span>
+          <h3>Trimap</h3>
+          <span class="lect">Lecture 10.1</span>
+          <span class="src">matting.py:189–194</span>
+        </div>
+        <p class="desc">The binary mask already gives a dense FG/BG labeling, so the trimap is built
+        geometrically: erode and dilate the mask with a disc of radius <code>RHO = 7</code>. The eroded
+        core is certain foreground, everything outside the dilation is certain background, and the
+        ring between them is the undecided band B<sub>ρ</sub>(Δ) around the contour.</p>
+        <div class="stage-cols">
+          <div class="formula-box">
+            <div class="formula">
+              α<sub>T</sub>(x) = <span class="hi-f">1</span>&nbsp; on erode(mask, disc<sub>ρ</sub>)<br>
+              α<sub>T</sub>(x) = <span class="hi-b">0</span>&nbsp; outside dilate(mask, disc<sub>ρ</sub>)<br>
+              α<sub>T</sub>(x) = <span class="hi-u">φ</span>&nbsp; in the band (width ≈ 2ρ)
+            </div>
+            <div class="chips">
+              <span class="chip fn">cv2.erode</span>
+              <span class="chip fn">cv2.dilate</span>
+              <span class="chip">disc kernel _ERODE_K</span>
+              <span class="chip">utils.bbox_of_mask → ROI</span>
+            </div>
+            <div class="fallback"><b>early exit</b> empty mask (<code>bbox_of_mask</code> returns
+            <code>None</code>, :177–179) → α = 0 everywhere, matted frame = new background.</div>
+            <details class="src-code">
+              <summary>view code — matting.py:189–194</summary>
+              <pre class="code"><code><span class="cm"># disc kernel of radius RHO = 7 (:63, :73)</span>
+<span class="ln">73</span>_ERODE_K = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * RHO + 1, 2 * RHO + 1))
+<span class="ln">189</span>mask_roi = mask[r0:r1, c0:c1]
+<span class="ln">190</span>fg_core = cv2.erode(mask_roi, _ERODE_K)
+<span class="ln">191</span>dilated = cv2.dilate(mask_roi, _ERODE_K)
+<span class="ln">192</span>band_u8 = dilated - fg_core
+<span class="ln">193</span>band = band_u8.astype(bool)
+<span class="ln">194</span>fg_bool = fg_core.astype(bool)</code></pre>
+              <pre class="code"><code><span class="cm"># confident pixels composite directly (:196–201)</span>
+<span class="ln">199</span>alpha_roi = fg_core.astype(np.float32)
+<span class="ln">200</span>matted_roi = bg_roi.copy()
+<span class="ln">201</span>matted_roi[fg_bool] = frame_f[fg_bool]</code></pre>
+            </details>
+          </div>
+          <figure class="trimap-fig">
+            <svg viewBox="0 0 250 150" role="img" aria-label="Trimap: foreground core inside an undecided band inside background">
+              <rect x="4" y="4" width="242" height="142" rx="10" fill="var(--bg-soft)" stroke="var(--bg-acc)" stroke-width="1.5"/>
+              <ellipse cx="125" cy="75" rx="92" ry="54" fill="var(--band-soft)" stroke="var(--band-acc)" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <ellipse cx="125" cy="75" rx="58" ry="30" fill="var(--fg-soft)" stroke="var(--fg-acc)" stroke-width="1.5"/>
+              <text x="125" y="80" text-anchor="middle" font-size="13" fill="var(--fg-acc)" font-weight="600">α = 1</text>
+              <text x="125" y="35" text-anchor="middle" font-size="12" fill="var(--band-acc)" font-weight="600">φ</text>
+              <text x="30" y="138" font-size="12" fill="var(--bg-acc)" font-weight="600">α = 0</text>
+            </svg>
+            <figcaption>Confident pixels composite directly: J = c (FG) or J = B<sub>new</sub> (BG).</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <div class="connect" aria-hidden="true">
+        <span class="stem"></span>
+        <span class="pass">band φ · <em>fg_core</em> · dilated mask</span>
+        <span class="stem tail"></span>
+      </div>
+
+      <article class="stage">
+        <div class="stage-head">
+          <span class="stage-num">2</span>
+          <h3>Color model — KDE</h3>
+          <span class="lect">Lectures 10.1 / 10.4</span>
+          <span class="src">matting.py:206–211</span>
+        </div>
+        <p class="desc">FG and BG color densities are estimated only from pixels adjacent to the band
+        (within <code>SAMPLE_RADIUS = 25</code>), where color statistics are local and reliable. The
+        3-D Parzen KDE over Lab uses the binned low-rank trick: quantize into a 64³ histogram, then
+        apply the separable Gaussian kernel as three 1-D convolutions — O(samples + bins) instead of
+        the quadratic direct sum.</p>
+        <div class="stage-cols">
+          <div class="formula-box">
+            <div class="formula">
+              f(c|<span class="hi-f">F</span>), f(c|<span class="hi-b">B</span>) = gaussian_filter(hist<sub>64³</sub>(Lab ≫ 2), σ = 2)<br>
+              P(<span class="hi-f">F</span>|c) = f(c|<span class="hi-f">F</span>) / ( f(c|<span class="hi-f">F</span>) + f(c|<span class="hi-b">B</span>) )&nbsp;&nbsp;<span style="color:var(--muted)">(Bayes, uniform priors)</span>
+            </div>
+            <div class="chips">
+              <span class="chip fn">kde_3d</span>
+              <span class="chip fn">posterior_fg</span>
+              <span class="chip">cv2.cvtColor → Lab</span>
+              <span class="chip">np.bincount</span>
+              <span class="chip">scipy gaussian_filter</span>
+            </div>
+            <div class="fallback"><b>fallback</b> no FG or no BG samples near the band (:210) → band
+            pixels keep α = 0 and the confident-only composite stands.</div>
+            <details class="src-code">
+              <summary>view code — matting.py:206–211 · kde_3d:83–93 · posterior_fg:98–105</summary>
+              <pre class="code"><code><span class="ln">206</span>lab_roi = cv2.cvtColor(frame[r0:r1, c0:c1], cv2.COLOR_BGR2Lab)
+<span class="ln">207</span>near_band = cv2.dilate(band_u8, _SAMPLE_K).astype(bool)
+<span class="ln">208</span>fg_sample_px = fg_bool &amp; near_band
+<span class="ln">209</span>bg_sample_px = (dilated == 0) &amp; near_band
+<span class="ln">210</span>if fg_sample_px.any() and bg_sample_px.any():
+<span class="ln">211</span>    p_fg = posterior_fg(lab_roi, lab_roi[fg_sample_px], lab_roi[bg_sample_px])</code></pre>
+              <pre class="code"><code><span class="cm"># inside kde_3d (:87–93) and posterior_fg (:100–105)</span>
+<span class="ln">87</span>q = (lab_samples &gt;&gt; 2).astype(np.int32)
+<span class="ln">89</span>hist = np.bincount(idx, minlength=KDE_BINS ** 3).astype(np.float32)
+<span class="ln">91</span>density = gaussian_filter(hist.reshape(KDE_BINS, KDE_BINS, KDE_BINS), KDE_SIGMA)
+<span class="ln">105</span>return pf / (pf + pb)</code></pre>
+            </details>
+          </div>
+        </div>
+      </article>
+
+      <div class="connect" aria-hidden="true">
+        <span class="stem"></span>
+        <span class="pass">posterior map <em>P(F|c)</em> over the ROI</span>
+        <span class="stem tail"></span>
+      </div>
+
+      <article class="stage">
+        <div class="stage-head">
+          <span class="stage-num">3</span>
+          <h3>Opacity map — geodesic distances</h3>
+          <span class="lect">Lecture 10.2</span>
+          <span class="src">matting.py:214–230</span>
+        </div>
+        <p class="desc">An 8-neighbor graph is built over the band plus thin confident rims on both
+        sides. Each edge costs the posterior jump |P(u) − P(v)| — the discrete line integral of the
+        lecture’s weight field W = ∇P(F|c) — plus a small spatial regularizer. Multi-source Dijkstra
+        from each rim gives D<sub>F</sub> and D<sub>B</sub>, blended into α.</p>
+        <div class="stage-cols">
+          <div class="formula-box">
+            <div class="formula">
+              cost(u→v) = |P(u) − P(v)| + ε·step<br>
+              <span class="hi-f">D_F</span>, <span class="hi-b">D_B</span> = Dijkstra(band graph, sources = rims)<br>
+              <span class="hi-f">w_F</span> = D<sub>F</sub><sup>−r</sup> · P(F|c)&nbsp;&nbsp;&nbsp;<span class="hi-b">w_B</span> = D<sub>B</sub><sup>−r</sup> · P(B|c)&nbsp;&nbsp;&nbsp;(r = 2)<br>
+              <span class="hi-u">α(x)</span> = w<sub>F</sub> / ( w<sub>F</sub> + w<sub>B</sub> )
+            </div>
+            <div class="chips">
+              <span class="chip fn">band_graph</span>
+              <span class="chip fn">geodesic_dist</span>
+              <span class="chip">csr_matrix</span>
+              <span class="chip">scipy dijkstra (min_only)</span>
+            </div>
+            <div class="fallback"><b>fallback</b> a rim side is empty (:228–229) → skip the geodesics
+            and use the posterior directly: <code>α = P(F|c)</code> on the band.</div>
+            <details class="src-code">
+              <summary>view code — matting.py:214–230 · band_graph:111–131 · geodesic_dist:136–139</summary>
+              <pre class="code"><code><span class="ln">214</span>near = cv2.dilate(band_u8, _RIM_K).astype(bool)
+<span class="ln">215</span>rim_f = fg_bool &amp; near
+<span class="ln">216</span>rim_b = (dilated == 0) &amp; near
+<span class="skip">⋮</span>
+<span class="ln">221</span>domain = band | rim_f | rim_b
+<span class="ln">222</span>ids, graph = band_graph(p_fg, domain)
+<span class="ln">223</span>d_f = geodesic_dist(ids, graph, rim_f)[ids[band]]
+<span class="ln">224</span>d_b = geodesic_dist(ids, graph, rim_b)[ids[band]]
+<span class="ln">225</span>w_f = np.power(d_f, -DIST_R) * p_fg[band]
+<span class="ln">226</span>w_b = np.power(d_b, -DIST_R) * (1.0 - p_fg[band])
+<span class="ln">227</span>a_band = (w_f / (w_f + w_b + EPS)).astype(np.float32)
+<span class="ln">230</span>alpha_roi[band] = a_band</code></pre>
+              <pre class="code"><code><span class="cm"># edge cost inside band_graph (:128) — |P(u) − P(v)| + ε·step</span>
+<span class="ln">128</span>ws.append(np.abs(p_fg[sl_u] - p_fg[sl_v])[ok] + GEO_EPS * step)
+<span class="cm"># multi-source Dijkstra inside geodesic_dist (:139)</span>
+<span class="ln">139</span>return dijkstra(graph, directed=False, indices=ids[src_mask], min_only=True)</code></pre>
+            </details>
+          </div>
+        </div>
+      </article>
+
+      <div class="connect" aria-hidden="true">
+        <span class="stem"></span>
+        <span class="pass">band opacities <em>α(x)</em> ∈ (0, 1)</span>
+        <span class="stem tail"></span>
+      </div>
+
+      <article class="stage">
+        <div class="stage-head">
+          <span class="stage-num">4</span>
+          <h3>Matting — pure foreground color</h3>
+          <span class="lect">Lecture 10.3</span>
+          <span class="src">matting.py:232–233</span>
+        </div>
+        <p class="desc">Blending the observed band color directly would drag the old background into
+        the new one. Instead, for each band pixel a KD-tree fetches the <code>N_CAND = 7</code>
+        nearest confident FG and BG pixels; the pair whose α-blend best reconstructs the observed
+        color yields the pure foreground color used in the final composite.</p>
+        <div class="stage-cols">
+          <div class="formula-box">
+            <div class="formula">
+              (x<sub>F</sub><sup>*</sup>, x<sub>B</sub><sup>*</sup>) = argmin ‖ α·c(<span class="hi-f">x_F</span>) + (1−α)·c(<span class="hi-b">x_B</span>) − c(x) ‖²<br>
+              J(x) = α(x) · c(<span class="hi-f">x_F*</span>) + (1 − α(x)) · <span class="hi-b">B_new</span>(x)
+            </div>
+            <div class="chips">
+              <span class="chip fn">pure_composite</span>
+              <span class="chip">scipy cKDTree ×2</span>
+              <span class="chip">7 × 7 candidate pairs / pixel</span>
+            </div>
+            <div class="fallback"><b>fallback</b> no confident candidates on one side (:152–153) →
+            naive blend <code>α·c + (1−α)·B_new</code>.</div>
+            <details class="src-code">
+              <summary>view code — matting.py:232–233 · pure_composite:145–166</summary>
+              <pre class="code"><code><span class="ln">232</span>matted_roi[band] = pure_composite(frame_f, a_band, band,
+<span class="ln">233</span>                                  rim_f, rim_b, bg_roi)</code></pre>
+              <pre class="code"><code><span class="cm"># the pair search inside pure_composite (:156–166)</span>
+<span class="ln">156</span>idx_f = cKDTree(np.column_stack(np.nonzero(rim_f))).query(band_yx, k=kf)[1]
+<span class="ln">157</span>idx_b = cKDTree(np.column_stack(np.nonzero(rim_b))).query(band_yx, k=kb)[1]
+<span class="skip">⋮</span>
+<span class="ln">162</span>recon = a * cand_f[:, :, None, :] + (1.0 - a) * cand_b[:, None, :, :]
+<span class="ln">163</span>err = ((recon - frame_f[band][:, None, None, :]) ** 2).sum(-1)
+<span class="ln">164</span>best_f = err.reshape(n, -1).argmin(1) // kb
+<span class="ln">165</span>pure_f = cand_f[np.arange(n), best_f]
+<span class="ln">166</span>return a1 * pure_f + (1.0 - a1) * bg_roi[band]</code></pre>
+            </details>
+          </div>
+          <figure class="pairs-fig">
+            <svg viewBox="0 0 250 150" role="img" aria-label="A band pixel picks its best foreground and background candidate pair">
+              <circle cx="125" cy="75" r="9" fill="var(--band-acc)"/>
+              <text x="125" y="105" text-anchor="middle" font-size="12" fill="var(--band-acc)" font-weight="600">c(x)</text>
+              <g stroke="var(--fg-acc)" stroke-width="1.2" opacity="0.55">
+                <line x1="125" y1="75" x2="48" y2="34"/><line x1="125" y1="75" x2="66" y2="62"/><line x1="125" y1="75" x2="55" y2="96"/>
+              </g>
+              <g stroke="var(--bg-acc)" stroke-width="1.2" opacity="0.55">
+                <line x1="125" y1="75" x2="202" y2="36"/><line x1="125" y1="75" x2="188" y2="70"/><line x1="125" y1="75" x2="198" y2="104"/>
+              </g>
+              <g fill="var(--fg-acc)">
+                <circle cx="48" cy="34" r="6"/><circle cx="66" cy="62" r="6"/><circle cx="55" cy="96" r="6"/>
+              </g>
+              <g fill="var(--bg-acc)">
+                <circle cx="202" cy="36" r="6"/><circle cx="188" cy="70" r="6"/><circle cx="198" cy="104" r="6"/>
+              </g>
+              <circle cx="66" cy="62" r="10" fill="none" stroke="var(--fg-acc)" stroke-width="2"/>
+              <circle cx="188" cy="70" r="10" fill="none" stroke="var(--bg-acc)" stroke-width="2"/>
+              <text x="52" y="135" font-size="12" fill="var(--fg-acc)" font-weight="600">x_F*</text>
+              <text x="182" y="135" font-size="12" fill="var(--bg-acc)" font-weight="600">x_B*</text>
+            </svg>
+            <figcaption>Ringed pair = best α-blend reconstruction of the observed color.</figcaption>
+          </figure>
+        </div>
+      </article>
+
+      <div class="connect" aria-hidden="true">
+        <span class="stem"></span>
+        <span class="pass">full-frame <em>α</em> + matted frame → written to both output videos</span>
+      </div>
+
+    </div>
+  </section>
+
+  <section aria-label="tuning constants">
+    <p class="sec-label">Tuning constants</p>
+    <div class="consts">
+      <div class="const"><span class="const-name">RHO <b>= 7</b></span><p>half-width of the undecided band around the contour</p></div>
+      <div class="const"><span class="const-name">SAMPLE_RADIUS <b>= 25</b></span><p>how far from the band KDE color samples are collected</p></div>
+      <div class="const"><span class="const-name">KDE_BINS <b>= 64</b></span><p>histogram bins per Lab channel (quantization ≫ 2)</p></div>
+      <div class="const"><span class="const-name">KDE_SIGMA <b>= 2.0</b></span><p>Parzen bell width, in histogram-bin units</p></div>
+      <div class="const"><span class="const-name">DIST_R <b>= 2.0</b></span><p>distance-weight exponent, r ∈ (0, 2]</p></div>
+      <div class="const"><span class="const-name">GEO_EPS <b>= 1e-3</b></span><p>spatial regularizer of the geodesic step cost</p></div>
+      <div class="const"><span class="const-name">N_CAND <b>= 7</b></span><p>confident FG/BG candidates per band pixel — window N(x)</p></div>
+    </div>
+  </section>
+
+  <footer>
+    Source: <code>FinalProject_213851579_213310485/Code/matting.py</code> · stages map to lecture 10
+    sections 10.1 (trimap, KDE), 10.2 (opacity map), 10.3 (matting), 10.4 (fast binned KDE).
+  </footer>
+
+</div>
+</body>
+</html>

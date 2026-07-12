@@ -45,4 +45,29 @@ def create_video(video_path, fps, w, h):
     return out
 
 
+#new added for matting/tracking
+def frames_of(video_path):
+    """Generator over the BGR frames of a video file."""
+    video = open_video(video_path)
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+        yield frame
+    video.release()
+
+
+#new added for matting/tracking
+def bbox_of_mask(mask):
+    """Bounding box (row, col, height, width) of the nonzero part of a mask,
+    or None if the mask is empty."""
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    if not rows.any():
+        return None
+    r0, r1 = np.where(rows)[0][[0, -1]]
+    c0, c1 = np.where(cols)[0][[0, -1]]
+    return int(r0), int(c0), int(r1 - r0 + 1), int(c1 - c0 + 1)
+
+
 
