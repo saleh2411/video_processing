@@ -84,6 +84,7 @@ def stabilize_video(input_video_path, output_video_path):
     anchors = cur_pts.copy()
 
     transform = np.eye(3, dtype=np.float64)  # maps current frame -> frame 0
+    transforms = [transform.copy()]          # transform actually used per output frame
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     for _ in tqdm(range(frame_count - 1), desc="Stabilization"):
@@ -117,6 +118,7 @@ def stabilize_video(input_video_path, output_video_path):
                                          borderMode=cv2.BORDER_CONSTANT,
                                          borderValue=0)
         out.write(stabilized)
+        transforms.append(transform.copy())
 
         # replenish the pool with fresh corners anchored via the current fit
         if cur_pts is None or len(cur_pts) < MIN_POINTS:
@@ -139,3 +141,4 @@ def stabilize_video(input_video_path, output_video_path):
     cap.release()
     out.release()
     cv2.destroyAllWindows()
+    return np.array(transforms, dtype=np.float64)

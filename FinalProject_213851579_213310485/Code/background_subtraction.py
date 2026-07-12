@@ -25,7 +25,11 @@ weight T_BG = 0.7 form the background set, the lecture's own suggested
 value. A higher T risks letting the person's own "ghost" mode become
 background where he lingers, but this was not observed on this video.
 Cast shadows are vetoed exactly: L attenuated into [0.50, 0.96] while
-|da|, |db| < 8. Warp borders excluded via a validity mask from the model.
+|da|, |db| < 8. Warp borders excluded via two validity signals that must
+BOTH agree: each pixel's own dominant trained colour (chronically-black
+pixels stay excluded even on frames where they briefly show real content)
+AND, when the caller supplies stabilization's per-frame transforms, the
+exact warp geometry for that frame.
 
 Post-processing: open -> close -> keep components >= 20% of the largest
 (limbs may split at dark clothing) -> re-close -> fill holes -> LINEAR
@@ -176,8 +180,16 @@ def clean_mask(mask):
 
 
 def background_subtraction(input_video_path, extracted_video_path,
-                           binary_video_path):
-    """Extract the walking person from the stabilized video."""
+                           binary_video_path, transforms=None):
+    """Extract the walking person from the stabilized video.
+
+    transforms: per-frame homographies returned by stabilize_video (same
+    array warpPerspective used to build each frame). Re-warping a blank
+    canvas with these gives the EXACT valid region for that frame, so no
+    colour/brightness guess is needed for border pixels. If None (e.g.
+    background_subtraction run standalone on a pre-existing stabilized
+    video), falls back to the old static colour-based guess.
+    """
     # read once: full-res BGR frames for output, half-res Lab for the GMM
     cap = utils.open_video(input_video_path)
     params = utils.get_video_parameters(cap)
@@ -202,15 +214,48 @@ def background_subtraction(input_video_path, extracted_video_path,
     bg_mean = np.take_along_axis(
         mu, top_k[None, ..., None], axis=0)[0]        # [H,W,3] dominant colour
 
-    # warp-border black pixels (black has L ~ 0) are never person
-    valid = (bg_mean[..., 0] > 15).astype(np.uint8)
-    valid = cv2.erode(valid, np.ones((7, 7), np.uint8))
+    h_small, w_small = small_frames[0].shape[:2]
+
+    # colour-history signal: a pixel whose OWN dominant trained mode is
+    # near-black has spent most of the video as warp border, even on a
+    # frame where it briefly shows real content (e.g. frame 0, before the
+    # camera has drifted) - the GMM never learned that content confidently,
+    # so keep distrusting it regardless of this frame's geometry.
+    static_valid = (bg_mean[..., 0] > 15).astype(np.uint8)
+    static_valid = cv2.erode(static_valid, np.ones((7, 7), np.uint8))
+
+    if transforms is not None:
+        # geometric signal: exact per-frame valid region, re-warping a
+        # blank canvas with the SAME transform stabilization used for this
+        # frame. Scale measured from the actual resize (not PROC_SCALE)
+        # so odd width/height videos don't drift by a rounded pixel.
+        valid_canvas = np.full((h_small, w_small), 255, np.uint8)
+        sx, sy = w_small / w_full, h_small / h
+        S = np.array([[sx, 0, 0], [0, sy, 0], [0, 0, 1]], np.float64)
+        S_inv = np.linalg.inv(S)
 
     out_extracted = utils.create_video(extracted_video_path, fps, w_full, h)
     out_binary = utils.create_video(binary_video_path, fps, w_full, h)
 
-    for frame, small in tqdm(list(zip(frames, small_frames)),
+    frame_transforms = transforms if transforms is not None else [None] * len(frames)
+
+    for frame, small, T_full in tqdm(list(zip(frames, small_frames, frame_transforms)),
                              desc="BG model (classify)"):
+        valid = static_valid
+        if T_full is not None:
+            T_small = S @ T_full @ S_inv
+            valid_small = cv2.warpPerspective(
+                valid_canvas, T_small, (w_small, h_small),
+                flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0)
+            # small erode absorbs the bilinear blend ring at the true edge
+            # (interpolation kernel bleed, not a drift-based guess)
+            geo_valid = cv2.erode((valid_small > 127).astype(np.uint8),
+                                  np.ones((3, 3), np.uint8))
+            # must clear BOTH signals: inside this frame's warp AND not
+            # chronically border at that pixel location
+            valid = valid & geo_valid
+
         mask = classify_frame(small, mu, sigma, is_bg, bg_mean)
         mask &= valid
         mask = clean_mask(mask)

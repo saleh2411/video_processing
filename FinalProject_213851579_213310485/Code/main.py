@@ -35,12 +35,12 @@ def main():
 
     # Step 1: Stabilization
     print('Step 1: Stabilization')
-    stabilize_video(input_video, stabilize_path)
+    transforms = stabilize_video(input_video, stabilize_path)
     timing['stabilize'] = time.time() - start_time
 
     # Step 2: Background Subtraction
     print('Step 2: Background Subtraction')
-    background_subtraction(stabilize_path, extracted_path, binary_path)
+    background_subtraction(stabilize_path, extracted_path, binary_path, transforms)
     timing['extracted'] = time.time() - start_time
     timing['binary'] = time.time() - start_time
 
