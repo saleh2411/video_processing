@@ -65,8 +65,8 @@ previous stage's output:
 \draw[arr] (trk) -- (outp);
 \end{tikzpicture}%
 }
-\caption{The processing pipeline. Blue blocks are the implemented stages; red names are the
-video/image artifacts each stage reads or writes.}
+\caption{The processing pipeline. Blue blocks are the implemented stages, and red names are the
+video and image files each stage reads or writes.}
 \end{figure}
 
 
@@ -75,19 +75,19 @@ video/image artifacts each stage reads or writes.}
 % ========================================================================
 
 \noindent
-\textbf{Input.} \texttt{INPUT.avi} -- a shaky, handheld color video of a person walking.
+\textbf{Input.} \texttt{INPUT.avi} is a shaky, handheld color video of a person walking.
 
 \medskip
 \noindent
-\textbf{Expected output.} \texttt{stabilize\_ID1\_ID2.avi} -- the same video, in color, with the
-camera motion cancelled: every frame is warped onto the coordinate system of the first frame, so
+\textbf{Expected output.} \texttt{stabilize\_ID1\_ID2.avi} is the same video, in color, with the
+camera motion cancelled. Every frame is warped onto the coordinate system of the first frame, so
 the background stays fixed for the next stage. Black regions near the frame borders are a known
 side effect of the warp and are allowed.
 
 \medskip
 \noindent
 \textbf{Algorithm.} We detect Shi--Tomasi corners and track them with pyramidal Lucas--Kanade
-optical flow, both exactly as taught in the course (and implemented in Exercise 2; here we call
+optical flow, both exactly as taught in the course (and implemented in Exercise 2, where we call
 OpenCV's implementation for speed). A robust fit with RANSAC, also as seen in the lectures, maps
 the tracked corners' positions onto a single global motion model per frame, and rejects the
 corners that sit on the walking person, whose motion disagrees with the camera's. The frame is
@@ -106,7 +106,7 @@ Two choices differ from the straightforward recipe and need a word:
     \item \emph{Homography as the motion model.} From the transformation ladder seen in class
     (translation $\to$ affine $\to$ homography) we use the homography. A handheld camera also
     rotates slightly out of the image plane, which creates a small perspective (keystone)
-    distortion between frames; similarity and affine models cannot represent it, and with them a
+    distortion between frames. Similarity and affine models cannot represent it, so with them a
     residual wobble remains visible.
 \end{itemize}
 
@@ -123,7 +123,7 @@ borders, as expected.
 % ========================================================================
 
 \noindent
-\textbf{Input.} \texttt{stabilize\_ID1\_ID2.avi} -- the stabilized color video from stage 1.
+\textbf{Input.} \texttt{stabilize\_ID1\_ID2.avi} is the stabilized color video from stage 1.
 
 \medskip
 \noindent
@@ -137,7 +137,7 @@ matching mask (person $=1$, saved scaled to 255).
 lectures, used as taught: each pixel holds $K=4$ Gaussians $(\mu_k, \sigma_k, \omega_k)$, a new
 sample matches a Gaussian within $2.5\sigma$, matched Gaussians are updated and their weight
 grows, unmatched ones decay, the weakest is replaced on no match, and the background Gaussians
-are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight.The departures from the lecture version:
+are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight. The departures from the lecture version:
 
 \begin{itemize}[nosep]
     \item \emph{Offline instead of online.} The lecture's algorithm serves a live camera. We
@@ -146,15 +146,15 @@ are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight.The departures
     \item \emph{Median/MAD initialization.} The main Gaussian of every pixel starts at the
     pixel's temporal median color, with $\sigma$ from the median absolute deviation. The person
     covers any single pixel for a minority of the frames, so the median already \emph{is} the
-    background; starting there instead of from a blind guess avoids pixels that never converge
+    background. Starting there instead of from a blind guess avoids pixels that never converge
     within the clip's length.
     \item \emph{CIE-Lab color space.} Matching runs in Lab with the illumination channel
     down-weighted: $d^2 = 0.25\,\Delta L^2 + \Delta a^2 + \Delta b^2$. Shadows and lighting
     changes live almost entirely in $L$, while the person differs in chroma, so this makes the
-    classifier insensitive to illumination but sharp on real color change. .
+    classifier insensitive to illumination but sharp on real color change.
     \item \emph{Cleanup.} Morphological opening and closing,
     keeping every connected component at least 20\% of the largest one (dark clothing can split
-    a limb off the torso; keeping only the largest deletes real body parts), hole filling, and a
+    a limb off the torso, so keeping only the largest deletes real body parts), hole filling, and a
     smooth upscale of the mask back to full resolution.
     \item \emph{Border exclusion from two signals.} The warp leaves a black border whose size
     changes every frame as the camera drifts, so no single fixed crop describes it. We re-warp a
@@ -166,7 +166,7 @@ are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight.The departures
 \end{itemize}
 
 \noindent
-\textbf{Result.} The binary mask holds the complete silhouette -- head, arms, legs, shoes -- in
+\textbf{Result.} The binary mask holds the whole body (head, arms, legs, shoes) in
 all frames, with no background patches, and the person's cast shadow on the floor is not
 included. The extracted video shows the person cleanly cut out on black, with a smooth boundary,
 ready for matting.
@@ -178,22 +178,21 @@ ready for matting.
 
 \noindent
 \textbf{Input.} Three artifacts: \texttt{stabilize\_ID1\_ID2.avi} (the stabilized color video),
-\texttt{binary\_ID1\_ID2.avi} (the person mask from stage 2), and \texttt{background.jpg} (the new
-background image, resized to the video resolution).
+\texttt{binary\_ID1\_ID2.avi} (the person mask from stage 2), and \texttt{background.jpg}.
 
 \medskip
 \noindent
-\textbf{Expected output.} Two videos: \texttt{matted\_ID1\_ID2.avi}, the person composited onto the
-new background, and \texttt{alpha\_ID1\_ID2.avi}, the per-pixel opacity $\alpha\in[0,1]$ stored
-scaled to $[0,255]$ and replicated to three channels.
+\textbf{Expected output.} Two videos. \texttt{matted\_ID1\_ID2.avi} shows the person placed on the
+new background, and \texttt{alpha\_ID1\_ID2.avi} stores the opacity $\alpha\in[0,1]$ of each pixel,
+scaled to $[0,255]$ and copied to three channels.
 
 \medskip
 \noindent
 \textbf{Algorithm.} For every frame we run the matting pipeline from Lecture~10: build a
 \emph{trimap}, learn a \emph{color model (KDE)}, find the \emph{opacity} $\alpha$ from geodesic
 distances, and \emph{composite} the person onto the new background. To stay fast, we only work inside
-a small box around the person (found from the mask); the rest of the frame is just background, so we
-copy the new background there directly. The steps:
+a small box around the person (found from the mask). The rest of the frame is just background, so we
+copy the new background there directly. The steps are:
 
 \begin{enumerate}[nosep]
     \item \emph{Trimap.} We erode and dilate the mask with a disc of radius $\rho=7$. The eroded part
@@ -227,11 +226,11 @@ What we changed or added on top of the lecture:
 
 \begin{itemize}[nosep]
     \item \emph{Trimap from the mask.} In class the trimap comes from a few hand-drawn scribbles. We
-    already have a full mask from stage~2, so we just erode and dilate it to get the trimap -- no
+    already have a full mask from stage~2, so we just erode and dilate it to get the trimap, with no
     drawing and no user input.
     \item \emph{Faster KDE.} Computing the KDE the direct way (a Gaussian around every sample, for
     every pixel) is very slow. Instead we put the colors into a $64^3$ histogram and blur it once
-    with a Gaussian; after that, looking up a pixel's color is instant. This is what keeps the
+    with a Gaussian. After that, looking up a pixel's color is instant, and this keeps the
     matting fast.
     \item \emph{Geodesic distance with a graph.} We turn the ``distance'' idea from class into a
     shortest-path problem on a pixel graph and solve it with Dijkstra.
@@ -239,12 +238,12 @@ What we changed or added on top of the lecture:
     KD-tree instead of checking every pixel one by one.
 \end{itemize}
 
-\noindent
-None of these library tools does the matting for us: Dijkstra, the KD-tree and the Gaussian blur are
-just small helpers, and all the real decisions are written by us. We use no deep learning, and we do
-not use the OpenCV-contrib matting functions (which would cap the grade at 70~points). The whole
-per-frame work is done in \texttt{process\_frame}, helped by \texttt{kde\_3d} (the fast KDE) and
-\texttt{pure\_composite} (the clean-color blend).
+% \noindent
+% None of these library tools does the matting for us. Dijkstra, the KD-tree and the Gaussian blur are
+% just small helpers, and we write all the real decisions ourselves. We use no deep learning, and we do
+% not use the OpenCV-contrib matting functions (which would cap the grade at 70~points). The whole
+% per-frame work is done in \texttt{process\_frame}, helped by \texttt{kde\_3d} (the fast KDE) and
+% \texttt{pure\_composite} (the clean-color blend).
 
 \medskip
 \noindent
@@ -260,7 +259,7 @@ box around the person and the KDE is fast, this stage runs well within the time 
 
 \noindent
 \begin{sloppypar}
-\textbf{Input.} The composited video \texttt{matted\_ID1\_ID2.avi} from stage~3. The mask video
+\textbf{Input.} The matted video \texttt{matted\_ID1\_ID2.avi} from stage~3. The mask video
 \texttt{binary\_ID1\_ID2.avi} is read only, to initialize the tracker automatically.
 \end{sloppypar}
 
@@ -273,7 +272,7 @@ the box \texttt{[ROW, COL, HEIGHT, WIDTH]} (top-left corner).
 \medskip
 \noindent
 \textbf{Algorithm.} We track the person with the particle filter (Condensation) from the tracking
-lecture, the same one we built in Exercise~3. Each particle is a guess for the box, written as
+lecture. Each particle is a guess for the box, written as
 $s=[x_c,\, y_c,\, w_{1/2},\, h_{1/2},\, v_x,\, v_y]$ (center, half-size, and velocity). We keep
 $N=100$ particles and update them every frame in four steps:
 
@@ -292,23 +291,25 @@ $N=100$ particles and update them every frame in four steps:
 \end{enumerate}
 
 \noindent
-What we changed from Exercise~3:
+What we changed from the lecture algorithm:
 
 \begin{itemize}[nosep]
-    \item \emph{Automatic start.} Exercise~3 sets the first box by hand. We instead use the first
-    frame where the mask is not empty and take its bounding box as the start, so the tracker starts
-    on its own from the stage-2 mask. Frames before that just report this first box.
-    \item \emph{Reference from the person only.} Normally the reference histogram $q$ is taken from
-    the whole starting box. We take it only from the person's pixels (using the mask), so a box that
-    mostly covers background cannot get a high score. This helps the tracker stay on the person.
-    \item \emph{Bigger noise.} Exercise~3 used small images with small noise. Our video is full-HD
-    and the person moves about 10~px per frame and turns around, so we use larger noise
-    ($\sigma_\text{pos}=10$, $\sigma_\text{vel}=3$~px). The exercise lets us choose these values.
+    \item \emph{Automatic start.} The lecture algorithm needs the first box to be given by hand. We
+    instead use the first frame where the mask is not empty and take its bounding box as the start,
+    so the tracker starts on its own from the stage-2 mask. Frames before that just report this first
+    box.
+    \item \emph{Reference from the person only.} In the lecture the reference histogram $q$ is taken
+    from the whole starting box. We take it only from the person's pixels (using the mask), so a box
+    that mostly covers background cannot get a high score. This helps the tracker stay on the person.
+    \item \emph{Bigger noise.} The lecture examples used small images with small noise. Our video is
+    full-HD and the person moves about 10~px per frame and turns around, so we use larger noise
+    ($\sigma_\text{pos}=10$, $\sigma_\text{vel}=3$~px). The algorithm leaves these values as a free
+    choice.
 \end{itemize}
 
 \noindent
 The Bhattacharyya coefficient (how much two color histograms overlap) and the random resampling are
-both from the exercise/lecture. No library does the tracking for us -- every step is written in
+both from the lecture. No library does the tracking for us. Every step is written in
 NumPy, and we only use \texttt{cv2.rectangle} to draw the box. There is no deep learning and no
 built-in tracker, so the 70-point cap does not apply. With only 100 particles the stage stays well
 within the time limit.
