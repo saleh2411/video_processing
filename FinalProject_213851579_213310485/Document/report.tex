@@ -137,8 +137,7 @@ matching mask (person $=1$, saved scaled to 255).
 lectures, used as taught: each pixel holds $K=4$ Gaussians $(\mu_k, \sigma_k, \omega_k)$, a new
 sample matches a Gaussian within $2.5\sigma$, matched Gaussians are updated and their weight
 grows, unmatched ones decay, the weakest is replaced on no match, and the background Gaussians
-are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight $T = 0.7$, inside the lecture's
-own suggested range of $0.7$--$0.9$. The departures from the lecture version:
+are the top ones by $\omega_k/\sigma_k$ up to a cumulative weight.The departures from the lecture version:
 
 \begin{itemize}[nosep]
     \item \emph{Offline instead of online.} The lecture's algorithm serves a live camera. We
@@ -152,10 +151,8 @@ own suggested range of $0.7$--$0.9$. The departures from the lecture version:
     \item \emph{CIE-Lab color space.} Matching runs in Lab with the illumination channel
     down-weighted: $d^2 = 0.25\,\Delta L^2 + \Delta a^2 + \Delta b^2$. Shadows and lighting
     changes live almost entirely in $L$, while the person differs in chroma, so this makes the
-    classifier insensitive to illumination but sharp on real color change. A pixel whose $L$
-    drops to 50--96\% of the background's while $a, b$ stay within 8 units is labelled a cast
-    shadow and kept as background.
-    \item \emph{Cleanup.} Morphological opening and closing (recommended in the lecture notes),
+    classifier insensitive to illumination but sharp on real color change. .
+    \item \emph{Cleanup.} Morphological opening and closing,
     keeping every connected component at least 20\% of the largest one (dark clothing can split
     a limb off the torso; keeping only the largest deletes real body parts), hole filling, and a
     smooth upscale of the mask back to full resolution.
