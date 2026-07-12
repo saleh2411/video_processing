@@ -21,8 +21,9 @@ then runs the chapter's streaming updates: 2.5-sigma match test, weight
 grow/decay + renormalize, rho-nudged mu/sigma, replace-weakest on no match.
 
 Classification: Gaussians sorted by w/sigma; top ones holding cumulative
-weight T_BG = 0.3 form the background set (unimodal indoor scene - higher
-T lets the person's own "ghost" mode become background where he lingers).
+weight T_BG = 0.7 form the background set, the lecture's own suggested
+value. A higher T risks letting the person's own "ghost" mode become
+background where he lingers, but this was not observed on this video.
 Cast shadows are vetoed exactly: L attenuated into [0.50, 0.96] while
 |da|, |db| < 8. Warp borders excluded via a validity mask from the model.
 
@@ -42,7 +43,7 @@ import numpy as np
 
 K = 4                  # Gaussians per pixel (chapter: 3-5)
 ALPHA = 0.01           # weight learning rate
-T_BG = 0.3             # background cumulative-weight threshold (top mode only)
+T_BG = 0.7             # background cumulative-weight threshold (top mode only)
 MATCH_SIGMA = 2.5      # match test width
 SIGMA_INIT = 20.0      # sigma for NEW (replacement) Gaussians
 SIGMA_MIN, SIGMA_MAX = 3.0, 10.0   # cap stops person inflating a bg Gaussian
@@ -203,7 +204,7 @@ def background_subtraction(input_video_path, extracted_video_path,
 
     # warp-border black pixels (black has L ~ 0) are never person
     valid = (bg_mean[..., 0] > 15).astype(np.uint8)
-    valid = cv2.erode(valid, np.ones((31, 31), np.uint8))
+    valid = cv2.erode(valid, np.ones((7, 7), np.uint8))
 
     out_extracted = utils.create_video(extracted_video_path, fps, w_full, h)
     out_binary = utils.create_video(binary_video_path, fps, w_full, h)
