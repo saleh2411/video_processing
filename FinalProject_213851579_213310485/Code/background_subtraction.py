@@ -47,7 +47,7 @@ import numpy as np
 
 K = 4                  # Gaussians per pixel (chapter: 3-5)
 ALPHA = 0.01           # weight learning rate
-T_BG = 0.7             # background cumulative-weight threshold (top mode only)
+T_BG = 0.3             # background cumulative-weight threshold (top mode only)
 MATCH_SIGMA = 2.5      # match test width
 SIGMA_INIT = 20.0      # sigma for NEW (replacement) Gaussians
 SIGMA_MIN, SIGMA_MAX = 3.0, 10.0   # cap stops person inflating a bg Gaussian
