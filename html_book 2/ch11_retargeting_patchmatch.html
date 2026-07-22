@@ -166,16 +166,38 @@
     will write this down as an optimization algorithm:</p>
     <p><strong>Re-targeting Algorithm</strong></p>
     <p>1. <u>Initialization:</u> $T^1 : \Omega' \to R^3$<br>
+    <span class="muted">↳ Start from an initial guess of the output image: a color image ($R^3$ = RGB) defined on
+    the new, desired domain $\Omega'$ (the target size). The quality of this guess matters a lot — see the
+    initialization section below.</span><br>
     2. For $k = 1, 2, \ldots$ until convergence:<br>
+    <span class="muted">↳ Outer loop: each iteration takes the current target $T^k$ and produces an improved
+    $T^{k+1}$. Stop when the image stops changing between iterations.</span><br>
     (a) $\forall x$: (i) $T^{k+1}(x) = 0$; (ii) $C(x) = 0$ - an accumulator for finding the denominator<br>
+    <span class="muted">↳ Reset before collecting votes: for every pixel $x$, the new image $T^{k+1}$ starts as
+    all zeros (it will accumulate the <em>numerator</em> of the averaging formula — the weighted sum of source
+    colors), and $C$ is a same-size weight map that accumulates the <em>denominator</em> (the total weight of
+    votes each pixel receives).</span><br>
     (b) For each $Q \in T^K$: (i) find $P = \arg\min_{P \in S} \|P - Q\|_2^2$;
     (ii) $T^{k+1}|_Q \leftarrow T^{k+1}|_Q + \frac{1-\alpha}{N_T} P$ - In the subset of image T where we have
     the patch Q we add the contribution of P. Only to the region Q we add this contribution.;
     (iii) $C|_Q \leftarrow C|_Q + \frac{1-\alpha}{N_T}$<br>
+    <span class="muted">↳ The <strong>coherence</strong> pass ("don't invent content"): (i) every patch $Q$ of the
+    current target finds its most similar patch $P$ in the source (its Nearest Neighbor); (ii) $P$'s pixel colors
+    are added onto exactly the pixels that $Q$ covers, scaled by the coherence weight $\frac{1-\alpha}{N_T}$ —
+    these are the $S(y_i)$ votes from the closed-form formula above; (iii) the same weight is added to $C$ over
+    those pixels, so the division in step (d) knows how many votes (and how heavy) each pixel got.</span><br>
     (c) For each $P' \in S$: (i) find $Q' = \arg\min_{Q \in T} \|P - Q\|_2^2$;
     (ii) $T^{k+1}|_{Q'} \leftarrow T^{k+1}|_{Q'} + \frac{\alpha}{N_S} P'$;
     (iii) $C|_{Q'} \leftarrow C|_{Q'} + \frac{\alpha}{N_S}$<br>
-    (d) $T^{k+1} \leftarrow \frac{T^{k+1}}{C}$, where the division of the matrices is element-wise.</p>
+    <span class="muted">↳ The <strong>completeness</strong> pass ("don't lose content") — the mirror image of (b):
+    (i) every patch $P'$ of the source finds its most similar patch $Q'$ in the target; (ii) $P'$'s colors are
+    added onto the pixels that $Q'$ covers, this time scaled by the completeness weight $\frac{\alpha}{N_S}$ —
+    the $S(y_i')$ votes; (iii) $C$ accumulates that weight over the same pixels. This pass guarantees every
+    source patch pushes its content somewhere into the target.</span><br>
+    (d) $T^{k+1} \leftarrow \frac{T^{k+1}}{C}$, where the division of the matrices is element-wise.<br>
+    <span class="muted">↳ Normalize: divide the accumulated color sum by the accumulated weights, pixel by pixel.
+    Each pixel becomes the weighted average of all the source colors that voted for it — which is exactly the
+    optimal $T(x)$ derived above by setting the derivative to zero.</span></p>
     <p>There are a couple of disadvantages to this approach. When we find corresponding patches based on $T^k$,
     if in previous iteration we got something legitimate, so we will have here. Thus, everything depends on the
     initialization of $T^1$. If we start with a black image then nothing will work. As a result, we need to make
@@ -233,6 +255,31 @@
     <p>The optimization is non-convex with many local minima. Start from black → land in a terrible minimum
     forever. Start from a slightly-resized version → land in a good minimum. The pyramid (gradually-resized
     intermediate targets) provides a sequence of "easy" optimizations that bootstrap the hard one.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Re-targeting — the voting algorithm on a 1-D image</h4><span class="tag">step / auto / α</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A 1-D "image": repetitive blue sky, an important red/yellow object,
+      repetitive green grass. We shrink it from 28 px to 18 px by running the algorithm above literally —
+      a patch is 3 consecutive pixels, nearest neighbours are found by brute force, and step (d) divides the
+      accumulated votes by the weight map C. The faint lines show the <em>completeness</em> pass of the last
+      iteration: where each source patch cast its vote. The amber bars show C(x) — how much vote weight each
+      target pixel received. Watch the object survive the shrink while sky/grass get squeezed. Then press
+      <em>Black init</em> and step: the matches are garbage and stay garbage — exactly the initialization
+      problem described above.</p>
+      <canvas id="cvRT" width="900" height="330"></canvas>
+      <div class="btnrow">
+        <button class="act" id="rtStep">Step (one iteration)</button>
+        <button class="act primary" id="rtAuto">Auto-run</button>
+        <button class="act" id="rtReset">Reset (resize init)</button>
+        <button class="act" id="rtBlack">Black init</button>
+        <label class="muted" style="display:flex;align-items:center;gap:8px">α
+          <input type="range" id="rtAlpha" min="0" max="100" value="50" style="width:120px">
+          <span id="rtAlphaVal">0.50</span></label>
+      </div>
+      <div class="readout" id="roRT"></div>
+    </div>
   </div>
 
   <h2>11.3 Patch Match</h2>
@@ -580,6 +627,78 @@
   document.getElementById('pmReset').onclick=()=>{it=0;reset();};
   document.getElementById('pmAuto').onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent='Auto-run';this.classList.remove('primary');return;}this.textContent='Stop';this.classList.add('primary');timer=setInterval(()=>{step();it++;updateRO(it);draw();},500);};
   reset();
+})();
+</script>
+<script>
+(function(){
+  const c=document.getElementById('cvRT'),ctx=c.getContext('2d');
+  const W=c.width;
+  const SW=28,TW=18,PS=3;        // source width, target width, patch size (pixels)
+  const NS=SW-PS+1,NT=TW-PS+1;   // number of patches in S and in T
+  // build the 1-D source image: sky (repetitive) | object (distinct) | grass (repetitive)
+  const S=[];
+  for(let i=0;i<10;i++)S.push([70+i*3,135+i*2,225]);
+  [[230,60,60],[245,120,40],[250,205,70],[250,205,70],[245,120,40],[230,60,60]].forEach(p=>S.push(p));
+  for(let i=0;i<12;i++)S.push([55,150+(i%3)*18,70]);
+  let T=[],it=0,last=null;
+  const alphaEl=document.getElementById('rtAlpha'),alphaVal=document.getElementById('rtAlphaVal');
+  function alpha(){return alphaEl.value/100;}
+  // patch distance d^2(P,Q): sum of squared RGB differences over the 3 pixels
+  function d2(A,ai,B,bi){let s=0;for(let k=0;k<PS;k++)for(let ch=0;ch<3;ch++){const d=A[ai+k][ch]-B[bi+k][ch];s+=d*d;}return s;}
+  // brute-force nearest neighbour of patch A[ai..] among the NB patches of B
+  function nn(A,ai,B,NB){let best=0,bc=Infinity;for(let b=0;b<NB;b++){const cst=d2(A,ai,B,b);if(cst<bc){bc=cst;best=b;}}return [best,bc];}
+  function losses(){
+    let com=0;for(let p=0;p<NS;p++)com+=nn(S,p,T,NT)[1];com/=NS;
+    let coh=0;for(let q=0;q<NT;q++)coh+=nn(T,q,S,NS)[1];coh/=NT;
+    return {com,coh,D:alpha()*com+(1-alpha())*coh};
+  }
+  function step(){
+    const a=alpha();
+    // (a) reset the accumulators: acc = numerator (weighted colour sum), Cw = denominator (vote weights)
+    const acc=Array.from({length:TW},()=>[0,0,0]),Cw=new Array(TW).fill(0);
+    const com=[];
+    // (b) coherence pass: every target patch Q finds its NN P in S and receives P's colours
+    for(let q=0;q<NT;q++){const p=nn(T,q,S,NS)[0];const w=(1-a)/NT;
+      for(let k=0;k<PS;k++){for(let ch=0;ch<3;ch++)acc[q+k][ch]+=w*S[p+k][ch];Cw[q+k]+=w;}}
+    // (c) completeness pass: every source patch P finds its NN Q in T and casts its colours there
+    for(let p=0;p<NS;p++){const q=nn(S,p,T,NT)[0];com.push([p,q]);const w=a/NS;
+      for(let k=0;k<PS;k++){for(let ch=0;ch<3;ch++)acc[q+k][ch]+=w*S[p+k][ch];Cw[q+k]+=w;}}
+    // (d) element-wise divide: each pixel becomes the weighted average of its votes
+    for(let x=0;x<TW;x++)if(Cw[x]>1e-9)T[x]=acc[x].map(v=>v/Cw[x]);
+    last={com,Cw:Cw.slice()};it++;draw();
+  }
+  const cell=26,chh=30,sy=42,ty=214;
+  const sx0=(W-SW*cell)/2,tx0=(W-TW*cell)/2;
+  function strip(A,x0,y,n){for(let i=0;i<n;i++){ctx.fillStyle=`rgb(${A[i].map(Math.round).join(',')})`;ctx.fillRect(x0+i*cell,y,cell-2,chh);}}
+  function draw(){
+    ctx.fillStyle='#0a0f1c';ctx.fillRect(0,0,W,c.height);
+    ctx.font='12px sans-serif';ctx.fillStyle='#8ea0c0';
+    ctx.fillText(`Source S (${SW} px)`,sx0,sy-8);
+    ctx.fillText(`Target T (${TW} px)`,tx0,ty-8);
+    // completeness vote lines of the last iteration (source patch centre -> target patch centre)
+    if(last){ctx.globalAlpha=0.3;ctx.lineWidth=1.2;
+      last.com.forEach(([p,q])=>{const mid=S[p+1];
+        ctx.strokeStyle=`rgb(${mid.join(',')})`;
+        ctx.beginPath();ctx.moveTo(sx0+(p+PS/2)*cell,sy+chh);ctx.lineTo(tx0+(q+PS/2)*cell,ty);ctx.stroke();});
+      ctx.globalAlpha=1;}
+    strip(S,sx0,sy,SW);strip(T,tx0,ty,TW);
+    // vote-weight map C(x) as amber bars under the target
+    if(last){const mx=Math.max(...last.Cw);ctx.fillStyle='#ffb454';ctx.globalAlpha=0.85;
+      for(let x=0;x<TW;x++){const h2=mx>0?last.Cw[x]/mx*38:0;ctx.fillRect(tx0+x*cell,ty+chh+8,cell-2,h2);}
+      ctx.globalAlpha=1;ctx.fillStyle='#8ea0c0';ctx.fillText('votes C(x)',tx0+TW*cell+10,ty+chh+30);}
+    const l=losses();
+    document.getElementById('roRT').innerHTML=
+      `iteration <b>${it}</b> &nbsp; D(S,T) = <b>${l.D.toFixed(0)}</b> &nbsp; (completeness ${l.com.toFixed(0)}, coherence ${l.coh.toFixed(0)}) &nbsp; lower = better`;
+  }
+  function initResize(){T=[];for(let x=0;x<TW;x++)T.push(S[Math.round(x*(SW-1)/(TW-1))].slice());it=0;last=null;draw();}
+  function initBlack(){T=[];for(let x=0;x<TW;x++)T.push([0,0,0]);it=0;last=null;draw();}
+  let timer=null;
+  document.getElementById('rtStep').onclick=()=>step();
+  document.getElementById('rtReset').onclick=initResize;
+  document.getElementById('rtBlack').onclick=initBlack;
+  document.getElementById('rtAuto').onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent='Auto-run';return;}this.textContent='Stop';timer=setInterval(step,600);};
+  alphaEl.oninput=()=>{alphaVal.textContent=alpha().toFixed(2);draw();};
+  initResize();
 })();
 </script>
 </body>

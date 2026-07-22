@@ -1,0 +1,43 @@
+\contentsline {section}{\numberline {1}Motion Representation (Chapter 1)}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Linear Transformation (2\texttimes 2)}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Affine Transformation (2\texttimes 3)}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Homography (3\texttimes 3)}{4}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Projection Matrix (pinhole camera)}{4}{subsection.1.4}%
+\contentsline {section}{\numberline {2}Optical Flow (Chapter 2)}{6}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Lucas--Kanade}{6}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Harris Corner Detector}{6}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Horn--Schunck}{7}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Applications of Motion Estimation (Chapter 3)}{9}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Super-Resolution (ML / MAP)}{9}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}BRIEF Descriptor}{9}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}RANSAC}{10}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Hyperlapse (cost $+$ dynamic programming)}{10}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Online Tracking: Kalman \& Particle Filters (Chapter 4)}{12}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Bayesian Recursive Tracking (derivation)}{12}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Kalman Filter}{12}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Particle Filter (Condensation)}{13}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Dynamic Texture Synthesis (Chapter 5)}{14}{section.5}%
+\contentsline {subsection}{\numberline {5.1}SVD $+$ ARMA State-Space Texture Synthesis}{14}{subsection.5.1}%
+\contentsline {section}{\numberline {6}Layer Representation (Chapter 6)}{15}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Layer Decomposition (LK $+$ K-means) and Alpha Compositing}{15}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}K-means Clustering}{15}{subsection.6.2}%
+\contentsline {section}{\numberline {7}Video Magnification (Chapter 7)}{17}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Eulerian Video Magnification}{17}{subsection.7.1}%
+\contentsline {section}{\numberline {8}Background Subtraction (Chapter 8)}{18}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Per-pixel Gaussian Mixture Model (GMM)}{18}{subsection.8.1}%
+\contentsline {section}{\numberline {9}Video Colorization \& Geodesic Distance (Chapter 9)}{19}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Geodesic Distance Colorization}{19}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Dijkstra's Algorithm}{19}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Fast Sweeping (Danielsson)}{20}{subsection.9.3}%
+\contentsline {section}{\numberline {10}Video Matting (Chapter 10)}{21}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Trimap Estimation (KDE $+$ geodesic)}{21}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Opacity Map (trimap refinement)}{21}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Matting (pure-foreground recovery)}{22}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}Fast KDE via Low-Rank Kernel}{22}{subsection.10.4}%
+\contentsline {section}{\numberline {11}Re-targeting \& PatchMatch (Chapter 11)}{23}{section.11}%
+\contentsline {subsection}{\numberline {11.1}Bidirectional-Similarity Re-targeting}{23}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}PatchMatch}{23}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}Applications: Inpainting, Reshuffling, Object Removal}{24}{subsection.11.3}%
+\contentsline {section}{\numberline {12}Intrinsic Images from Sequences (Chapter 12)}{25}{section.12}%
+\contentsline {subsection}{\numberline {12.1}Weiss Intrinsic Images (median of derivative filters)}{25}{subsection.12.1}%
+\contentsline {section}{Course-wide Pattern}{26}{algocf.18}%

@@ -1,0 +1,1111 @@
+\documentclass[10pt]{article}
+
+% ==================================================================
+% Video Processing (0512-4263, Prof. Shai Avidan, TAU)
+% COMPLETE course algorithm reference -- all chapters (1-12) of the
+% course html-book. Every algorithm uses the six-part template.
+% Every claim is grounded in the provided course material;
+% anything not in the source is marked [not specified in source].
+% Pure course reference, ordered by chapter.
+% ==================================================================
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black,
+            citecolor=blue!55!black]{hyperref}
+
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.2}
+\setlist{nosep,leftmargin=1.4em}
+
+% six-part run-in headers (compact)
+\newcommand{\Purpose}{\par\smallskip\textbf{Purpose.}\ }
+\newcommand{\WhenUse}{\par\textbf{When to use.}\ }
+\newcommand{\WhenAvoid}{\par\textbf{When to avoid.}\ }
+\newcommand{\TheAlgo}{\par\smallskip\textbf{The algorithm.}\par\nopagebreak}
+\newcommand{\Knobs}{\par\smallskip\textbf{Parameters and knobs.}\par\nopagebreak}
+\newcommand{\ShortExp}{\par\smallskip\textbf{Short explanation.}\ }
+
+% flag box for content absent from the source
+\newmdenv[linecolor=red!60!black,backgroundcolor=red!5,linewidth=1pt,
+          innertopmargin=5pt,innerbottommargin=5pt]{flagbox}
+\newmdenv[linecolor=blue!40!black,backgroundcolor=blue!4,linewidth=0.7pt,
+          innertopmargin=5pt,innerbottommargin=5pt]{notebox}
+
+\titleformat{\section}{\normalfont\Large\bfseries\color{blue!30!black}}{\thesection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{black!85}}{\thesubsection}{0.6em}{}
+
+\newcommand{\Ix}{I_x}\newcommand{\Iy}{I_y}\newcommand{\It}{I_t}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\pt}[1]{\marginpar{}}
+
+% smaller font inside parameter tables
+\newenvironment{ptable}{\begin{center}\small\begin{tabular}{@{}p{2.5cm} p{5.9cm} p{6.2cm}@{}}\toprule
+Parameter & What it controls & Effect of increasing / decreasing \\ \midrule}
+{\bottomrule\end{tabular}\end{center}}
+
+\title{\vspace{-1.3cm}\textbf{Video Processing --- Complete Algorithm Reference}\\[2mm]
+\large Course 0512-4263 \; (Prof.\ Shai Avidan, Tel-Aviv University)}
+\author{}
+\date{Compiled from the course html-book, chapters 1--12}
+
+\begin{document}
+\maketitle
+\vspace{-0.8cm}
+
+\begin{notebox}
+\textbf{Scope.} This is a reference to \emph{every} algorithm/method taught in the course
+(chapters 1--12), each in a fixed six-part template: \emph{Purpose $\to$ When to use $\to$ When to
+avoid $\to$ The algorithm (pseudocode + math) $\to$ Parameters $\to$ Short explanation}. Sections follow
+the course chapter order. Every formula is grounded in the source; items not present are marked
+\textbf{[not specified in source]}.
+\end{notebox}
+
+\tableofcontents
+
+% ##################################################################
+\newpage
+\section{Motion Representation (Chapter 1)}
+% ##################################################################
+Every motion a camera perceives is a matrix acting on coordinates. The models form a ladder of
+increasing expressiveness (and estimation difficulty): linear $\to$ affine $\to$ homography $\to$ full
+3D projection. \emph{Counting rule:} a model with $k$ free parameters needs at least $\lceil k/2\rceil$
+point pairs (each pair gives 2 equations); with more pairs the system is over-determined and solved by
+Least Squares $x=(A^TA)^{-1}A^Tb$.
+
+% -----------------------------------------------------------------
+\subsection{Linear Transformation (2\texttimes2)}
+\Purpose Represent rotation, scale, and shear of image coordinates by a $2\times2$ matrix, $p'=Ap$.
+\WhenUse Small/far objects whose motion has no translation or perspective; the cheapest model (4 params).
+\WhenAvoid Whenever translation is needed --- a pure $2\times2$ matrix always fixes the origin
+($A\,(0,0)^T=(0,0)^T$); use affine instead.
+\TheAlgo
+$\begin{pmatrix}x'\\y'\end{pmatrix}=\begin{pmatrix}a&b\\c&d\end{pmatrix}\begin{pmatrix}x\\y\end{pmatrix}$.
+Stack point pairs into $\tilde A\tilde x=b$ with $\tilde x=(a\,b\,c\,d)^T$; each pair gives 2 rows:
+\[
+\begin{pmatrix} x & y & 0 & 0\\ 0 & 0 & x & y\\ \vdots&&&\vdots\end{pmatrix}
+\begin{pmatrix}a\\b\\c\\d\end{pmatrix}=\begin{pmatrix}x'\\y'\\\vdots\end{pmatrix}.
+\]
+Solve exactly with 2 pairs (invert $4\times4$) or over-determined with LS.
+\Knobs
+\begin{ptable}
+$a,b,c,d$ & Rotation/scale/shear jointly & More free params $=$ more flexible but more noise-sensitive \\
+\# point pairs & Determinacy of the fit & $\geq2$ needed; more pairs $\Rightarrow$ LS averages out noise \\
+\end{ptable}
+\ShortExp ``Multiply by a $2\times2$ matrix.'' Its four numbers encode rotation, scaling and shear
+together, but it can never shift the image because the origin is a fixed point. Estimate it from
+before/after point pairs (2 equations each); with extra pairs the system is over-determined and Least
+Squares gives the best average fit.
+
+% -----------------------------------------------------------------
+\subsection{Affine Transformation (2\texttimes3)}
+\Purpose Linear transform \emph{plus} translation, using homogeneous coordinates; preserves parallelism.
+\WhenUse Medium/closer objects; layer motion (Ch.\ 6 clusters affine motions). 6 params, keeps parallel
+lines parallel.
+\WhenAvoid When true perspective is present (converging parallels) --- use homography; or when 6 params
+overfit a tiny target (use translation/similarity).
+\TheAlgo Append a homogeneous ``1'': $\begin{pmatrix}x'\\y'\end{pmatrix}=(A\ t)\begin{pmatrix}x\\y\\1\end{pmatrix}
+=\begin{pmatrix}a&b&c\\d&e&f\end{pmatrix}\begin{pmatrix}x\\y\\1\end{pmatrix}$. Each pair gives 2 rows in
+6 unknowns $\Rightarrow$ need $\geq3$ pairs; solve $\tilde A\tilde x=b$ by LS.
+\Knobs
+\begin{ptable}
+$A$ (4 params) & Rotation/scale/shear & As linear model \\
+$t=(t_x,t_y)$ & Translation & Shifts the origin anywhere (the homogeneous ``1'') \\
+\# point pairs & Determinacy & $\geq3$ pairs ($=6$ equations) \\
+\end{ptable}
+\ShortExp The homogeneous ``1'' gives the matrix a slot to add a constant, so it can translate as if by
+multiplication. Affine does rotation $+$ scale $+$ shear $+$ translation and always keeps parallel lines
+parallel (a square becomes a parallelogram, never a trapezoid). It needs 3 point pairs.
+
+% -----------------------------------------------------------------
+\subsection{Homography (3\texttimes3)}
+\Purpose Model a planar perspective mapping (a flat world plane $\to$ image plane), up to scale.
+\WhenUse Panorama stitching, document ``flattening'', AR markers, mapping a tilted plane to top-down.
+Large/close flat objects.
+\WhenAvoid Non-planar / full-3D scenes (needs the projection matrix); estimation is noise-sensitive (8
+params).
+\TheAlgo $\begin{pmatrix}x'\\y'\\1\end{pmatrix}\cong H\begin{pmatrix}x\\y\\1\end{pmatrix}$, where $\cong$
+is equality \emph{up to scale} (divide by the third coordinate: $x'=H_1p/H_3p$, $y'=H_2p/H_3p$). Rearranging
+gives a homogeneous system $Ax=0$ (with $A$ of size $2N\times9$); 4 point pairs give $8\times9$, and a
+normalisation constraint on the last row fixes the overall scale.
+\Knobs
+\begin{ptable}
+$H$ (9 entries, 8 free) & Perspective warp & Overall scale is free (1 redundancy) $\Rightarrow$ normalise \\
+\# point pairs & Determinacy & $\geq4$ pairs (8 equations) \\
+Normalisation & Numerical stability & Constrains scale; avoids huge values \\
+\end{ptable}
+\ShortExp Homography is affine plus true perspective: parallel lines may converge (train tracks meeting).
+The $3\times3$ matrix is meaningful only after dividing by the last coordinate --- that division creates
+the perspective. Only 8 of its 9 numbers are independent, so 4 point pairs suffice.
+
+% -----------------------------------------------------------------
+\subsection{Projection Matrix (pinhole camera)}
+\Purpose Map a 3D world point $(X,Y,Z)$ to a 2D pixel $(u,v)$ through the pinhole-camera pipeline.
+\WhenUse Relating world geometry to pixels: robotics, AR, self-driving, SLAM, photogrammetry.
+\WhenAvoid When the lens distortion matters (undistort first) or intrinsics are uncalibrated.
+\TheAlgo Three composed stages (world $\to$ camera $\to$ image $\to$ pixels):
+\[
+\begin{pmatrix}u\\v\\1\end{pmatrix}\cong
+\underbrace{\begin{pmatrix}k_u&0&u_0\\0&k_v&v_0\\0&0&1\end{pmatrix}}_{\text{intrinsics (pixels)}}
+\underbrace{\begin{pmatrix}1&0&0&0\\0&1&0&0\\0&0&1/f&0\end{pmatrix}}_{\text{pinhole }(1/Z)}
+\underbrace{\begin{pmatrix}R_{3\times3}&t_{3\times1}\\0&1\end{pmatrix}}_{\text{extrinsics }R,t}
+\begin{pmatrix}X\\Y\\Z\\1\end{pmatrix}=P\begin{pmatrix}X\\Y\\Z\\1\end{pmatrix}.
+\]
+Perspective comes from triangle similarity $x=Xf/Z,\ y=Yf/Z$ (far $=$ small). $P$ is $3\times4$ (11 free
+params: 6 extrinsic $+$ 5 intrinsic).
+\Knobs
+\begin{ptable}
+$R,t$ (extrinsics) & Camera pose (where it is/points) & Change when the camera moves \\
+$f,k_u,k_v,u_0,v_0$ (intrinsics) & Lens $+$ sensor mapping & Calibrated once; $f$ sets zoom, $u_0,v_0$ principal point \\
+Depth $Z$ & Projected size ($1/Z$) & Larger $Z$: object projects smaller \\
+\end{ptable}
+\ShortExp A world point is rotated/translated into camera coordinates ($R,t$), projected onto the image
+plane by pinhole similarity (the $1/Z$ that shrinks distant things), then converted from cm to pixels
+($k_u,k_v,u_0,v_0$). Multiplying the three matrices gives one $3\times4$ projection matrix $P$ that turns
+any $(X,Y,Z,1)$ into a pixel. Extrinsics say where the camera is; intrinsics say how it maps rays to pixels.
+
+% ##################################################################
+\newpage
+\section{Optical Flow (Chapter 2)}
+% ##################################################################
+Optical flow asks, for every pixel, where it moved in the next frame: find $(u,v)$ with
+$I_1(x{+}u,y{+}v)=I_2(x',y')$. It rests on the \emph{constant brightness constraint} (a moving point keeps
+its intensity), which breaks under specularities, shadows, and auto-exposure.
+
+% -----------------------------------------------------------------
+\subsection{Lucas--Kanade}\label{sub:lk}
+\Purpose Recover local motion $(u,v)$ (or a warp $W(X;P)$) by assuming a whole window moves together and
+solving a tiny least-squares system from a first-order Taylor expansion.
+\WhenUse Small motions, textured/corner patches, high frame rate; tracking, stabilisation, SLAM --- sparse
+flow where speed matters (a $2\times2$ inverse per window).
+\WhenAvoid Large jumps; flat/edge-only patches (aperture problem, $A^TA$ singular); specular reflections;
+when dense per-pixel flow is needed (use Horn--Schunck).
+\TheAlgo Brightness constancy $+$ Taylor gives $\Ix u+\Iy v+\It=0$ per pixel. Stack the window into
+$Ax=b$ and minimise $E=\|Ax-b\|^2$:
+\[
+x=(A^TA)^{-1}A^Tb,\qquad
+A^TA=\begin{pmatrix}\sum \Ix^2&\sum \Ix\Iy\\ \sum \Ix\Iy&\sum \Iy^2\end{pmatrix}.
+\]
+General warp form: $P^*=\arg\min_P\sum_X[I_2(W(X;P))-I_1(X)]^2$, solved incrementally with
+$\Delta P^*=-(B^TB)^{-1}B^T\It$, $B=\nabla I_2\,\partial W/\partial P$ (for affine
+$\partial W/\partial P=\big(\begin{smallmatrix}x&y&1&0&0&0\\0&0&0&x&y&1\end{smallmatrix}\big)$).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{$I_1,I_2$; window $W$; warp model $W(X;P)$; tolerance $\epsilon$}
+\KwOut{Motion $(u,v)$ / warp params $P$}
+Initialise $P$ (identity / zero)\;
+\Repeat{$\|\Delta P\|<\epsilon$}{
+  Warp $I_2$ by $P$; $\It=I_2(W(X;P))-I_1(X)$\;
+  $B=\nabla I_2\,\partial W/\partial P$ over the window\;
+  $\Delta P^*=-(B^TB)^{-1}B^T\It$;\quad $P\leftarrow P+\Delta P^*$\;
+}
+\caption{Incremental Lucas--Kanade}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+Window size $n$ & \# equations per solve & Larger: robust but mixes motions; smaller: worse aperture problem \\
+Warp model & Translation (2) vs.\ affine (6) & Richer fits larger windows, needs more data \\
+Pyramid levels & Max recoverable motion & More levels handle bigger motion, coarse-to-fine \\
+\end{ptable}
+\ShortExp Instead of searching for matching pixels, LK uses calculus: intensity change $\approx$
+gradient $\cdot$ motion. One pixel is one equation but there are two unknowns, so LK assumes a window shares
+one motion, giving an over-determined system solved by a $2\times2$ inverse (fast). It fails on flat/edge
+patches (rank-deficient) and large motion, which an image pyramid fixes.
+
+% -----------------------------------------------------------------
+\subsection{Harris Corner Detector}\label{sub:harris}
+\Purpose Find distinctive ``interest points'' (corners) --- exactly the pixels where LK is rank-2 and
+trackable.
+\WhenUse As the front-end of tracking: detect corners on frame 1, track them with LK (SLAM, 3D
+reconstruction).
+\WhenAvoid Textureless regions; when dense flow is needed; scale-sensitive (combine with a pyramid).
+\TheAlgo The self-difference $E(u,v)=\sum_W[I(x{+}u,y{+}v)-I(x,y)]^2$ linearises to the quadratic form
+\[
+E(u,v)=(u\ v)\,H\begin{pmatrix}u\\v\end{pmatrix},\quad
+H=\sum_{W}\begin{pmatrix}\Ix^2&\Ix\Iy\\ \Iy\Ix&\Iy^2\end{pmatrix}\ (=A^TA),
+\]
+with eigenvalues $\lambda_{\min}\le\lambda_{\max}$: rank 0 flat, 1 edge, 2 corner.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Image $I$; window $g$; sensitivity $\alpha$; threshold $\theta$}
+\KwOut{Corner keypoints}
+$(\Ix,\Iy)=\mathrm{grad}(I)$;\quad $I_{xx}=\Ix\!\cdot\!\Ix,\ I_{xy}=\Ix\!\cdot\!\Iy,\ I_{yy}=\Iy\!\cdot\!\Iy$\;
+$S_{xx}=\mathrm{conv}(I_{xx},g)$, etc.\ ($g=\mathrm{ones}(5,5)$)\;
+$R\leftarrow$ one of: $\lambda_{\min}$ (Shi--Tomasi); $\det H/\mathrm{tr}\,H$ (Noble);
+$\det H-\alpha(\mathrm{tr}\,H)^2$ (Harris)\;
+$R(R<\theta)\leftarrow0$;\quad return max $R$ per tile (non-max suppression)\;
+\caption{Harris / structure-tensor detection}
+\end{algorithm}
+with $\det H=\lambda_{\min}\lambda_{\max}=S_{xx}S_{yy}-S_{xy}^2$, $\mathrm{tr}\,H=S_{xx}+S_{yy}$.
+
+\Knobs
+\begin{ptable}
+$\alpha$ ($0.04$--$0.06$) & Edge penalty in Harris $R$ & Larger: rejects more edges; smaller: more permissive \\
+Threshold $\theta$ & Minimum cornerness & Higher: fewer, stronger corners \\
+Window $g$ & Region summed into $H$ & Larger: smoother, rotation-robust \\
+\end{ptable}
+\ShortExp A pixel on a uniform wall is untrackable. Harris reuses LK's matrix $H=A^TA$ (the structure
+tensor) and its eigenvalues to classify pixels: two large $=$ corner, one large $=$ edge, both small $=$
+flat. The response $R$ compresses this into one number (Harris's form is cheapest, avoiding
+eigen-decomposition); thresholding $+$ non-max suppression keeps strong, spread-out corners.
+
+% -----------------------------------------------------------------
+\subsection{Horn--Schunck}\label{sub:hs}
+\Purpose Estimate a \emph{dense} flow field for every pixel by combining the brightness-constancy data
+term with a global smoothness prior.
+\WhenUse Dense flow (warping, interpolation, magnification); coherent motion; small motion.
+\WhenAvoid Large motion (use a pyramid); sharp motion boundaries (quadratic smoothness blurs them);
+brightness-constancy violations.
+\TheAlgo Minimise over the whole image
+\[
+(u,v)=\arg\min_{u,v}\iint\big[(\Ix u+\Iy v+\It)^2+\alpha(|\nabla u|^2+|\nabla v|^2)\big]\,dx\,dy .
+\]
+Euler--Lagrange gives $(\Ix u+\Iy v+\It)\Ix-\alpha(u_{xx}+u_{yy})=0$ (and the $v$ analogue). Using the
+Laplacian kernel $L=\big(\begin{smallmatrix}0&-1&0\\-1&4&-1\\0&-1&0\end{smallmatrix}\big)$:
+\[
+\begin{pmatrix}\Ix^2+\alpha L&\Ix\Iy\\ \Ix\Iy&\Iy^2+\alpha L\end{pmatrix}\begin{pmatrix}u\\v\end{pmatrix}
+=\begin{pmatrix}\Ix\It\\ \Iy\It\end{pmatrix},
+\]
+a sparse $2N\times2N$ system ($\approx7$ non-zeros/row), solved iteratively.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{$I_1,I_2$; weight $\alpha$; iterations $K$}
+\KwOut{Dense flow $(u,v)$}
+Compute $\Ix,\Iy,\It$; init $u,v\leftarrow0$\;
+\For{$k=1$ \KwTo $K$}{
+  neighbourhood averages $\bar u,\bar v$\;
+  $u\leftarrow\bar u-\Ix\dfrac{\Ix\bar u+\Iy\bar v+\It}{\alpha+\Ix^2+\Iy^2}$;\quad
+  $v\leftarrow\bar v-\Iy\dfrac{\Ix\bar u+\Iy\bar v+\It}{\alpha+\Ix^2+\Iy^2}$\;
+}
+\caption{Horn--Schunck iterative solver}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$\alpha$ (smoothness) & Data vs.\ prior (ML vs.\ MAP) & Larger: smoother, washes out real motion; smaller: choppy/noisy \\
+$K$ (iterations) & Solver convergence & More: closer to exact, costlier \\
+\end{ptable}
+\ShortExp LK works on a window; HS solves the whole image at once and cures the under-determined
+``one equation, two unknowns'' problem with a smoothness prior: neighbouring pixels should have similar
+flow. $\alpha$ sets the balance (small $=$ trust data / ML, large $=$ trust smooth prior / MAP). The huge
+system is very sparse, so it solves fast, but the quadratic penalty blurs true motion boundaries.
+
+% ##################################################################
+\newpage
+\section{Applications of Motion Estimation (Chapter 3)}
+% ##################################################################
+Three uses of estimated motion --- redistributing pixel information across time.
+
+% -----------------------------------------------------------------
+\subsection{Super-Resolution (ML / MAP)}
+\Purpose Fuse several sub-pixel-shifted low-resolution frames into one high-resolution image $X$.
+\WhenUse Multiple LR frames of the same scene with \emph{varied} sub-pixel shifts (camera shake helps);
+need $\gtrsim r^2$ frames for upscale factor $r$.
+\WhenAvoid Identical sub-pixel offsets (no new information); inaccurate motion $F_i$; ML alone (ringing ---
+add a prior).
+\TheAlgo Forward model per frame: $Y_i=D H F_i X+v_i$ (decimate $D$, blur $H$, warp $F_i$).
+\textbf{ML:} $\min_X\sum_i\|DHF_iX-Y_i\|_2^2$, solved by gradient descent
+\[
+X_{n+1}=X_n-\beta\sum_i F_i^TH^TD^T(DHF_iX_n-Y_i).
+\]
+\textbf{MAP} (adds a Gibbs/smoothness prior $P(x)\propto e^{-A(x)}$, e.g.\ Laplacian $A(x)=\|Lx\|$):
+\[
+X_{\text{map}}=\arg\min_X\|DHFX-Y\|_2^2+\lambda A(x),\quad
+X_{n+1}=X_n-\beta\!\sum_i F_i^TH^TD^T(DHF_iX_n-Y_i)+\gamma L(X_n).
+\]
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{LR frames $\{Y_i\}$; blur $H$, decimation $D$; step $\beta$; (MAP) $\gamma$}
+\KwOut{HR image $X$}
+Estimate motions $F_i$ ($F_1=$ identity); init $X$ (e.g.\ upsampled $Y_1$)\;
+\Repeat{convergence}{
+  residual per frame $DHF_iX-Y_i$; back-project by $F_i^TH^TD^T$\;
+  $X\leftarrow X-\beta\sum_i F_i^TH^TD^T(DHF_iX-Y_i)$ \ (MAP: $+\gamma L(X)$)\;
+}
+\caption{Iterative super-resolution (ML/MAP)}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$\beta$ (step) & Gradient-descent rate & Larger: faster but may diverge \\
+$\lambda,\gamma$ (prior weight) & Smoothness vs.\ data (MAP) & Larger: smoother, less detail; smaller: sharper, noisier \\
+\# frames & Recoverable detail & Need $\gtrsim r^2$ with varied sub-pixel shifts \\
+\end{ptable}
+\ShortExp Each LR frame samples the HR scene on a slightly different sub-pixel grid, so combining them
+recovers detail. The forward model chains warp$\to$blur$\to$downsample; inverting it as least squares is a
+huge system, so it is solved by gradient descent using function calls (warp/blur/downsample), not giant
+matrices. ML alone rings, so MAP adds a smoothness prior --- the same data-plus-regulariser recipe as HS.
+
+% -----------------------------------------------------------------
+\subsection{BRIEF Descriptor}
+\Purpose Describe a keypoint with a fast binary ``fingerprint'' for matching.
+\WhenUse Fast feature matching (e.g.\ inside hyperlapse); brightness-change resilience; matched by Hamming
+distance (XOR $+$ popcount).
+\WhenAvoid When rotation invariance is required (BRIEF is not rotation-invariant by default).
+\TheAlgo For a set of fixed pixel-pair positions $(p_i,q_i)$ in a window, output bit $=1$ if
+$p_i>q_i$ else $0$; concatenate into a binary string. Match two descriptors by Hamming distance.
+\Knobs
+\begin{ptable}
+\# pixel pairs & Descriptor length & More bits: more distinctive, slower \\
+Window size & Spatial support & Larger: more context, less localised \\
+Pair pattern & Fixed sampling layout & Determines robustness/repeatability \\
+\end{ptable}
+\ShortExp BRIEF picks fixed pixel pairs around a corner and writes 1 if the first is brighter than the
+second, giving a bit string. Because it only compares relative brightness it resists lighting changes, and
+matching is a single XOR $+$ popcount --- extremely fast.
+
+% -----------------------------------------------------------------
+\subsection{RANSAC}
+\Purpose Fit a model robustly when the data contains outliers (wrong matches).
+\WhenUse Any fit with outliers: estimating a transform from feature matches, line/plane fitting,
+fundamental matrix. Always precede a transform-from-matches LS fit with it.
+\WhenAvoid Very high outlier ratios make $K$ explode; needs a sensible inlier threshold $t$.
+\TheAlgo Repeat: sample the minimal \#points ($n$: 2 for a line, 3 for affine), fit, count inliers
+(residual $<t$), keep the model with the most inliers; refit on all inliers. Number of draws:
+\[
+K=\frac{\log(1-P)}{\log(1-W^n)},\qquad W=\text{inlier fraction},\ P=\text{target success prob}.
+\]
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Matches; model size $n$; inlier threshold $t$; support $d$; draws $K$}
+\KwOut{Robust model}
+\For{$K$ times}{
+  sample $n$ points; compute model; count inliers ($<t$)\;
+  \If{\#inliers $>d$}{keep as candidate}
+}
+Recompute model using all inliers of the best candidate\;
+\caption{RANSAC}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$n$ (sample size) & Points to fit the model & Minimal $n$ maximises all-inlier draw probability \\
+$t$ (inlier threshold) & Inlier/outlier cutoff & Larger: more inliers, looser fit; smaller: stricter \\
+$K$ (iterations) & Success probability & Set via the formula; higher $P$ or lower $W$ $\Rightarrow$ larger $K$ \\
+\end{ptable}
+\ShortExp One bad match wrecks a least-squares fit. RANSAC samples the fewest points needed to define a
+model, counts how many other points agree, repeats many times, and keeps the model with the most votes,
+then refits on the inliers. Using the minimal sample keeps the ``all-inliers'' probability high, and the
+formula for $K$ says how many tries guarantee success with probability $P$.
+
+% -----------------------------------------------------------------
+\subsection{Hyperlapse (cost $+$ dynamic programming)}
+\Purpose Turn a long jittery video into a smooth sped-up one by selecting frames that are smooth
+continuations of each other (not uniformly spaced).
+\WhenUse Stabilised timelapse from hand-held / wearable footage; when uniform sub-sampling looks jittery.
+\WhenAvoid When exact playback timing must be uniform (uniform sub-sampling then wins on timing).
+\TheAlgo Match cost between frames $i,j$ (feature points via Harris $+$ BRIEF, transform $T(i,j)$ via
+affine $+$ RANSAC): $C_r(i,j)=\frac1n\sum_p\|(x_p,y_p)_j^T-T(i,j)(x_p,y_p)_i^T\|_2$. Full cost adds a
+speedup term and a constant-pace term:
+\[
+C(h,i,j,\mu)=C_m(i,j)+\lambda_s\,C_s(i,j,\mu)+\lambda_a\,C_a(h,i,j),
+\]
+$C_s=\min(\|(j-i)-\mu\|_2^2,T_s)$, $C_a=\min(\|(j-i)-(i-h)\|_2^2,T_a)$. Minimise the total over paths by a
+2-pass dynamic program (build cost matrix, back-trace optimal path).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Frames; desired speedup $v$; window $w$; weights $\lambda_s,\lambda_a$}
+\KwOut{Frame path $P$}
+Init: $D_v(i,j)=C_m(i,j)+\lambda_s C_s(i,j,v)$ for gaps $\le w$\;
+Pass I: $D(i,j)=C_m(i,j)+\lambda_sC_s+\min_k[D_v(i{-}k,i)+\lambda_aC_a(i{-}k,i,j)]$; store argmin in $T$\;
+Pass II: $P\leftarrow$ Back-Trace$(T)$\;
+\caption{Hyperlapse frame selection (DP)}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$\mu$ / $v$ (speedup) & Target frames skipped & Larger: faster video \\
+$\lambda_s$ (speedup weight) & Adherence to target rate & Usually $\gg\lambda_a$ (timing matters less than smoothness) \\
+$\lambda_a$ (accel.\ weight) & Pace uniformity & Larger: more constant intervals \\
+window $w$ & Max jump considered & Larger: more options, costlier DP \\
+\end{ptable}
+\ShortExp Keeping every $k$-th frame gives violent jitter because samples land at random phases of the
+camera's bob. Instead, a cost measures how smoothly frame $j$ follows frame $i$ (via matched features and a
+fitted transform), plus penalties for missing the target speedup and for uneven pacing. A two-pass dynamic
+program finds the frame-selection path minimising the total cost.
+
+% ##################################################################
+\newpage
+\section{Online Tracking: Kalman \& Particle Filters (Chapter 4)}
+% ##################################################################
+Online $=$ frames arrive one at a time. A filter fuses the accumulated belief with each new measurement:
+\emph{predict $+$ correct}.
+
+% -----------------------------------------------------------------
+\subsection{Bayesian Recursive Tracking (derivation)}\label{sub:bayes}
+\Purpose Derive the recursive posterior that underlies both Kalman and particle filters.
+\WhenUse Any online tracking where a belief over the state history is updated recursively.
+\WhenAvoid When the two assumptions (Markov state; observation depends only on current state) do not hold.
+\TheAlgo With state $x_t$, measurements $z_t$: \textbf{Markov} $p(x_t\mid x_{1:t-1})=p(x_t\mid x_{t-1})$
+so $p(x_{1:t})=p(x_1)\prod_{j\ge2}p(x_j\mid x_{j-1})$; \textbf{conditional independence}
+$p(z_{1:t}\mid x_{1:t})=\prod_\tau p(z_\tau\mid x_\tau)$. Bayes then gives
+\[
+p(x_{1:t}\mid z_{1:t})\propto
+\underbrace{p(z_t\mid x_t)}_{\text{likelihood}}\,
+\underbrace{p(x_t\mid x_{t-1})}_{\text{motion model}}\,
+\underbrace{p(x_{1:t-1}\mid z_{1:t-1})}_{\text{recursion}},
+\]
+and marginalising gives filtering
+$p(x_t\mid z_{1:t})=C\,p(z_t\mid x_t)\!\int p(x_t\mid x_{t-1})p(x_{t-1}\mid z_{1:t-1})\,dx_{t-1}$.
+\Knobs
+\begin{ptable}
+$p(x_t\mid x_{t-1})$ & Motion / transition model & Constant position/velocity/acceleration \\
+$p(z_t\mid x_t)$ & Measurement likelihood & e.g.\ $e^{-\text{SSD}}$ template score \\
+prior (recursion) & Carried-forward belief & No need to store the video \\
+\end{ptable}
+\ShortExp Two assumptions --- the future depends only on the present (Markov), and each observation
+depends only on the current state --- collapse Bayes' rule into \emph{likelihood $\times$ motion model
+$\times$ previous posterior}. That single recursion is what Kalman and particle filters implement.
+
+% -----------------------------------------------------------------
+\subsection{Kalman Filter}\label{sub:kalman}
+\Purpose Optimally fuse a linear prediction with a noisy measurement under Gaussian noise.
+\WhenUse Roughly linear dynamics, roughly Gaussian noise, unimodal belief; cheap ($O(n^3)$ in state dim).
+\WhenAvoid Non-linear dynamics, non-Gaussian noise, or multi-modal beliefs (use a particle filter / EKF).
+\TheAlgo Model $x_{k+1}=\Phi x_k+w_k$, $z_k=Hx_k+v_k$, $Q=E[ww^T]$, $R=E[vv^T]$:
+\begin{align*}
+\text{Predict: } &\hat x'_{k+1}=\Phi\hat x_k, & P'_{k+1}&=\Phi P_k\Phi^T+Q,\\
+\text{Gain: } &K_k=P'_kH^T(HP'_kH^T+R)^{-1}, &&\\
+\text{Update: } &\hat x_k=\hat x'_k+K_k(z_k-H\hat x'_k), & P_k&=(I-K_kH)P'_k .
+\end{align*}
+$K$ minimises $\mathrm{tr}(P_k)$; in 1-D $K=P'/(P'+R)$ ($R\to0\Rightarrow K\to1$ trust data;
+$R\to\infty\Rightarrow K\to0$ trust model).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{$\Phi,H,Q,R$; init $\hat x_0,P_0$; measurements $z_k$}
+\KwOut{Filtered $\hat x_k$}
+\For{each frame $k$}{
+  Predict: $\hat x'_k=\Phi\hat x_{k-1}$, $P'_k=\Phi P_{k-1}\Phi^T+Q$\;
+  Gain: $K_k=P'_kH^T(HP'_kH^T+R)^{-1}$\;
+  Measure $z_k$ (LK / template match near $\hat x'_k$)\;
+  Update: $\hat x_k=\hat x'_k+K_k(z_k-H\hat x'_k)$, $P_k=(I-K_kH)P'_k$\;
+}
+\caption{Kalman filter}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$Q$ (process noise) & Trust in motion model & Too small: over-confident, drifts in occlusion; too big: jumpy \\
+$R$ (measurement noise) & Trust in sensor & $R$ small $\Rightarrow$ follow data; $R$ large $\Rightarrow$ follow model \\
+State vector & What is tracked & Add velocity/accel to coast through occlusions \\
+\end{ptable}
+\ShortExp Each frame the filter predicts (push the state through $\Phi$; uncertainty grows by $Q$) then
+updates (blend the measurement via gain $K$; uncertainty shrinks). $K$ is a trust dial set by $R$ versus the
+predicted covariance. Optimal --- but only under linear dynamics and Gaussian noise.
+
+% -----------------------------------------------------------------
+\subsection{Particle Filter (Condensation)}\label{sub:particle}
+\Purpose Track a non-Gaussian / multi-modal belief as a cloud of $N$ weighted samples.
+\WhenUse Non-linear dynamics, non-Gaussian noise, multiple hypotheses (look-alike targets); $100$--$200$
+particles.
+\WhenAvoid When Kalman's assumptions hold (cheaper); cost is $O(NM)$ per frame; beware sample
+impoverishment.
+\TheAlgo Samples $\{S_t^{(n)},\pi_t^{(n)},C_t^{(n)}\}$ ($S$ state, $\pi$ weight, $C$ cumulative weight)
+implement the recursion of \S\ref{sub:bayes}.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{$\{S_{t-1}^{(n)},\pi_{t-1}^{(n)},C_{t-1}^{(n)}\}_{n=1}^N$}
+\KwOut{New particle set $+$ estimate}
+\For{$n=1$ \KwTo $N$}{
+  Select: draw $r\sim U[0,1]$; smallest $j$ with $C_{t-1}^{(j)}>r$; $S_t'^{(n)}=S_{t-1}^{(j)}$\;
+  Predict: $S_t^{(n)}=A\,S_t'^{(n)}+B\,w_t^{(n)}$ \tcp*{drift $+$ diffuse}
+  Measure: $\pi_t^{(n)}=p(z_t\mid x_t=S_t^{(n)})$ \tcp*{e.g.\ $e^{-\text{SSD}}$}
+}
+Normalise $\sum_n\pi_t^{(n)}=1$; $C_t^{(0)}=0,\ C_t^{(n)}=C_t^{(n-1)}+\pi_t^{(n)}$\;
+\Return $\sum_n\pi_t^{(n)}f(S_t^{(n)})$ (or max-weight particle)\;
+\caption{Condensation (particle filter)}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$N$ (particles) & Approximation quality & More: better fidelity, costlier; too few: poor coverage \\
+Diffusion noise & Exploration & Prevents impoverishment; too much: noisy estimate \\
+Output rule & Max vs.\ weighted mean & Max: sharp but jittery; mean: stable but can fall between modes \\
+\end{ptable}
+\ShortExp A Gaussian cannot represent ``on the table OR under the chair.'' Particles store the belief as
+weighted samples of any shape. Each frame: resample (duplicate heavy particles via the cumulative-weight
+roulette), predict (motion $+$ noise), re-weight by measurement similarity. Output is a weighted average
+(smooth) or the max-weight particle (sharp).
+
+% ##################################################################
+\newpage
+\section{Dynamic Texture Synthesis (Chapter 5)}
+% ##################################################################
+\subsection{SVD $+$ ARMA State-Space Texture Synthesis}\label{sub:texture}
+\Purpose Learn a low-dimensional linear state-space model of a stochastic texture and drive it with noise
+to generate endless novel frames.
+\WhenUse ``Dynamic textures'' --- statistically stationary content that never repeats (fire, smoke, water,
+grass). State dim $n\sim50$, image dim $m\sim200\times300$.
+\WhenAvoid Structured objects (a face, a person walking): the linear low-rank model produces blurry blobs
+--- use GAN/VAE.
+\TheAlgo Model $x(t{+}1)=Ax(t)+Bv(t)$, $y(t)=Cx(t)+w(t)$. Stack frames $Y_1^\tau=[y(1)\cdots y(\tau)]$; with
+$C^TC=I$ take the SVD $Y_1^\tau=U\Sigma V^T\Rightarrow\hat C=U,\ \hat X=\Sigma V^T$; fit dynamics by LS
+$\hat A=\arg\min_A\|X_1^\tau-AX_0^{\tau-1}\|$ (AR view: $x_t=C+\sum_i p_ix_{t-i}+\epsilon_t$).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Frames $y(1..\tau)$; state dim $n$; noise levels}
+\KwOut{Endless synthetic frames}
+Vectorise frames into columns $Y$; $U,\Sigma,V^T\leftarrow$ SVD$(Y)$ truncated to $n$\;
+$\hat C\leftarrow U$; $\hat X\leftarrow\Sigma V^T$; $\hat A\leftarrow\arg\min_A\|X_1^\tau-AX_0^{\tau-1}\|$\;
+pick start state $x$\;
+\While{generating}{$x\leftarrow\hat A x+\epsilon$; output $y=\hat C x+w$\;}
+\caption{Dynamic-texture learning $+$ synthesis}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$n$ (state dim) & Rank kept from SVD ($\ge95\%$ variance) & Larger: sharper, costlier; smaller: blurrier \\
+State noise $v$ & Trajectory exploration & Keeps it non-deterministic; too big: unnatural \\
+Image noise $w$ & Natural look & Hides low-rank seams; too big: grainy \\
+$C^TC=I$ & Canonical solution & Removes the $T$-ambiguity ($A\to TAT^{-1}$) \\
+\end{ptable}
+\ShortExp A dynamic texture is a hidden low-dimensional state that drifts by a linear rule and renders to an
+image by another linear map --- a Kalman model whose $A,C$ are estimated from data (system identification).
+The SVD of stacked frames gives the patterns ($C=U$) and their time-mixing ($x_t=\Sigma V^T$); a least-squares
+fit gives $A$. Driving the state forward with noise generates infinitely many plausible frames.
+
+% ##################################################################
+\newpage
+\section{Layer Representation (Chapter 6)}
+% ##################################################################
+\subsection{Layer Decomposition (LK $+$ K-means) and Alpha Compositing}
+\Purpose Given a composited video and the number of layers $k$, recover each layer, its motion, and its
+mask by segmenting the motion into $k$ affine motions.
+\WhenUse Videos built from a few coherently-moving layers (background $+$ a few objects); editing, object
+removal, background swap. Start with $k=2$--$3$.
+\WhenAvoid Non-coherent / highly deformable motion; wrong $k$ (too small lumps motions, too large splits
+objects); poor K-means init (empty clusters).
+\TheAlgo Alpha-compositing synthesis model $I_k=I_{k-1}(1-\alpha_k)+E_k\alpha_k$ (layers $E_k$, masks
+$\alpha_k$). Analysis is an EM-style alternation:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Frame pair $I_1,I_2$; \# layers $k$}
+\KwOut{Per-pixel layer assignment, per-layer affine motion}
+\Repeat{convergence}{
+  \textbf{LK:} fit a 6-D affine motion $V\in\R^6$ on random windows\;
+  \textbf{K-means:} cluster the window motions in $\R^6$ into $k$ groups (layers)\;
+  Refit LK per layer on its pixels\;
+}
+\caption{Layer decomposition (LK $\to$ K-means loop)}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$k$ (\# layers) & Number of motion groups & Too small: lumps motions; too large: splits objects (MDL picks $k$) \\
+Motion model & Affine (6) vs.\ homography (8) & Affine usually enough; homography for planar perspective \\
+\# random windows & Sampling of motions & More: accurate, slower; random sub-sampling is standard \\
+\end{ptable}
+\ShortExp Movies are layered sandwiches (background, characters, effects) combined by alpha compositing
+$I=E\alpha+I_{\text{prev}}(1-\alpha)$. To invert this, assume each layer moves by one affine transform (6
+numbers): fit LK motions on windows, cluster them in $\R^6$ with K-means (each cluster $=$ a layer), refit
+per layer, and iterate --- the classic ``assume A to estimate B, swap, repeat''.
+
+% -----------------------------------------------------------------
+\subsection{K-means Clustering}\label{sub:kmeans}
+\Purpose Partition points $x\in\R^d$ into $k$ groups minimising total squared-error distortion.
+\WhenUse Grouping vectors by similarity (motion vectors into layers; vector quantisation) with known $k$.
+\WhenAvoid Unknown $k$ (needs MDL/trial); non-convex/unequal clusters; poor init (local minima).
+\TheAlgo Minimise $\text{Distortion}=\sum_i\|x_i-c_{\text{Encode}(x_i)}\|^2$; setting
+$\partial/\partial c_j=0$ gives $c_j=\frac{1}{|s_j|}\sum_{i\in s_j}x_i$.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Points $\{x_i\}_{i=1}^n$; \# clusters $k$}
+\KwOut{Prototypes $c_1,\dots,c_k$}
+Initialise $c_1,\dots,c_k$ (random / $k$-means++)\;
+\Repeat{assignments stop changing}{
+  Assign each $x_i$ to nearest $c_j$\;
+  Update $c_j\leftarrow\frac{1}{|s_j|}\sum_{i\in s_j}x_i$\;
+}
+\caption{K-means (Lloyd)}
+\end{algorithm}
+
+\textbf{Termination (guaranteed).} Both steps never increase the distortion (nearest-centre assignment
+minimises it for fixed centres; the mean minimises it for fixed assignments), so distortion is monotonically
+non-increasing. Since there are only finitely many partitions ($\le k^n$) and the cost cannot cycle upward,
+the algorithm stops after finitely many steps --- at a local (not necessarily global) minimum.
+
+\Knobs
+\begin{ptable}
+$k$ (\# clusters) & Granularity & Larger $k$: lower distortion ($0$ at $k=n$); MDL picks optimal $k$ \\
+Initialisation & Which local minimum & $k$-means++ avoids empty clusters \\
+Restarts & Robustness & Keep the lowest-distortion run \\
+\end{ptable}
+\ShortExp Drop $k$ centres, assign each point to its nearest, move each centre to its members' mean,
+repeat. Each step is a distortion minimiser, so the cost only ever drops; with finitely many partitions and
+no upward cycling, K-means is guaranteed to terminate --- possibly at a local minimum, which is why
+initialisation and restarts matter.
+
+% ##################################################################
+\newpage
+\section{Video Magnification (Chapter 7)}
+% ##################################################################
+\subsection{Eulerian Video Magnification}
+\Purpose Amplify motions too small to see (a pulse, a swaying building) without estimating motion.
+\WhenUse Sub-pixel, low-amplitude, dense changes; a steady (tripod) camera; known target frequency band.
+\WhenAvoid Motion $>\!\sim1$ pixel (Taylor breaks $\Rightarrow$ ringing --- use pyramid magnification);
+shaky camera (shake gets amplified too).
+\TheAlgo For $I(x,t)=f(x+\delta(t))$, first-order Taylor gives
+$I(x,t)\approx f(x)+\underbrace{\delta(t)\,\partial f/\partial x}_{B(x,t)}$. Adding $\alpha B$ back yields
+\[
+\tilde I(x,t)=I(x,t)+\alpha B(x,t)\approx f\big(x+(1+\alpha)\delta(t)\big),
+\]
+so motion is amplified by $\alpha$ --- \emph{without} estimating $\delta$. In practice $B\approx I_2-I_1$
+(ideally band-passed in time first).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Video frames; amplification $\alpha$; (optional) temporal band-pass}
+\KwOut{Motion-magnified video}
+\ForEach{location (independently)}{
+  temporal signal $\to$ band-pass to the target frequency $\to$ get $B\approx I_2-I_1$\;
+  output $\tilde I=I+\alpha B$\;
+}
+\caption{Eulerian magnification}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$\alpha$ (amplification) & Motion gain (typ.\ 5--50) & Higher: reveals more but more ringing artifacts \\
+Band-pass band & Frequencies amplified & Match target (heart $\approx1$\,Hz); cuts noise \\
+Pyramid & Handles $>\!1$px motion & Amplify each scale separately to avoid ringing \\
+\end{ptable}
+\ShortExp Lagrangian methods follow each pixel (need motion estimation); Eulerian methods sit at a fixed
+location and watch the value change over time. A tiny spatial shift $\delta$ changes the pixel value by
+$\delta\times$ slope (Taylor); multiply that temporal change by $\alpha$ and add it back and the pixel
+``moves'' as if by $(1+\alpha)\delta$ --- amplification with no motion estimation. Band-pass first so only
+the target motion (not lighting drift/noise) is amplified.
+
+% ##################################################################
+\newpage
+\section{Background Subtraction (Chapter 8)}
+% ##################################################################
+\subsection{Per-pixel Gaussian Mixture Model (GMM)}
+\Purpose Classify each pixel as background or a moving object online, robust to repetitive background
+motion (rustling leaves).
+\WhenUse Static-camera surveillance with multimodal backgrounds; low memory ($O(K)$ state per pixel).
+\WhenAvoid Sudden lighting changes, camera shake (false positives until it adapts); slow objects get
+absorbed; shadows flagged as foreground.
+\TheAlgo Each pixel's value is modelled by $K$ Gaussians
+$f_x(x\mid\Phi)=\sum_k\omega_k f_{x\mid k}(x\mid k,\theta_k)$, $\theta_k=(\mu_k,\sigma_k)$,
+$\sum_k\omega_k=1$. Decision by MAP $\hat k=\arg\max_k\omega_k f_{x\mid k}$. Sort Gaussians by
+$\omega_k/\sigma_k$ (frequent $+$ tight $=$ background) and take the top ones with
+$B=\arg\min_b(\sum_{k\le b}\omega_k/\sigma_k>T)$ as background. Online update per new value $x_t$:
+\[
+\omega_{k,t}=(1-\alpha)\omega_{k,t-1}+\alpha M_{k,t},\quad
+\mu_t=(1-\rho)\mu_{t-1}+\rho x_t,\quad
+\sigma_t^2=(1-\rho)\sigma_{t-1}^2+\rho(x_t-\mu_t)^2,
+\]
+where $M_{k,t}=1$ if $x_t$ matches Gaussian $k$ (within $2.5\sigma$), else $0$, and
+$\rho=\alpha\,p(k\mid x_t)/\hat\omega_{k,t}$.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{New pixel value $x_t$; $K$ Gaussians; rates $\alpha,\rho$; threshold $T$}
+\KwOut{Background / foreground label}
+\eIf{$x_t$ within $2.5\sigma$ of some Gaussian $k$}{
+  nudge $\mu_k,\sigma_k$ toward $x_t$; increase $\omega_k$\;
+}{
+  replace lowest-weight Gaussian with one centred at $x_t$ (low $\omega$, high $\sigma$)\;
+}
+Renormalise weights; sort by $\omega_k/\sigma_k$; background $=$ top until $\sum>T$\;
+Label $x_t$ foreground iff its Gaussian is not background\;
+\caption{Online GMM background subtraction}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$K$ (Gaussians) & Modes modelled (3--5) & Fewer: miss multimodal BG; more: fit noise \\
+$\alpha$ (weight rate) & How fast new patterns become BG & $\approx0.01$; too fast: parked car $\to$ BG; too slow: no adaptation \\
+$T$ (BG threshold) & BG fraction (0.7--0.9) & Higher: more count as BG, fewer false alarms \\
+Match ($2.5\sigma$) & New-object sensitivity & Tight: detect changes; loose: absorb noise \\
+\end{ptable}
+\ShortExp Each pixel keeps its own mixture of a few Gaussians (mean colour, width, popularity). A new value
+that matches an existing Gaussian nudges it; otherwise it replaces the weakest one (likely a moving object).
+Background Gaussians are the frequent \emph{and} tight ones (high $\omega/\sigma$) whose weights sum past
+$T$; everything else is foreground. It is fully online and memory-efficient.
+
+% ##################################################################
+\newpage
+\section{Video Colorization \& Geodesic Distance (Chapter 9)}
+% ##################################################################
+Propagate a few colour scribbles to every pixel: fast within similar-luminance regions, slow across edges.
+The vehicle is \emph{geodesic distance}, computed by Dijkstra or fast sweeping.
+
+% -----------------------------------------------------------------
+\subsection{Geodesic Distance Colorization}\label{sub:colorize}
+\Purpose Fill the two chrominance channels of a B\&W video from sparse colour scribbles, respecting
+luminance edges.
+\WhenUse Region-wise-smooth colour (cartoon-like); colour edges coincide with luminance edges; video needs
+far fewer scribbles (time axis carries colour).
+\WhenAvoid Saturated luminance with varying colour (fire); smooth colour gradients (sunset); specular
+highlights.
+\TheAlgo Path length weighted by contour-crossing
+$L(p)=\int_p|\langle\dot p(s),\nabla Y\rangle|\,dl$, distance $d_L(x,y)=\min_p L(p)$, distance map
+$D_k(x)=d_L(x,\Omega_k)$ to scribble $k$. Blend by a distance-decaying convex combination:
+\[
+c(x)=\frac{\sum_k W(D_k(x))\,c_k}{\sum_k W(D_k(x))},\qquad W(D)=\frac{1}{D^{\,b}},\ b\in[1,6].
+\]
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Luminance $Y$; scribbles $\{\Omega_k,c_k\}$; exponent $b$}
+\KwOut{Chrominance $c(x)$ for all pixels}
+\ForEach{scribble $k$}{$D_k\leftarrow$ geodesic distance from $\Omega_k$ (Dijkstra / fast sweeping)\;}
+\ForEach{pixel $x$}{$c(x)\leftarrow\sum_k D_k(x)^{-b}c_k\,/\,\sum_k D_k(x)^{-b}$\;}
+\caption{Geodesic colorization}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$b$ in $1/D^b$ (1--6) & Transition sharpness & Larger: sharper boundaries; smaller: smoother blends \\
+Edge weight $W_e=|Y(p)-Y(q)|$ & How edges act as walls & Gradient magnitude blocks colour bleed \\
+Scribble placement & Region coverage & Inside regions, not on edges; more in large regions \\
+Video neighbourhood & 4 (image) vs.\ 6 (+time) & Time edges let colour flow between frames \\
+\end{ptable}
+\ShortExp Redefine distance to follow content: staying inside one region costs almost nothing, crossing an
+edge costs a lot. For each scribble, compute this geodesic distance to every pixel; each pixel's colour is a
+weighted vote of all scribbles with weight $1/D^b$ (nearby scribbles dominate). In video, adding a temporal
+edge (6-neighbourhood) lets colour flow through time, so far fewer scribbles are needed.
+
+% -----------------------------------------------------------------
+\subsection{Dijkstra's Algorithm}\label{sub:dijkstra}
+\Purpose Compute the shortest (geodesic) distance from a source set to every node of a weighted graph.
+\WhenUse Exact single-source distance maps on a CPU with a priority queue; $O(N\log N)$.
+\WhenAvoid Massively parallel / GPU settings (the priority queue is hard to parallelise --- use fast
+sweeping).
+\TheAlgo Edge weight $W_e=|Y(x,y)-Y(x',y')|$; path length $L_p=\sum_{e\in P}W_e$.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Grid $(\Omega,E)$, weights $W$; source set $\Omega_s$}
+\KwOut{$D(x)=d_L(x,\Omega_s)$}
+$D|_{\Omega_s}=0$, $D|_{\text{rest}}=\infty$, $Q=\Omega$\;
+\While{$Q\neq\varnothing$}{
+  $x=\arg\min_{x\in Q}D(x)$ \tcp*{priority queue $O(\log N)$}
+  \ForEach{$y\in N_1(x)\cap Q$}{$D(y)\leftarrow\min\{D(y),D(x)+W(x,y)\}$\;}
+  $Q\leftarrow Q\setminus\{x\}$\;
+}
+\caption{Dijkstra (geodesic distance)}
+\end{algorithm}
+Correctness rests on the \emph{Bellman principle}: any sub-path of an optimal path is optimal.
+
+\Knobs
+\begin{ptable}
+Edge weights & Cost of crossing gradients & Gradient-magnitude weighting makes edges walls \\
+Neighbourhood $N_1$ & 4 (image) / 6 (video) & Larger: more path options, costlier \\
+\end{ptable}
+\ShortExp Water spreads from the source pixels but flows slowly through high-gradient regions; the pixel
+that is ``wet first'' takes that distance. Pop the closest unvisited pixel, relax its neighbours, repeat ---
+$O(N\log N)$ with a priority queue. The Bellman principle (sub-paths of optimal paths are optimal) is what
+makes the greedy relaxation correct.
+
+% -----------------------------------------------------------------
+\subsection{Fast Sweeping (Danielsson)}
+\Purpose Compute the geodesic distance map with parallel-friendly raster sweeps instead of a priority
+queue.
+\WhenUse GPU / cache-friendly settings; often faster than Dijkstra in practice.
+\WhenAvoid Highly spiralling geodesics need many sweeps; distances are not Euclidean so $>4$ sweeps may be
+required.
+\TheAlgo Update each pixel from already-visited neighbours in raster order; 4 sweeps cover the 4 directions;
+repeat sweeps until the distance map stops changing (spirals need $\ge4N$ sweeps for $N$ turns). Parallelise
+by updating a whole column at a time.
+\Knobs
+\begin{ptable}
+\# sweeps & Directions / turns covered & 4 for simple paths; more for spirals; iterate to convergence \\
+Neighbourhood layout & Parallelisation & Column-wise update enables parallel sweeps \\
+\end{ptable}
+\ShortExp Dijkstra's priority queue is hard to parallelise. Fast sweeping instead runs simple raster scans,
+updating each pixel from its already-visited neighbours; four sweeps handle the four directions and more are
+added until nothing changes. It is cache- and GPU-friendly and usually faster than Dijkstra.
+
+% ##################################################################
+\newpage
+\section{Video Matting (Chapter 10)}
+% ##################################################################
+Extract a foreground and composite it onto a new background without colour bleed:
+trimap $\to$ opacity map $\to$ matting. Reuses Ch.\ 9's geodesic machinery with a foreground-probability
+cost field.
+
+% -----------------------------------------------------------------
+\subsection{Trimap Estimation (KDE $+$ geodesic)}
+\Purpose Label each pixel confidently-foreground (1), confidently-background (0), or unsure ($\phi$).
+\WhenUse Given FG/BG scribbles; when colour alone is ambiguous (overlapping FG/BG colours) so geodesic
+proximity breaks ties.
+\WhenAvoid Poorly-placed scribbles (need one per distinct colour region); wrong band radius $\rho$.
+\TheAlgo Estimate colour distributions by KDE (Parzen window)
+$f(c\mid F)\propto\sum_{x\in\Omega_F}K(c,c(x))$, $K\propto e^{-\|c-c'\|^2/2\sigma^2}$; Bayes gives
+$P(F\mid c)=f(c\mid F)/(f(c\mid F)+f(c\mid B))$ (uniform prior). Compute geodesic distances $D_F,D_B$ using
+$W(x)=\nabla_x P(F\mid c(x))$ as the field; classify $V_F=\{D_F<D_B\}$; the unsure band is a radius-$\rho$
+ball around the boundary $\Delta=\{D_F=D_B\}$:
+\[
+\alpha_T(x)=1\ \text{on}\ V_F\setminus B_\rho(\Delta),\quad
+\alpha_T(x)=0\ \text{on}\ V_B\setminus B_\rho(\Delta),\quad
+\alpha_T(x)=\phi\ \text{on}\ B_\rho(\Delta).
+\]
+\Knobs
+\begin{ptable}
+$\rho$ (band radius) & Width of unsure band (5--15 px) & Too small: misses soft hair; too big: too much work for stage 2 \\
+$\sigma$ (KDE kernel) & Colour-model smoothness & Larger: smoother distribution \\
+Scribbles & Colour-region coverage & One per distinct FG/BG colour region \\
+\end{ptable}
+\ShortExp Place a soft Gaussian ``bell'' on each scribble pixel's colour (KDE) to get FG/BG colour
+distributions, convert to $P(F\mid c)$ by Bayes, then compute geodesic distances to FG and BG scribbles.
+Classify by whichever is closer, and mark a narrow band around the boundary as ``unsure''. Geodesic
+proximity resolves cases where FG and BG share colours.
+
+% -----------------------------------------------------------------
+\subsection{Opacity Map (trimap refinement)}
+\Purpose Assign each unsure pixel a continuous $\alpha\in[0,1]$.
+\WhenUse Inside the narrow uncertain band, where local colour statistics differ from the global model.
+\WhenAvoid Outside the band (already confident 0/1).
+\TheAlgo Re-estimate FG/BG distributions using only boundary pixels (nearly 1-D along the boundary curve
+length $\tau$), then combine local probability with geodesic distance:
+\[
+\alpha(x)=\frac{w_F(x)}{w_F(x)+w_B(x)},\qquad w_F(x)=\tilde D_F(x)^{-r}\,\tilde P_F(x),\ r\in(0,2].
+\]
+\Knobs
+\begin{ptable}
+$r\in(0,2]$ & Distance weighting & Larger: sharper reliance on proximity \\
+Local KDE window & Boundary colour model & Re-estimated from boundary pixels (richer local data) \\
+\end{ptable}
+\ShortExp Near the boundary there are many more FG/BG samples than the sparse scribbles, so re-estimate the
+colour models locally. Combining the local FG probability with the geodesic distances gives each unsure pixel
+a soft opacity $\alpha$ between 0 and 1.
+
+% -----------------------------------------------------------------
+\subsection{Matting (pure-foreground recovery)}
+\Purpose Composite onto a new background without dragging the old background's colour into fuzzy pixels.
+\WhenUse The uncertain boundary band (hair, fuzzy edges) where a pixel mixes FG and BG colour.
+\WhenAvoid Confident FG/BG regions (a plain $\alpha$ blend is fine there).
+\TheAlgo A boundary pixel is $c(x)=\alpha f(x)+(1-\alpha)b(x)$ (one equation, two unknowns). In a small
+window assume $f,b$ match confident FG/BG neighbours; pick the pair that best explains $c(x)$:
+\[
+(x_F^*,x_B^*)=\arg\min_{x_F,x_B}\|\alpha(x)c(x_F)+(1-\alpha(x))c(x_B)-c(x)\|^2,\quad
+J(x)=\alpha\,c(x_F^*)+(1-\alpha)B(x).
+\]
+\Knobs
+\begin{ptable}
+Window size & Neighbour search for $f,b$ & Larger: more candidates, costlier; small windows usually suffice \\
+New background $B$ & Composite target & Provided by the user \\
+\end{ptable}
+\ShortExp A naive blend $J=\alpha c+(1-\alpha)B$ drags the old background's colour onto the new one at
+fuzzy pixels. Instead recover the \emph{pure} foreground colour by finding, in a small window, the
+confident FG/BG pixel pair that best reproduces the mixed pixel, and composite that pure colour ---
+avoiding colour bleed.
+
+% -----------------------------------------------------------------
+\subsection{Fast KDE via Low-Rank Kernel}
+\Purpose Evaluate $f(x)=\sum_{y}k(x,y)w(y)$ (KDE) in linear rather than quadratic time.
+\WhenUse Large images where naive KDE is $O(|\Omega|\,|\Omega'|)$; kernels with fast-decaying singular
+values (e.g.\ Gaussian).
+\WhenAvoid Genuinely full-rank kernels (no speedup).
+\TheAlgo If $K=\sum_{i=1}^p\phi_i\psi_i^T$ (rank $p\ll m,n$), then with $a_i=\sum_y\psi_i(y)w(y)$,
+$f(x)=\sum_i a_i\phi_i(x)$, total $O((m+n)p)$ instead of $O(mn)$ (the Fast Multipole Method factorises such
+kernels).
+\Knobs
+\begin{ptable}
+$p$ (effective rank) & Approximation vs.\ speed & Smaller $p$: faster, less accurate \\
+Kernel choice & Rank / decay & Pick low-rank (fast-decaying singular values) \\
+\end{ptable}
+\ShortExp Naive KDE sums over every scribble pixel at every output pixel --- quadratic. If the kernel is
+(approximately) low rank, the double sum factors into two cheap passes, giving $O((m{+}n)p)$. Gaussians are
+formally infinite-rank but their singular values decay, so a small effective rank works.
+
+% ##################################################################
+\newpage
+\section{Re-targeting \& PatchMatch (Chapter 11)}
+% ##################################################################
+Resize/edit an image while preserving a natural look, formalised by two losses (completeness $+$ coherence)
+and solved fast by PatchMatch.
+
+% -----------------------------------------------------------------
+\subsection{Bidirectional-Similarity Re-targeting}
+\Purpose Produce a target of new size/aspect that keeps all important source content (completeness) and
+invents nothing (coherence).
+\WhenUse Content-aware resize, inpainting, reshuffling, object removal/preservation; images and video (3-D
+patches).
+\WhenAvoid Bad initialisation (start from black $\Rightarrow$ garbage --- use a hierarchical pyramid);
+straight lines/objects may bend (add constraints).
+\TheAlgo With patch distance $d^2(P,Q)=\|P-Q\|_2^2$:
+\[
+D_{\text{com}}(S,T)=\tfrac1{N_S}\!\sum_{P\in S}\min_{Q\in T}d^2(Q,P),\quad
+D_{\text{coh}}(S,T)=\tfrac1{N_T}\!\sum_{Q\in T}\min_{P\in S}d^2(P,Q),
+\]
+$D=\alpha D_{\text{com}}+(1-\alpha)D_{\text{coh}}$. Per-pixel optimum is a weighted average of voting source
+colours (set derivative to 0). Weighted constraints multiply patches by $W_P$ (high $=$ preserve, $\approx0$
+$=$ remove), keeping $D$ convex.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Source $S$; target size $\Omega'$; balance $\alpha$}
+\KwOut{Target $T$}
+Initialise $T^1$ by hierarchical resize (gradual pyramid), \emph{not} black\;
+\Repeat{convergence}{
+  reset $T^{k+1}\leftarrow0$, weight map $C\leftarrow0$\;
+  \textbf{Coherence:} each $Q\in T^k$ finds NN $P\in S$; add $\frac{1-\alpha}{N_T}P$ onto $Q$; $C{+}{=}\frac{1-\alpha}{N_T}$\;
+  \textbf{Completeness:} each $P'\in S$ finds NN $Q'\in T$; add $\frac{\alpha}{N_S}P'$ onto $Q'$; $C{+}{=}\frac{\alpha}{N_S}$\;
+  $T^{k+1}\leftarrow T^{k+1}/C$ (element-wise)\;
+}
+\caption{Re-targeting by bidirectional similarity}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+$\alpha$ (0--1) & Completeness vs.\ coherence & Higher: keep more content; lower: smoother but riskier (start 0.5) \\
+Patch size (5--7) & Context vs.\ sharpness & Larger: more context, blurrier \\
+Constraint weights $W_P$ & Preserve / remove & High: protect a face/line; $\approx0$: erase an object \\
+Pyramid step ($\sim1.1\times$) & Init quality & Gradual resize avoids bad local minima \\
+\end{ptable}
+\ShortExp Two symmetric principles: every important source patch should appear in the target
+(completeness), and every target patch should exist in the source (coherence). Their weighted sum is
+minimised by setting each output pixel to a weighted average of the source patches voting for it. Good
+initialisation (a gradual resize pyramid) is essential, and the nearest-neighbour search is the bottleneck
+that PatchMatch accelerates.
+
+% -----------------------------------------------------------------
+\subsection{PatchMatch}\label{sub:patchmatch}
+\Purpose Compute an approximate nearest-neighbour offset field in near real time.
+\WhenUse Whenever brute-force $O(N^2)$ patch matching is too slow and matches are spatially coherent (most
+natural images).
+\WhenAvoid Non-coherent correspondences; when an exact global NN is required.
+\TheAlgo Find $f(x)=\arg\min_y\|P_x-Q_{x+f}\|_2^2$ using \emph{propagation} (exploit coherence) $+$
+\emph{random search} (escape local minima).
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Source $S$, target $T$; window $W$; iterations $K$}
+\KwOut{NN offset field $f$}
+Init $f\sim U[-W/2,W/2]^2$; $d(x)=\|P_x-Q_{x+f(x)}\|_2^2$\;
+\For{$k=1$ \KwTo $K$ (alternating raster order)}{
+  \ForEach{$x$}{
+    Propagation: $f(x)\leftarrow\arg\min_{f\in\{f(x),f(x-e_1),f(x-e_2)\}}\|P_x-Q_{x+f}\|$\;
+    Random search: test $f(x)+r$ with shrinking radius; keep if it lowers $d(x)$\;
+  }
+}
+\caption{PatchMatch (1-NN)}
+\end{algorithm}
+
+\Knobs
+\begin{ptable}
+Patch size (5--7) & Context vs.\ sharpness & Larger: more context, blurrier \\
+Iterations $K$ (4--6) & NN-field convergence & More: better matches, costlier \\
+Window $W$ & Random-search radius & Shrinks each inner step \\
+\end{ptable}
+\ShortExp If patch $(100,100)$ matches $(200,50)$, its neighbour almost certainly matches with the same
+offset --- so neighbours borrow each other's offset instead of searching. PatchMatch alternates propagation
+(spread good offsets to causal neighbours, flipping scan direction each pass) with shrinking-radius random
+search. Together they converge in $\sim4$--$6$ passes, hundreds of times faster than brute force.
+
+% -----------------------------------------------------------------
+\subsection{Applications: Inpainting, Reshuffling, Object Removal}
+\Purpose Fill missing pixels, move objects, or delete content --- all as the same re-targeting optimisation
+with constraints, solved by PatchMatch.
+\WhenUse Scratch/hole filling; rearranging objects; content-aware removal; mixing content from several
+sources.
+\WhenAvoid Large semantically-structured holes (patch copying can't hallucinate unseen structure).
+\TheAlgo \emph{Inpainting:} minimise $D(S,T)$ over the missing region $\Omega_m$ with
+$T|_{\Omega\setminus\Omega_m}=S|_{\Omega\setminus\Omega_m}$. \emph{Reshuffling:} fix pasted-object pixels,
+fill the rest. \emph{Removal:} set the object's patch weights $\approx0$ so it cannot influence $T$;
+\emph{preservation:} weight protected patches (and their NN) high.
+\Knobs
+\begin{ptable}
+Mask $\Omega_m$ & Region to synthesise & Generous mask ($+$few px) avoids edge halos \\
+Weights $W_P$ & Preserve vs.\ remove & High: keep; $\approx0$: remove \\
+Source set & Where fill comes from & Multiple sources allowed \\
+\end{ptable}
+\ShortExp All these tasks reduce to ``define which pixels are fixed and which are free, then minimise
+completeness $+$ coherence with PatchMatch''. Weighting patches steers the result --- high weight preserves
+a face or line, near-zero weight makes an object vanish as neighbours fill its space.
+
+% ##################################################################
+\newpage
+\section{Intrinsic Images from Sequences (Chapter 12)}
+% ##################################################################
+\subsection{Weiss Intrinsic Images (median of derivative filters)}
+\Purpose From $T$ images of a fixed scene under changing light, recover one reflectance (paint) image and
+$T$ illumination (light) images.
+\WhenUse A stationary camera/scene with only lighting varying (a day-long webcam); a handful of frames
+already suffices.
+\WhenAvoid A single image (ill-posed: $T$ equations, $T{+}1$ unknowns); non-sparse lighting; strongly
+non-linear camera response (assumed linear).
+\TheAlgo In the log domain $i(x,y,t)=r(x,y)+l(x,y,t)$. Assume derivative-filter outputs of the lighting are
+sparse (Laplacian $P(x)\propto e^{-\alpha|x|}$). With filters $\{f_n\}$, $o_n=i\star f_n$, the ML estimate of
+the filtered reflectance is the \emph{temporal median}
+\[
+\hat r_n(x,y)=\operatorname*{median}_t\,o_n(x,y,t)
+\]
+(because maximising the Laplacian likelihood minimises the $\ell_1$ error, whose minimiser is the median).
+Reconstruct $r$ from its filtered versions by the pseudo-inverse
+\[
+\hat r=g\star\Big(\sum_n f_n^{\,r}\star\hat r_n\Big),\qquad
+g\star\Big(\sum_n f_n^{\,r}\star f_n\Big)=\delta,
+\]
+where $f_n^{\,r}(x,y)=f_n(-x,-y)$ and $g$ is a precomputable, image-independent deconvolution filter. Then
+$\hat l(x,y,t)=i(x,y,t)-\hat r(x,y)$.
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Log frames $i(\cdot,\cdot,t)$, $t=1..T$; derivative filters $\{f_n\}$ (usually $\partial_x,\partial_y$)}
+\KwOut{Reflectance $\hat r$; illuminations $\hat l(\cdot,\cdot,t)$}
+\ForEach{filter $f_n$}{$o_n(\cdot,\cdot,t)=i(\cdot,\cdot,t)\star f_n$; \ $\hat r_n=\operatorname{median}_t o_n$\;}
+$\hat r\leftarrow g\star(\sum_n f_n^{\,r}\star\hat r_n)$ \tcp*{$g$ precomputed from the filters}
+$\hat l(\cdot,\cdot,t)\leftarrow i(\cdot,\cdot,t)-\hat r$\;
+\caption{Weiss intrinsic-image estimation}
+\end{algorithm}
+
+\textbf{Convergence (Claim 2).} If $p_\epsilon=P(|f_n\star l|<\epsilon)$ then
+$P(|\hat r_n-r_n|<\epsilon)\ge\sum_{k=0}^{\lfloor T/2\rfloor}\binom{T}{k}(1-p_\epsilon)^{T-k}p_\epsilon^{\,k}$;
+sparser lighting (larger $p_\epsilon$) converges faster --- $p_\epsilon=0.85$ gives $\ge0.93$ at $T=3$ and
+$\ge0.97$ at $T=5$.
+
+\Knobs
+\begin{ptable}
+Filters $\{f_n\}$ & Which gradients (usually $\partial_x,\partial_y$) & Two derivative filters are enough; $g$ depends only on them \\
+\# frames $T$ & Convergence certainty & More frames / sparser light $\Rightarrow$ higher accuracy \\
+$g$ & Reconstruction deconvolution & Precompute once; reuse on every sequence \\
+\end{ptable}
+\ShortExp Take logs so image $=$ paint $+$ light. The paint is constant across frames; the light's edges are
+sparse (mostly zero). So at each pixel, the temporal \emph{median of the edge-filtered frames} throws away
+the rare shadow-edge outliers and keeps the paint's gradients; reconstruct an image from those gradients (a
+fixed deconvolution) to get reflectance, then subtract to get each frame's lighting. Crucially it is the
+median of \emph{gradients}, not raw pixels --- a permanently-shadowed pixel produces no edge and cancels,
+whereas a raw-pixel median (or min/mean) would bake the shadow into the paint.
+
+% ##################################################################
+\newpage
+\section*{Course-wide Pattern}
+\addcontentsline{toc}{section}{Course-wide Pattern}
+% ##################################################################
+\begin{notebox}
+\textbf{Course-wide pattern.} Almost every method reduces to: \emph{define a cost, minimise it iteratively,
+add a regulariser}. Least squares handles over-determined systems (motion models, LK/HS, super-resolution,
+texture $A$); a smoothness/MAP prior resolves ambiguity (HS, super-resolution, colorization); dynamic
+programming gives shortest paths (geodesic/Dijkstra, hyperlapse); predict/update or
+propagation/randomisation drive the iterative solvers (Kalman, particle filter, PatchMatch, K-means); and
+low-rank/SVD structure recurs (texture synthesis, fast KDE, intrinsic-image reconstruction).
+\end{notebox}
+
+\end{document}
