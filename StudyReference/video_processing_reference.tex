@@ -486,6 +486,21 @@ $\times$ previous posterior}. That single recursion is what Kalman and particle 
 \text{Gain: } &K_k=P'_kH^T(HP'_kH^T+R)^{-1}, &&\\
 \text{Update: } &\hat x_k=\hat x'_k+K_k(z_k-H\hat x'_k), & P_k&=(I-K_kH)P'_k .
 \end{align*}
+
+\textbf{Variable meanings:}
+\begin{itemize}[noitemsep]
+  \item $\hat x_k$ = \textit{state estimate at frame $k$} (after measurement update; this is your best guess right now)
+  \item $\hat x'_k$ = \textit{predicted state before measurement} (from the motion model $\Phi$ alone, uncertainty is high)
+  \item $z_k$ = \textit{measurement at frame $k$} (e.g., LK optical flow, template match location; noisy data)
+  \item $P_k$ = \textit{uncertainty (error covariance) of state estimate}; small = confident, large = uncertain
+  \item $P'_k$ = \textit{uncertainty after prediction}; always grows because the motion model drifts
+  \item $K_k$ = \textit{Kalman gain} (how much to trust the new measurement vs.\ the prediction; the key dial)
+  \item $\Phi$ = \textit{state transition matrix} (e.g., position $\to$ new position, or $[x, v] \to [x+v\Delta t, v]$)
+  \item $H$ = \textit{measurement matrix} (extracts what you measured from the state; often identity)
+  \item $Q$ = \textit{process noise covariance} (how much does the real world deviate from $\Phi x_k$?)
+  \item $R$ = \textit{measurement noise covariance} (how noisy is $z_k$?)
+\end{itemize}
+
 $K$ minimises $\mathrm{tr}(P_k)$; in 1-D $K=P'/(P'+R)$ ($R\to0\Rightarrow K\to1$ trust data;
 $R\to\infty\Rightarrow K\to0$ trust model).
 
@@ -693,7 +708,8 @@ Band-pass band & Frequencies amplified & Match target (heart $\approx1$\,Hz); cu
 Pyramid & Handles $>\!1$px motion & Amplify each scale separately to avoid ringing \\
 \end{ptable}
 \ShortExp Lagrangian methods follow each pixel (need motion estimation); Eulerian methods sit at a fixed
-location and watch the value change over time. A tiny spatial shift $\delta$ changes the pixel value by
+location and watch its \emph{intensity profile} --- the value of that one pixel over time --- change.
+A tiny spatial shift $\delta$ changes the pixel value by
 $\delta\times$ slope (Taylor); multiply that temporal change by $\alpha$ and add it back and the pixel
 ``moves'' as if by $(1+\alpha)\delta$ --- amplification with no motion estimation. Band-pass first so only
 the target motion (not lighting drift/noise) is amplified.
@@ -702,6 +718,19 @@ the target motion (not lighting drift/noise) is amplified.
 \newpage
 \section{Background Subtraction (Chapter 8)}
 % ##################################################################
+
+\textbf{Why GMM? (motivation from the intensity profile).} Fix one pixel and plot its value across every
+frame of the video --- its \emph{intensity profile}. Ideally it sits at the background colour, jumps when a
+moving object passes over it, then returns. In practice a pixel often has \emph{several} typical background
+values (e.g.\ a leaf blowing in front of sky), so its profile oscillates between a few clusters even with no
+foreground object present. The naive fix is to collect many frames, build a histogram of that pixel's
+values, and cluster it (the big clusters = background modes, e.g.\ ``leaf'' and ``sky''; a small outlier
+cluster = a passing object). This works, but has three problems: (1) \emph{delay} --- you must wait to
+collect enough frames before clustering; (2) \emph{cost} --- re-clustering per pixel is expensive; (3)
+\emph{memory} --- you must store the frame history. The \textbf{GMM} below fixes all three by replacing
+batch clustering with an \emph{online, incremental} update: each new pixel value nudges an existing Gaussian
+or spawns a new one, with no stored history.
+
 \subsection{Per-pixel Gaussian Mixture Model (GMM)}
 \Purpose Classify each pixel as background or a moving object online, robust to repetitive background
 motion (rustling leaves).
@@ -1107,5 +1136,223 @@ programming gives shortest paths (geodesic/Dijkstra, hyperlapse); predict/update
 propagation/randomisation drive the iterative solvers (Kalman, particle filter, PatchMatch, K-means); and
 low-rank/SVD structure recurs (texture synthesis, fast KDE, intrinsic-image reconstruction).
 \end{notebox}
+
+% ##################################################################
+\newpage
+\appendix
+\section*{Parameter Index and Glossary}
+\addcontentsline{toc}{section}{Parameter Index and Glossary}
+% ##################################################################
+Quick reference: every parameter mentioned in this document, organised by algorithm. Use this to
+quickly find what a parameter does or how changing it affects the method.
+
+\subsection*{Affine Transformation (2\texttimes3)}
+\textbf{$A$ (4 params)} --- Rotation/scale/shear
+
+\textbf{$t=(t_x,t_y)$} --- Translation
+
+\textbf{\# point pairs} --- Determinacy of the fit
+
+\subsection*{Applications: Inpainting, Reshuffling, Object Removal}
+\textbf{Mask $\Omega_m$} --- Region to synthesise
+
+\textbf{Weights $W_P$} --- Preserve vs.\ remove ($\approx0$: erase; high: protect)
+
+\textbf{Source set} --- Where fill comes from (multiple sources allowed)
+
+\subsection*{BRIEF Descriptor}
+\textbf{\# pixel pairs} --- Descriptor length (more: more distinctive, slower)
+
+\textbf{Window size} --- Spatial support (larger: more context, blurrier)
+
+\textbf{Pair pattern} --- Fixed sampling layout
+
+\subsection*{Bayesian Recursive Tracking (derivation)}
+\textbf{$p(x_t \mid x_{t-1})$} --- Motion / transition model
+
+\textbf{$p(z_t \mid x_t)$} --- Measurement likelihood
+
+\textbf{prior (recursion)} --- Carried-forward belief
+
+\subsection*{Bidirectional-Similarity Re-targeting}
+\textbf{$\alpha$ (0--1)} --- Completeness vs.\ coherence (higher: keep more content; lower: smoother)
+
+\textbf{Patch size (5--7)} --- Context vs.\ sharpness
+
+\textbf{Constraint weights $W_P$} --- Preserve / remove (high: protect a face/line; $\approx0$: erase)
+
+\textbf{Pyramid step ($\sim1.1\times$)} --- Gradual resize for good initialisation
+
+\subsection*{Dijkstra's Algorithm}
+\textbf{Edge weights} --- Cost of crossing gradients (gradient magnitude)
+
+\textbf{Neighbourhood $N_1$} --- 4-conn (image) or 6-conn (video with time)
+
+\subsection*{Dynamic Texture Synthesis}
+\textbf{$n$ (state dim)} --- Rank kept from SVD ($\ge95\%$ variance)
+
+\textbf{State noise $v$} --- Trajectory exploration (prevents determinism)
+
+\textbf{Image noise $w$} --- Natural look (hides low-rank seams)
+
+\subsection*{Eulerian Video Magnification}
+\textbf{$\alpha$ (amplification)} --- Motion gain, typically 5--50
+
+\textbf{Band-pass band} --- Target frequency range (match your signal)
+
+\textbf{Pyramid} --- Handles motions $>1$ pixel
+
+\subsection*{Fast KDE via Low-Rank Kernel}
+\textbf{$p$ (effective rank)} --- Approximation quality vs.\ speed
+
+\textbf{Kernel choice} --- Pick low-rank kernels (fast-decaying singular values)
+
+\subsection*{Fast Sweeping (Danielsson)}
+\textbf{\# sweeps} --- Directions / turns covered (4 for simple paths; more for spirals)
+
+\textbf{Neighbourhood layout} --- Enables parallel column-wise updates
+
+\subsection*{Geodesic Distance Colorization}
+\textbf{$b \in [1,6]$ (in $1/D^b$)} --- Transition sharpness (larger: sharper boundaries)
+
+\textbf{Edge weight $|Y(p)-Y(q)|$} --- How edges act as walls
+
+\textbf{Scribble placement} --- One per distinct FG/BG colour region (inside regions, not on edges)
+
+\textbf{Video neighbourhood} --- 4 (image only) vs.\ 6 (+ time; lets colour flow through frames)
+
+\subsection*{GMM Background Subtraction}
+\textbf{$K$ (Gaussians)} --- Modes modelled, typically 3--5
+
+\textbf{$\alpha$ (weight rate)} --- How fast new patterns become background ($\approx0.01$)
+
+\textbf{$T$ (BG threshold)} --- Background fraction, 0.7--0.9
+
+\textbf{Match distance ($2.5\sigma$)} --- Detection sensitivity to new objects
+
+\subsection*{Harris Corner Detector}
+\textbf{$\alpha$ (0.04--0.06)} --- Edge penalty in Harris response $R$
+
+\textbf{Threshold $\theta$} --- Minimum cornerness (higher: fewer, stronger corners)
+
+\textbf{Window $g$} --- Region summed into $H$ (larger: smoother, rotation-robust)
+
+\subsection*{Homography (3\texttimes3)}
+\textbf{$H$ (9 entries, 8 free)} --- Perspective warp parameters
+
+\textbf{\# point pairs} --- Determinacy (need $\ge4$ pairs)
+
+\textbf{Normalisation} --- Numerical stability (constrains overall scale)
+
+\subsection*{Horn--Schunck}
+\textbf{$\alpha$ (smoothness)} --- Data vs.\ prior; ML (small) vs.\ MAP (large)
+
+\textbf{$K$ (iterations)} --- Solver convergence (more: closer to exact)
+
+\subsection*{Hyperlapse}
+\textbf{$\mu$ / $v$ (speedup)} --- Target frames skipped (larger: faster video)
+
+\textbf{$\lambda_s$ (speedup weight)} --- Adherence to target rate (usually $\gg\lambda_a$)
+
+\textbf{$\lambda_a$ (accel.\ weight)} --- Pace uniformity (larger: more constant intervals)
+
+\textbf{window $w$} --- Max jump considered in DP (larger: more options)
+
+\subsection*{Kalman Filter}
+\textbf{$Q$ (process noise)} --- Trust in motion model (too small: over-confident; too big: jumpy)
+
+\textbf{$R$ (measurement noise)} --- Trust in sensor ($R$ small: follow data; large: follow model)
+
+\textbf{State vector} --- What is tracked (add velocity/accel for occlusion coasting)
+
+\subsection*{K-means Clustering}
+\textbf{$k$ (\# clusters)} --- Granularity (larger $k$: lower distortion but more noise)
+
+\textbf{Initialisation} --- Which local minimum (k-means++ avoids empty clusters)
+
+\textbf{Restarts} --- Robustness (keep the lowest-distortion run)
+
+\subsection*{Layer Decomposition}
+\textbf{$k$ (\# layers)} --- Number of motion groups (too small: lumps motions; too large: splits objects)
+
+\textbf{Motion model} --- Affine (6) vs.\ homography (8)
+
+\textbf{\# random windows} --- Sampling of motions (more: accurate, slower)
+
+\subsection*{Linear Transformation (2\texttimes2)}
+\textbf{$a,b,c,d$} --- Rotation/scale/shear jointly (4 free parameters)
+
+\textbf{\# point pairs} --- Determinacy of the fit (need $\ge2$ pairs)
+
+\subsection*{Lucas--Kanade}
+\textbf{Window size $n$} --- \# equations per solve (larger: robust but mixes motions; smaller: worse aperture)
+
+\textbf{Warp model} --- Translation (2) vs.\ affine (6)
+
+\textbf{Pyramid levels} --- Max recoverable motion (more levels: handle bigger motion)
+
+\subsection*{Matting (pure-foreground recovery)}
+\textbf{Window size} --- Neighbour search for foreground/background (small windows usually suffice)
+
+\textbf{New background $B$} --- Composite target (provided by user)
+
+\subsection*{Opacity Map}
+\textbf{$r \in (0,2]$} --- Distance weighting in opacity calculation
+
+\textbf{Local KDE window} --- Boundary colour model (re-estimated from boundary pixels)
+
+\subsection*{Opacity Map (Trimap Refinement)}
+\textbf{$\rho$ (band radius)} --- Width of unsure band, 5--15 px
+
+\textbf{$\sigma$ (KDE kernel)} --- Colour-model smoothness (larger: smoother distribution)
+
+\textbf{Scribbles} --- Colour-region coverage (one per distinct FG/BG colour)
+
+\subsection*{Particle Filter (Condensation)}
+\textbf{$N$ (particles)} --- Approximation quality (more: better fidelity, costlier)
+
+\textbf{Diffusion noise} --- Exploration; prevents sample impoverishment
+
+\textbf{Output rule} --- Max vs.\ weighted mean (max: sharp but jittery; mean: stable)
+
+\subsection*{PatchMatch}
+\textbf{Patch size (5--7)} --- Context vs.\ sharpness
+
+\textbf{$K$ iterations (4--6)} --- NN-field convergence
+
+\textbf{Window $W$} --- Random-search radius (shrinks each pass)
+
+\subsection*{Projection Matrix (pinhole camera)}
+\textbf{$R,t$ (extrinsics)} --- Camera pose (6 params: 3 rotation, 3 translation)
+
+\textbf{$f,k_u,k_v,u_0,v_0$ (intrinsics)} --- Lens + sensor mapping (5 params, calibrated once)
+
+\textbf{Depth $Z$} --- Projects inversely to size ($1/Z$ shrinks distant objects)
+
+\subsection*{RANSAC}
+\textbf{$n$ (sample size)} --- Points to fit the model (minimal $n$ maximises all-inlier probability)
+
+\textbf{$t$ (inlier threshold)} --- Inlier/outlier cutoff
+
+\textbf{$K$ (iterations)} --- Success probability (set via the closed-form formula)
+
+\subsection*{Re-targeting by Bidirectional Similarity}
+\textbf{Initialisation $T^1$} --- Start from hierarchical pyramid, not black
+
+\textbf{$\alpha$ (0--1)} --- Completeness vs.\ coherence (0.5 is a good start)
+
+\subsection*{Super-Resolution (ML / MAP)}
+\textbf{$\beta$ (step)} --- Gradient-descent rate
+
+\textbf{$\lambda,\gamma$ (prior weights)} --- Smoothness vs.\ data in MAP
+
+\textbf{\# frames} --- Recoverable detail (need $\gtrsim r^2$ with varied sub-pixel shifts)
+
+\subsection*{Weiss Intrinsic Images}
+\textbf{Filters $\{f_n\}$} --- Which gradients (usually $\partial_x,\partial_y$)
+
+\textbf{\# frames $T$} --- Convergence certainty ($p_\epsilon=0.85$: $\ge0.93$ at $T=3$)
+
+\textbf{$g$} --- Reconstruction deconvolution (precomputed from filters; reuse on every sequence)
 
 \end{document}
