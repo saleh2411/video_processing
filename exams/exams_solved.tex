@@ -1,0 +1,537 @@
+\documentclass[11pt]{article}
+
+% ------------------------------------------------------------------
+%  Video Processing 0512-4263 -- Solved exams (Moed A & Moed B, 2022)
+%  Solutions grounded only in the course HTML book (Book 2).
+%  Compile with pdflatex (needs amsmath, amssymb, tcolorbox, hyperref).
+% ------------------------------------------------------------------
+
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+\setlist{nosep,leftmargin=1.4em}
+\definecolor{teal}{RGB}{20,140,130}
+\definecolor{amber}{RGB}{190,120,20}
+\definecolor{oob}{RGB}{190,50,70}
+
+% coloured boxes -----------------------------------------------------
+\newtcolorbox{answer}{colback=green!6,colframe=green!55!black,boxrule=0.6pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,before skip=6pt,after skip=10pt}
+\newtcolorbox{notebox}{colback=oob!6,colframe=oob!70!black,boxrule=0.6pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,before skip=6pt,after skip=10pt}
+\newtcolorbox{qbox}{colback=black!3,colframe=black!25,boxrule=0.5pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,before skip=6pt,after skip=8pt}
+
+% helper macros ------------------------------------------------------
+\newcommand{\step}[1]{\smallskip\par\noindent\textbf{\textcolor{amber}{#1}}\par\nobreak}
+\newcommand{\maps}[1]{{\small\textcolor{teal}{[maps to: #1]}}}
+\newcommand{\mapsoob}[1]{{\small\textcolor{oob}{[#1]}}}
+\newcommand{\ans}[1]{\begin{answer}\textbf{Answer.} #1\end{answer}}
+
+\titleformat{\subsection}{\large\bfseries}{\thesubsection.}{0.6em}{}
+
+\title{\textbf{Video Processing 0512-4263}\\[2pt]\large Two exams, fully solved
+  (Moed A \& Moed B, 2022)}
+\author{Solutions grounded only in the course HTML book}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.2em}
+
+\begin{tcolorbox}[colback=teal!5,colframe=teal!60!black,title=\textbf{How each question maps to the book}]
+The exam has 8 fixed ``slots''. Each maps to one chapter:
+\begin{itemize}
+  \item \textbf{Optic Flow} $\to$ Ch.2 (Horn--Schunck)
+  \item \textbf{Tracking} $\to$ Ch.4 (Kalman / particle filter)
+  \item \textbf{Intrinsic images / Dynamic texture} $\to$ Ch.12 (Weiss median) / Ch.5 (state-space texture)
+  \item \textbf{Clone detection / PatchMatch} $\to$ Ch.11
+  \item \textbf{Geodesic distance} $\to$ Ch.9 (colorization) \& Ch.10 (matting)
+  \item \textbf{Segmentation} $\to$ Ch.9 geodesic label propagation
+  \item \textbf{Clustering / Bidirectional similarity} $\to$ Ch.6 (k-means) / Ch.11 (completeness--coherence)
+\end{itemize}
+\textbf{Two questions are not covered by Book 2} --- Moed A Q4 (Evolving Time Fronts / dynamosaicing) and
+Moed B Q4 (Light Fields). They were ``papers discussed in class'' this book does not reproduce. They are marked
+\mapsoob{not in Book 2} and answered only with reasoning the book does support, with the gap called out honestly.
+\end{tcolorbox}
+
+% ==================================================================
+\section{Exam 1 --- Moed A (19/6/2022)}
+
+% ---- Q1 ----
+\subsection{OPTIC FLOW \hfill \maps{Ch.2} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} You have a semantic-segmentation network: image $I\to$ label map $S$ (each pixel a
+class $0..c-1$; all cars share one label). Modify Horn--Schunck to take $I_1,I_2$ and label maps $S_1,S_2$ and
+output the optic flow.\end{qbox}
+
+\step{How I thought about it}
+Base Horn--Schunck minimises
+\[\min_{u,v}\iint (I_xu+I_yv+I_t)^2+\alpha\big(|\nabla u|^2+|\nabla v|^2\big)\,dx\,dy .\]
+Its known weakness (Ch.2): the smoothness term smooths flow \emph{everywhere}, blurring motion across object
+boundaries. The label map $S$ is exactly a boundary detector: where the label changes there is a real boundary
+where the flow may jump. So: keep the data term, but stop smoothness from diffusing flow across label boundaries.
+
+\step{Solution}
+Introduce a per-edge weight, on inside a class and off across classes. For neighbours $p,q$:
+\[ w(p,q)=\begin{cases}1 & S_1(p)=S_1(q)\\ \varepsilon\approx 0 & S_1(p)\neq S_1(q)\end{cases} \]
+and minimise the segmentation-aware energy
+\[\min_{u,v}\iint (I_xu+I_yv+I_t)^2+\alpha\,w(x)\big(|\nabla u|^2+|\nabla v|^2\big)\,dx\,dy .\]
+The Euler--Lagrange derivation of Ch.2 then replaces the ordinary Laplacian by a \emph{weighted graph Laplacian}:
+each neighbour contributes $-w(p,q)$ instead of $-1$, so edges crossing a label boundary have weight $0$ and flow
+no longer leaks across it --- sharp motion discontinuities appear exactly at object silhouettes. $S_2$ gives an
+optional label-consistency data term $\lambda\,[\,S_2(x+u,y+v)\neq S_1(x)\,]$ (penalise sending a ``car'' pixel
+onto ``road''); it is soft because instances of a class share the label.
+\ans{Horn--Schunck with a label-gated smoothness weight ($w=0$ across label changes) $\Rightarrow$
+boundary-preserving dense flow; optionally a label-consistency data term using $S_2$.}
+
+% ---- Q2 ----
+\subsection{TRACKING --- loaded die \hfill \maps{Ch.4 Condensation} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} Simulate rolling a loaded six-sided die with probabilities $(p_1,\dots,p_6)$ using
+only $\texttt{rand()}\sim U[0,1]$.\end{qbox}
+
+\step{How I thought about it}
+This is exactly the ``select'' step of the Condensation / particle filter (Ch.4), which samples an index in
+proportion to weights using one uniform draw. Faces are particles; $p_i$ are the weights.
+
+\step{Solution}
+Build the CDF $C_0=0,\;C_i=C_{i-1}+p_i\;(i=1..6),\;C_6=1$. Then: draw $r=\texttt{rand()}$; return the smallest
+$j$ with $C_j>r$ (i.e. $C_{j-1}\le r<C_j$). Face $j$ is returned when $r$ falls in $[C_{j-1},C_j)$, an interval
+of length $p_j$; since $r$ is uniform, $P(\text{face }j)=p_j$. Identical to the Ch.4 select step
+``generate $r$; find smallest $j$ with $C^{(j)}>r$''.
+\ans{Inverse-CDF sampling --- cumulative sums $C_i$, one uniform $r$, pick the bin $r$ falls into. Same as
+particle-filter resampling.}
+
+% ---- Q3 ----
+\subsection{INTRINSIC IMAGES --- online reflectance \hfill \maps{Ch.12 Weiss} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} Give an \emph{online} algorithm for the reflectance image $R_t$ from a stream
+$I_1,\dots,I_t$. Store at most 256 images (or equivalent). Hint: intensities are in $[0,255]$.\end{qbox}
+
+\step{How I thought about it}
+Ch.12 (Weiss): with $I(x,t)=R(x)L(x,t)$, in log $i=r+l$. Filter each frame with derivative filters $f_n$;
+assuming filtered illumination is sparse, the ML filtered-reflectance is the per-pixel temporal median
+$\hat r_n(x)=\operatorname{median}_t (f_n*i)(x,t)$, and $r$ is reconstructed by the fixed pseudo-inverse
+(Ch.12 eq.\,6), $R=e^{r}$. Only the median blocks an online version. Hint ``$[0,255]$, store 256 images'' $\Rightarrow$
+a running median from a \textbf{256-bin histogram}.
+
+\step{Solution}
+Keep, per pixel and per filter, a 256-bin histogram over the (quantised) response range --- 256 numbers per
+pixel, independent of $t$. For each new frame $I_t$:
+\begin{enumerate}
+  \item Compute $i=\log I_t$ and responses $f_n*i$.
+  \item Increment each pixel's histogram bin ($O(1)$).
+  \item Running median $\hat r_n(x)=$ smallest bin whose cumulative count reaches $t/2$.
+  \item Reconstruct $R_t$ from the current medians with the fixed deconvolution filter $g$ (Ch.12 eq.\,6--7,
+  precomputed once, depends only on the filters).
+\end{enumerate}
+Memory $=256\times(\#\text{filters})$ per pixel (Weiss uses only horizontal + vertical derivatives $\Rightarrow$
+two histograms); work $O(1)$/pixel/frame; emit $R_t$ every frame.
+\ans{Per-pixel 256-bin histogram of the filtered log-frames $\to$ running temporal median $\to$ Weiss
+reconstruction. Constant memory, truly online.}
+
+% ---- Q4 ----
+\subsection{EVOLVING TIME FRONTS --- Iguazu \hfill \mapsoob{not in Book 2} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} A video pans left$\to$right over the Iguazu falls. Synthesize a video that pans
+right$\to$left while the water still falls downward.\end{qbox}
+
+\begin{notebox}\textbf{Honesty note.} Book 2 has no chapter on this (the ``dynamosaicing / evolving time fronts''
+paper). The answer uses only space-time reasoning the book supports; the named technique is outside Book 2.\end{notebox}
+
+\step{How I thought about it}
+Two motions are entangled: the global horizontal \emph{camera pan} and the local downward \emph{water} (a dynamic
+texture, cf.\ Ch.5). Plain reverse playback reverses both, so water would flow up. They must be decoupled: reverse
+the spatial scan while keeping local time forward.
+
+\step{Solution (space-time volume)}
+Stack all frames into an $x\,y\,t$ volume. An ordinary output frame is a planar slice at $t=\text{const}$ (a
+``time front''). To pan right$\to$left with water still falling, sweep a \emph{slanted / evolving time-front
+surface} through the volume that moves across $x$ in the \emph{opposite} direction to the original scan, but where
+the local time coordinate along the sweep still \emph{increases}. Each output frame is a cut of the volume with
+this surface; advancing the surface in $-x$ produces the reversed pan, while local $t$ moving forward keeps the
+water falling down.
+\ans{Build the $x\,y\,t$ volume; synthesize each frame as a non-planar time-front cut; sweep the front in
+reverse-$x$ while local time advances forward. \emph{(Technique itself outside Book 2.)}}
+
+% ---- Q5 ----
+\subsection{CLONE DETECTION \hfill \maps{Ch.11 PatchMatch} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} An object was removed by inpainting/cloning. Given only the doctored image,
+automatically detect the cloned regions.\end{qbox}
+
+\step{How I thought about it}
+Cloning = two regions of the \emph{same} image are near-identical copies. PatchMatch (Ch.11) gives each patch its
+nearest-neighbour patch elsewhere, and a coherent region produces a \emph{constant offset} in the NN field. A copy
+is a region whose patches all match another location with near-zero distance and one shared offset. So run
+PatchMatch of the image against itself.
+
+\step{Solution}
+\begin{enumerate}
+  \item PatchMatch with source $=$ target $=$ input image, giving offset field $f(x)$ and distance
+  $d(x)=\|P_x-Q_{x+f(x)}\|^2$; \emph{forbid the trivial match} (offsets within a few patch-widths of $x$).
+  \item Clone candidates: pixels with $d(x)\approx 0$.
+  \item Among candidates keep large connected components sharing one dominant offset $v$ (histogram the offsets);
+  a genuine copy-move appears as a matched pair, region $A$ with $+v$ and region $B$ with $-v$.
+  \item Output those components as the clone mask.
+\end{enumerate}
+\ans{Self-PatchMatch (image vs itself, trivial match excluded) $\to$ flag regions with near-zero patch distance
+\emph{and} a shared coherent offset $\to$ those matched components are the clones.}
+
+% ---- Q6 ----
+\subsection{GEODESIC DISTANCE --- the $\gamma$ parameter \hfill \maps{Ch.9/10} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} With
+$d(a,b)=\inf_\Gamma\int_0^{l(\Gamma)}\sqrt{1+\gamma^2(\nabla I(s)\cdot\Gamma'(s))^2}\,ds$, decide for maps (c) and
+(d) whether $\gamma=0$ or $\gamma>0$ (darker $=$ shorter). Explain.\end{qbox}
+
+\step{How I thought about it}
+$\gamma$ sets how much the \emph{image} influences distance. Read the integrand:
+\begin{itemize}
+  \item $\gamma=0$: integrand $=\sqrt{1}=1$, so $d=\int ds=$ arc length --- purely spatial/Euclidean from the
+  object region $\Omega$, completely image-blind. Smooth halo; background swirls leave no trace.
+  \item $\gamma>0$: the term $\gamma^2(\nabla I\cdot\Gamma')^2$ adds cost wherever a path runs across an image
+  gradient. Distance is image-aware: it grows fast crossing edges, small inside homogeneous regions, so image
+  structure (swirls, silhouette) becomes \emph{visible} and the map ``sticks'' at edges.
+\end{itemize}
+
+\step{Determination}
+Cue: ``does the map show the image's own structure?''
+\begin{itemize}
+  \item \textbf{(c)} --- smooth halo, background swirls invisible $\Rightarrow \gamma=0$ (geometry only).
+  \item \textbf{(d)} --- swirl textures / edges show up in the field $\Rightarrow \gamma>0$ (crossing them costs
+  distance).
+\end{itemize}
+\ans{(c) uses $\gamma=0$ (image-blind Euclidean halo); (d) uses $\gamma>0$ (edges visible). Rule: map ignores
+texture $\Rightarrow\gamma=0$; texture prints through $\Rightarrow\gamma>0$.}
+
+% ---- Q7 ----
+\subsection{SEGMENTATION --- 3D point cloud + scribbles \hfill \maps{Ch.9} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} Given an unordered 3D point cloud and coloured user scribbles, reproduce the
+segmentation.\end{qbox}
+
+\step{How I thought about it}
+Colorization/matting (Ch.9/10): propagate seed labels by geodesic distance. The domain is a point cloud, not a
+pixel grid --- only the graph construction is new; then the same Dijkstra machinery applies.
+
+\step{Solution}
+\begin{enumerate}
+  \item Build a graph $G=(V,E)$: nodes $=$ points; connect each to its $k$ nearest neighbours in 3D (the list is
+  unordered $\Rightarrow$ use spatial proximity).
+  \item Edge weights so distance grows across boundaries: $w(p,q)=\|p-q\|$, optionally plus a surface-normal /
+  feature difference so a sharp geometric boundary is expensive.
+  \item Seeds $\Omega_k=$ points carrying scribble colour $k$.
+  \item Per label $k$, compute geodesic distance $D_k(v)=d_L(v,\Omega_k)$ with Dijkstra (Ch.9).
+  \item Assign $\text{label}(v)=\arg\min_k D_k(v)$; boundary $=$ where two $D_k$ tie.
+\end{enumerate}
+\ans{kNN graph on the points $\to$ edge weights from 3D/normal dissimilarity $\to$ per-scribble geodesic distance
+(Dijkstra) $\to$ label each point by its nearest scribble. Ch.9 moved from a pixel grid to a point graph.}
+
+% ---- Q8 ----
+\subsection{BIDIRECTIONAL SIMILARITY --- is $D$ symmetric? \hfill \maps{Ch.11} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} $D(P,Q)=\max_{p\in P}\min_{q\in Q}d(p,q)$. Is $D(P,Q)=D(Q,P)$? Prove or give a
+counter-example.\end{qbox}
+
+\step{How I thought about it}
+This is the directed (one-sided) distance --- exactly $D_{\text{com}}$ vs $D_{\text{coh}}$ in Ch.11: the two
+directions differ, which is why retargeting needs both. Expect ``not symmetric''; find a two-point counter-example.
+
+\step{Solution --- counter-example}
+On the real line, $P=\{0\},\;Q=\{0,10\}$:
+\[ D(P,Q)=\min\{d(0,0),d(0,10)\}=0,\qquad D(Q,P)=\max\{d(0,0),d(10,0)\}=\max\{0,10\}=10 .\]
+Since $0\neq 10$, $D$ is \textbf{not symmetric}.
+\ans{No. $P=\{0\},Q=\{0,10\}$ gives $D(P,Q)=0$ but $D(Q,P)=10$. This is the completeness-vs-coherence asymmetry,
+symmetrised in retargeting as $\alpha D_{\text{com}}+(1-\alpha)D_{\text{coh}}$.}
+
+% ==================================================================
+\section{Exam 2 --- Moed B (1/8/2022)}
+
+% ---- Q1 ----
+\subsection{OPTIC FLOW --- sparse LiDAR depth \hfill \maps{Ch.2} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} A car has a grayscale camera and a LiDAR giving depth at a \emph{sparse} pixel set.
+Modify Horn--Schunck to use $I_1,I_2$ and sparse depth maps $D_1,D_2$ and output the flow.\end{qbox}
+
+\step{How I thought about it}
+Same weakness as before (HS over-smooths across boundaries). Depth gives two signals: (1) depth discontinuities
+are object boundaries $\Rightarrow$ smoothness off there; (2) where depth exists it is a hard measurement anchoring
+the flow. Sparse $\Rightarrow$ both act only at pixels with depth.
+
+\step{Solution}
+\emph{Depth-aware smoothness.} For neighbours $p,q$ with depth, set
+$w(p,q)=\exp\!\big(-(D_1(p)-D_1(q))^2/2\sigma_d^2\big)$ (near 1 within a surface, near 0 across a depth edge); where
+depth is missing, fall back to constant $\alpha$. Minimise
+\[\iint (I_xu+I_yv+I_t)^2+\alpha\,w(x)\big(|\nabla u|^2+|\nabla v|^2\big)\,dx\,dy ,\]
+a weighted-Laplacian solve preserving motion boundaries at depth edges.
+\emph{Sparse depth-constancy data term.} Only at LiDAR pixels, a tracked pixel carries its depth to the match, so
+add $\lambda\sum_{x\in\text{LiDAR}}\big(D_2(x+u,y+v)-D_1(x)\big)^2$, pinning the flow at the measured points and
+letting smoothness interpolate to the rest.
+\ans{HS with (i) smoothness weight small across depth discontinuities and (ii) a sparse depth-constancy data term
+at LiDAR pixels. Sparse anchors + boundary-aware smoothness.}
+
+% ---- Q2 ----
+\subsection{TRACKING --- the Bayes recursion \hfill \maps{Ch.4} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} State the Markov and conditional-independence assumptions and show
+$p(x_{1:t}\mid z_{1:t})\propto p(z_t\mid x_t)\,p(x_t\mid x_{t-1})\,p(x_{1:t-1}\mid z_{1:t-1})$.\end{qbox}
+
+\step{Assumptions}
+\textbf{Markov (motion):} $p(x_t\mid x_{1:t-1})=p(x_t\mid x_{t-1})\Rightarrow p(x_{1:t})=p(x_t\mid x_{t-1})p(x_{1:t-1})$.\\
+\textbf{Conditional independence of observations:} $p(z_{1:t}\mid x_{1:t})=p(z_t\mid x_t)\,p(z_{1:t-1}\mid x_{1:t-1})=\prod_{\tau=1}^{t}p(z_\tau\mid x_\tau)$.
+
+\step{Derivation}
+\begin{align*}
+p(x_{1:t}\mid z_{1:t})
+&=\frac{p(z_{1:t}\mid x_{1:t})\,p(x_{1:t})}{p(z_{1:t})}\ \propto\ p(z_{1:t}\mid x_{1:t})\,p(x_{1:t})\\
+&=\underbrace{p(z_t\mid x_t)\,p(z_{1:t-1}\mid x_{1:t-1})}_{\text{cond.\ indep.}}\cdot
+  \underbrace{p(x_t\mid x_{t-1})\,p(x_{1:t-1})}_{\text{Markov}}\\
+&=p(z_t\mid x_t)\,p(x_t\mid x_{t-1})\,
+  \underbrace{\big[p(z_{1:t-1}\mid x_{1:t-1})\,p(x_{1:t-1})\big]}_{\propto\,p(x_{1:t-1}\mid z_{1:t-1})}\\
+&\propto p(z_t\mid x_t)\,p(x_t\mid x_{t-1})\,p(x_{1:t-1}\mid z_{1:t-1}).
+\end{align*}
+The three factors are the \textbf{likelihood}, the \textbf{motion model}, and the \textbf{recursion} --- the basis
+of the particle filter. $\qquad\blacksquare$
+
+% ---- Q3 ----
+\subsection{DYNAMIC TEXTURE --- Word2Vec text synthesis \hfill \maps{Ch.5} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} Word2Vec maps words to vectors. Use it to synthesize text: short input $\to$ a page
+of output.\end{qbox}
+
+\step{How I thought about it}
+The slot is ``dynamic texture'' $\to$ Ch.5: a texture is a low-dimensional linear state-space process driven by
+noise, learned from a sample then run forward. In Ch.5 a frame becomes a vector via SVD; here a word already
+becomes a vector via Word2Vec. So the word sequence is a trajectory in embedding space; synthesis $=$ drive it
+forward with noise, then decode vectors back to words.
+
+\step{Solution}
+\begin{enumerate}
+  \item \textbf{Vectorise:} $y_t=\text{W2V}(\text{word}_t)$ for the input --- analogue of ``frame $\to$ vector''.
+  \item \textbf{System ID:} model $x_{t+1}=Ax_t+Bv,\;y_t=Cx_t+w$. Take $x_t=y_t$ (embeddings are already Euclidean;
+  optionally reduce with SVD) and fit $\hat A=\arg\min_A\sum_t\|x_{t+1}-Ax_t\|^2$ (or ARMA
+  $x_t=\sum_i p_i x_{t-i}+\varepsilon$).
+  \item \textbf{Generate:} seed with the input's last state(s); iterate $x_{t+1}=\hat A x_t+Bv$ for a page. Noise
+  $v$ is essential (Ch.5) --- without it the trajectory is deterministic and dies/repeats.
+  \item \textbf{Decode:} $\text{word}=\arg\min_w\|x-\text{W2V}(w)\|$ (nearest neighbour in the vocabulary).
+\end{enumerate}
+Like all dynamic-texture synthesis, this reproduces local statistics/style, not deep grammar.
+\ans{Treat the Word2Vec-vector sequence as a dynamic texture: fit an ARMA/linear state-space model (Ch.5), run it
+forward with noise, decode each generated vector to its nearest word.}
+
+% ---- Q4 ----
+\subsection{LIGHT FIELDS --- novel view from a rotating camera \hfill \mapsoob{not in Book 2} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} A camera on a rotating arm records a video around an axis. Synthesize a novel view
+from a virtual camera \emph{inside} the circle.\end{qbox}
+
+\begin{notebox}\textbf{Honesty note.} Book 2 has no light-fields chapter. The answer uses only the multi-view
+geometry the book supports (Ch.1 projection/homography) plus interpolation; the named ``light field / concentric
+mosaic'' method is outside Book 2.\end{notebox}
+
+\step{How I thought about it}
+The rotating camera samples a dense family of scene rays. A novel view is a new bundle of rays through the virtual
+centre. If for each virtual ray I find the recorded ray that coincides with it, I copy that pixel --- ray
+re-indexing + interpolation, built on the Ch.1 projection matrix.
+
+\step{Solution}
+\begin{enumerate}
+  \item \textbf{Calibrate:} know each recorded frame's projection matrix $P_k$ (Ch.1: intrinsics + known arm
+  angle/position give $R_k,t_k$); give the virtual camera $P_v$.
+  \item \textbf{Per virtual pixel $=$ a ray:} back-project via $P_v$ to a 3D ray.
+  \item \textbf{Match:} among all frames, find the camera/pixel whose optical ray best coincides with that virtual
+  ray; sample its colour.
+  \item \textbf{Interpolate:} when a virtual ray falls between two recorded rays, blend the nearest samples by
+  angular closeness.
+\end{enumerate}
+The ring of views densely covers ray-space, so nearby recorded rays approximate any virtual ray well (the
+light-field / IBR idea).
+\ans{Reconstruct each virtual pixel from the recorded camera ray that coincides with the virtual ray (via the Ch.1
+projection matrices), interpolating between nearest recorded views. \emph{(Light fields outside Book 2.)}}
+
+% ---- Q5 ----
+\subsection{PATCHMATCH --- extend to k-NN \hfill \maps{Ch.11} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} 1-NN PatchMatch returns the single best match per patch. Extend it to k-NN: the
+top-$k$ nearest neighbours per patch.\end{qbox}
+
+\step{How I thought about it}
+PatchMatch is ``keep the best offset; improve by propagation + random search''. For k-NN keep the best $k$ offsets
+and let both operations draw candidates from neighbours' whole $k$-lists. The per-patch structure becomes a
+bounded heap of size $k$.
+
+\step{Solution}
+\begin{enumerate}
+  \item \textbf{Init:} $k$ random distinct offsets per patch (with distances), in a size-$k$ max-heap ordered by
+  patch distance (top $=$ current worst).
+  \item \textbf{Propagation} (alternating raster scans): candidate pool $=$ $x$'s $k$ offsets $\cup$ left
+  neighbour's $k$ $\cup$ above neighbour's $k$; keep the $k$ smallest-distance \emph{distinct} offsets.
+  \item \textbf{Random search:} around each held offset sample with shrinking radius; if a sample beats the worst
+  and is not a near-duplicate, insert and evict the worst.
+  \item Iterate 4--6 passes; output each patch's $k$-offset list.
+\end{enumerate}
+\textbf{Distinctness} is the subtlety: reject candidates too close to already-held offsets, else the heap fills
+with $k$ copies of one match. Cost $\approx k\times$ the 1-NN cost, still far below brute force.
+\ans{Replace the single best offset with a size-$k$ heap; propagation and random search draw from neighbours' full
+$k$-lists and keep the $k$ best \emph{distinct} offsets.}
+
+% ---- Q6 ----
+\subsection{GEODESIC DISTANCE --- path along Lena's hat edge \hfill \maps{Ch.9 Dijkstra} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} The user clicks $A$ and $B$; the system auto-draws the path between them that
+follows the edge of the hat. Compute that path.\end{qbox}
+
+\step{How I thought about it}
+``Follows the edge'' $=$ shortest path in a weighted grid (Ch.9). But note the \emph{sign flip}: colorization made
+crossing an edge expensive ($w=|\nabla Y|$) so paths avoid edges. Here we want the path to ride the edge, so it
+must be cheap where the gradient is strong --- weight inversely related to gradient magnitude.
+
+\step{Solution}
+\begin{enumerate}
+  \item Grid graph; edge weight small on strong image edges, e.g.\ $w=\dfrac{1}{|\nabla I|+\varepsilon}$ or
+  $w=\big(\max|\nabla I|-|\nabla I|\big)$. Walking along a high-gradient contour costs almost nothing.
+  \item Dijkstra from $A$; read the shortest path to $B$ (Ch.9 Bellman/DP). It hugs the hat's rim.
+  \item Draw it (``intelligent scissors'' --- same algorithm as colorization, edge-\emph{following} weights).
+\end{enumerate}
+\ans{Grid graph with weights small where $|\nabla I|$ is large (edge-following), then Dijkstra shortest path
+$A\!\to\!B$. Ch.9 machinery, inverted edge cost.}
+
+% ---- Q7 ----
+\subsection{SEGMENTATION --- social network interest mix \hfill \maps{Ch.9 blending} \hfill \textnormal{\small 13 pts}}
+\begin{qbox}\textbf{Question.} A graph $G=(V,E)$ with tie strengths $w(u,v)$; a few users labelled (finance expert
+$u_1$, fashion expert $u_2$). Learn every node's \emph{mix} of interests (e.g.\ 30\% finance / 70\% fashion).\end{qbox}
+
+\step{How I thought about it}
+Labelled experts $=$ scribbles; the wanted output is a \emph{soft mixture} summing to 1 $=$ the \textbf{blending}
+formula of colorization (Ch.9), not a hard label. The graph is given; only convert strength to a distance and
+reuse geodesic distance + soft blend.
+
+\step{Solution}
+\begin{enumerate}
+  \item \textbf{Strength $\to$ distance:} a strong tie means ``close'', so edge length $\ell(u,v)=1/w(u,v)$ (or
+  $-\log w$); geodesic distance is short along strong-connection chains.
+  \item \textbf{Seeds} $\Omega_k=$ users labelled with interest $k$.
+  \item \textbf{Distance maps} $D_k(v)=$ geodesic distance to seed set $k$ (Dijkstra on $G$).
+  \item \textbf{Soft mixture} with $W(D)=1/D^b$:
+  \[\text{interest}_k(v)=\frac{W(D_k(v))}{\sum_j W(D_j(v))} .\]
+\end{enumerate}
+These are non-negative and sum to 1 --- the percentage split. Literally colorization's
+$c(x)=\dfrac{\sum_k W(D_k)c_k}{\sum_k W(D_k)}$ with categories in place of colours.
+\ans{Turn tie strength into edge length $1/w$, compute geodesic distance from each labelled expert, output the
+distance-weighted normalized blend $W(D_k)/\sum_j W(D_j)$ as each node's interest percentages.}
+
+% ---- Q8 ----
+\subsection{CLUSTERING --- does k-means terminate? \hfill \maps{Ch.6} \hfill \textnormal{\small 12 pts}}
+\begin{qbox}\textbf{Question.} Is k-means guaranteed to terminate? Explain.\end{qbox}
+
+\step{Argument}
+k-means minimises the distortion $J=\sum_i\|x_i-c_{\text{enc}(i)}\|^2$ by alternating two steps.
+\textbf{Both steps are non-increasing in $J$:}
+\begin{itemize}
+  \item \emph{Assignment} (each $x_i\to$ nearest centre): by definition of ``nearest'', each term can only stay or
+  drop $\Rightarrow J$ does not increase.
+  \item \emph{Update} (centre $\gets$ mean of members): the mean minimises $\sum_{i\in S_j}\|x_i-c\|^2$ (derivative
+  $0$ gives $c_j=\frac{1}{|S_j|}\sum_{i\in S_j}x_i$, Ch.6) $\Rightarrow J$ does not increase.
+\end{itemize}
+So $J$ is monotonically non-increasing. \textbf{Finiteness:} there are $\le k^n$ assignments; each fixes its
+centres (means) and hence a specific $J$. Since $J$ never increases, once the algorithm leaves an assignment
+(only when the assignment strictly lowers $J$, using a fixed tie-break) it can never return --- that would raise
+$J$. A monotone sequence over finitely many values cannot decrease forever, so the assignment stops changing after
+finitely many steps and the algorithm halts.
+\ans{Yes. Distortion decreases (never increases) at every step and there are finitely many assignments, so no
+assignment repeats and it must stop in finite time. Caveat: converges to a \emph{local} minimum (global k-means is
+NP-hard) and depends on initialization --- but termination is guaranteed.}
+
+% ==================================================================
+\section{The question patterns}
+
+Both exams reuse one skeleton --- one question per topic, 12--13 points each. Recognise the slot and you know the
+chapter:
+
+\begin{center}\small
+\begin{tabular}{clll}
+\textbf{\#} & \textbf{Slot} & \textbf{Ch.} & \textbf{What it always asks}\\[2pt]\hline
+1 & Optic Flow & 2 & ``Modify Horn--Schunck to use extra input $X$'' (labels, depth, \dots)\\
+2 & Tracking & 4 & Particle-filter resampling, or the Bayes recursion derivation\\
+3 & Intrinsic / Dyn.\ texture & 12/5 & Weiss median (online variant) or state-space synthesis in a new domain\\
+4 & ``Paper'' slot & --- & A paper from class (time fronts, light fields) --- often outside the notes\\
+5 & PatchMatch / retargeting & 11 & Manipulate the NN field: clone detection, k-NN, inpaint\\
+6 & Geodesic distance & 9/10 & Distance map / shortest path; edge-avoiding vs following; $\gamma$\\
+7 & Segmentation & 9 & Propagate seed labels by geodesic distance on a graph\\
+8 & Clustering / theory & 6/11 & ``Is it guaranteed / symmetric?'' --- monotone proof or counter-example\\
+\end{tabular}
+\end{center}
+
+\step{Four meta-recipes that solve almost all of them}
+\begin{itemize}
+  \item \textbf{``Modify algorithm A to accept new input B.''} Find where $B$ signals a boundary or a reliable
+  measurement; inject it as a smoothness weight (turn smoothing off across $B$'s boundaries) and/or a data term
+  (anchor the solution where $B$ is measured). --- Optic-flow slot, every time.
+  \item \textbf{``Design an online / efficient version.''} Replace ``store everything'' with a running statistic:
+  a per-pixel histogram (running median/mode), a low-rank factorization, or PatchMatch instead of brute-force NN.
+  \item \textbf{``Adapt an image method to a new domain''} (3D points, a graph, words): build the right graph or
+  vector space, then reuse the same machinery --- geodesic distance (Dijkstra), ARMA state-space, or the NN field.
+  \item \textbf{``Is $X$ guaranteed / symmetric / a metric?''} A monotone-decrease + finiteness argument, or a
+  tiny two/three-point counter-example.
+\end{itemize}
+The unifying hammer: \emph{define a cost, add a boundary-aware regularizer, minimise it iteratively} (least squares
+/ Dijkstra-DP / EM-style alternation).
+
+% ==================================================================
+\section{New practice questions (same patterns)}
+Ten fresh questions on the templates above, each with a short answer key.
+
+\subsection{Optic Flow --- confidence map \hfill \maps{slot 1}}
+Given $I_1,I_2$ and a per-pixel confidence map $U(x)\in[0,1]$ (high where textured/reliable). Modify Horn--Schunck.
+\ans{Weight the \emph{data} term by $U$: $\iint U(x)(I_xu+I_yv+I_t)^2+\alpha(|\nabla u|^2+|\nabla v|^2)$. Trust
+brightness only where $U$ is high; in low-$U$ regions the data term nearly vanishes and smoothness fills flow from
+confident neighbours.}
+
+\subsection{Optic Flow --- external edge map \hfill \maps{slot 1}}
+Given $I_1,I_2$ and a binary motion-boundary map $B$, modify Horn--Schunck.
+\ans{Set smoothness weight $w(p,q)=0$ for neighbour pairs separated by $B$ (else 1) $\Rightarrow$ weighted-Laplacian
+solve that lets flow jump on $B$. Same structure as Moed A/B Q1.}
+
+\subsection{Tracking --- sample from a CDF \hfill \maps{slot 2}}
+Using only $\texttt{rand()}$, draw from a continuous distribution with known CDF $F$.
+\ans{Inverse-CDF sampling: $r=\texttt{rand()}$, return $F^{-1}(r)$. The loaded die (Moed A Q2) is the step-function
+special case.}
+
+\subsection{Tracking --- filtering recursion \hfill \maps{slot 2}}
+Derive $p(x_t\mid z_{1:t})\propto p(z_t\mid x_t)\int p(x_t\mid x_{t-1})p(x_{t-1}\mid z_{1:t-1})\,dx_{t-1}$.
+\ans{From Moed B Q2's posterior recursion, marginalise $x_{1:t-1}$: the integral of
+$p(x_t\mid x_{t-1})p(x_{t-1}\mid z_{1:t-1})$ is the predicted prior $p(x_t\mid z_{1:t-1})$; multiply by the
+likelihood and normalise (Ch.4 ``filtering'').}
+
+\subsection{Intrinsic --- online temporal mode \hfill \maps{slot 3}}
+Online, bounded-memory per-pixel temporal \emph{mode} of a $[0,255]$ video (background modelling).
+\ans{Per-pixel 256-bin histogram; increment each frame ($O(1)$); mode $=\arg\max$ bin. Same trick as the
+online-median reflectance (Moed A Q3), read the peak instead of the median.}
+
+\subsection{Dynamic texture --- melody synthesis \hfill \maps{slot 3}}
+With a note-embedding (``music2vec''), synthesize a long melody from a short one.
+\ans{Moed B Q3 with notes: embed the note sequence, fit an ARMA/linear state-space model (Ch.5), drive forward with
+noise, decode each vector to its nearest note.}
+
+\subsection{PatchMatch --- match across many images \hfill \maps{slot 5}}
+Extend PatchMatch to find, for each source patch, its NN across a set of $M$ target images.
+\ans{Let the offset carry an image index: the match is $(m,y)$. Propagation borrows neighbours' $(m,y)$; random
+search perturbs $y$ and occasionally re-rolls $m$; keep the best across all $M$ (Ch.11 multi-source reshuffling).}
+
+\subsection{PatchMatch --- duplicated video segment \hfill \maps{slot 5}}
+Detect a looped/duplicated temporal segment inside one video.
+\ans{3D (space-time) self-PatchMatch, excluding the trivial temporal neighbourhood; a duplicate appears as voxels
+with near-zero distance and a constant \emph{temporal} offset. Clone detection (Moed A Q5) in the time dimension.}
+
+\subsection{Geodesic --- stay in the middle of the road \hfill \maps{slot 6}}
+User clicks two points; draw the path that stays in the middle of a road (avoiding its edges).
+\ans{Opposite weighting to the Lena-hat question (Moed B Q6): make edges expensive, $w=|\nabla I|$ (colorization
+weight), then Dijkstra $A\!\to\!B$. The path avoids high-gradient boundaries and runs through the smooth interior.}
+
+\subsection{Clustering --- is k-means monotone? can it cycle? \hfill \maps{slot 8}}
+Can the distortion ever increase? Can k-means cycle forever? What about a point equidistant from two centres?
+\ans{Distortion never increases (both steps non-increasing --- Moed B Q8). No cycle: finitely many assignments +
+monotone decrease $\Rightarrow$ no repeat. Ties need a fixed tie-break (e.g.\ lowest index) so each changed
+assignment strictly lowers $J$.}
+
+\vspace{1em}
+\begin{tcolorbox}[colback=teal!5,colframe=teal!60!black,title=\textbf{Study tip}]
+For a new question, first name its \textbf{slot} (1--8), which fixes the chapter, then ask: ``what is the extra
+input, and is it a \emph{boundary signal} (${\to}$ smoothness weight) or a \emph{measurement} (${\to}$ data term /
+seed)?'' That answers slots 1, 6, 7 outright; the online/efficiency and domain-transfer recipes cover the rest.
+\end{tcolorbox}
+
+\end{document}
