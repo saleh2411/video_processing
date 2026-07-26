@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Filter — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+           border:1px solid var(--line); border-left:4px solid #c792ea; }
+  .story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+           color:#c792ea; font-weight:700; margin-bottom:6px; }
+  .steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+  .steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+           background:var(--card); border:1px solid var(--line); border-radius:11px; }
+  .steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+           border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+           display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .steps li b { color:var(--accent-2); }
+  details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+           padding:12px 16px; margin:10px 0; }
+  details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  details.qa summary::marker { color:var(--accent-3); }
+  details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+  .stagebar { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; }
+  .stagebar .st { flex:1; min-width:110px; text-align:center; padding:8px 6px; border-radius:9px;
+           border:1px solid var(--line); background:#131a2b; color:var(--ink-faint); font-size:13px; }
+  .stagebar .st.on { border-color:var(--accent-3); color:#07221f; background:var(--accent-3); font-weight:700; }
+  .kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+  .kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+  pre.ruler { background:#0a0f1c; border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+         overflow-x:auto; color:var(--accent); font-size:13.5px; line-height:1.5; margin:12px 0; }
+  .chk { display:inline-flex; align-items:center; gap:7px; font-size:14px; color:var(--ink-dim);
+         padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:#131a2b; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Extra</b> · Particle Filter, from zero</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch04_kalman_particle.html">‹ Chapter 4</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="exam04_kalman_particle.html">Exam 4 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 4 · built for exam day</div>
+    <h1>The Particle Filter, explained like you are five</h1>
+    <p class="lede">No formulas in the first half. Just a story, a game, and three demos you can press.
+    The math shows up at the end — by then it will look like a description of the game you already played.</p>
+  </header>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">Lost puppy in a dark park</span>
+    <p>Your puppy ran into a big dark park. You cannot see it. You have <strong>100 friends</strong> and each
+    friend stands somewhere in the park and shouts <em>"maybe the puppy is HERE!"</em></p>
+    <p>Each friend is a <strong>guess</strong>. That is a <span class="term">particle</span>.</p>
+    <p>Every second you hear a faint <strong>bark</strong>. The bark is not exact — echoes make it fuzzy — but a friend
+    standing near where the bark came from is probably right. The bark is the <span class="term">measurement</span>.</p>
+    <p>So every second you do three things:</p>
+    <ul>
+      <li><strong>Score</strong> — friends close to the bark get a big star. Far friends get a tiny star.</li>
+      <li><strong>Copy</strong> — friends with big stars get cloned; friends with tiny stars go home.</li>
+      <li><strong>Wander</strong> — everyone takes a step in the direction they think the puppy is running,
+      plus a random little stumble (nobody is sure).</li>
+    </ul>
+    <p>Do that every second and the crowd of friends squeezes together right on top of the puppy — and it keeps
+    following it. <strong>That crowd IS the particle filter.</strong> Nothing else.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">The one sentence to remember</span>
+    A particle filter answers <em>"where is it?"</em> not with one number, but with a <strong>crowd of guesses,
+    each holding a score</strong>. The crowd is the answer.
+  </div>
+
+  <h3>Who is who</h3>
+  <table class="kv">
+    <tr><th>In the story</th><th>In the course</th><th>In your ex3 code</th></tr>
+    <tr><td>the puppy's real spot</td><td>state $x_t$ (also written $S_t$)</td><td><code>s = [x, y, half_w, half_h, vx, vy]</code></td></tr>
+    <tr><td>one friend's guess</td><td>one particle $S_t^{(n)}$</td><td>one column of the <code>(6, N)</code> matrix</td></tr>
+    <tr><td>the bark you hear</td><td>measurement $z_t$</td><td>the video frame / its colour histogram</td></tr>
+    <tr><td>the star you give a friend</td><td>weight $\pi_t^{(n)} = P(z_t \mid x_t)$</td><td><code>bhattacharyya_distance(p, q)</code></td></tr>
+    <tr><td>cloning good friends</td><td>resampling</td><td><code>sample_particles(S_prev, C)</code></td></tr>
+    <tr><td>step + stumble</td><td>drift + diffusion</td><td><code>predict_particles(...)</code></td></tr>
+    <tr><td>where you finally point</td><td>$\sum_n \pi_t^{(n)} S_t^{(n)}$</td><td>the average / max-weight box</td></tr>
+  </table>
+
+  <div class="callout warn"><span class="lbl">The #1 confusion — x vs z</span>
+    <p style="margin:6px 0 0"><strong>$x$ is what you WANT and never see.</strong> Position, size, and speed of the
+    car. Speed is in $x$ even though no sensor ever measures speed directly — the filter figures it out.</p>
+    <p><strong>$z$ is what you GET and never trust.</strong> The camera frame. You only use $z$ to hand out scores.
+    A measurement never becomes the state; it only judges the guesses.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Play it once, by hand</h2>
+
+  <div class="explain">
+    <span class="explain-label">How to use this demo</span>
+    <p>Press <strong>Next stage</strong> over and over. One click = one stage of the algorithm, so you can see
+    exactly what changes and what does not. The dark box on top is the "park", seen from above and squashed into
+    a line (1-D, to keep it simple).</p>
+    <p>Watch how the crowd starts spread out and knows nothing — then locks on after 3–4 full rounds. That
+    "locking on" moment is the whole magic.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the four stages, one click at a time</h4><span class="tag">click Next stage</span></div>
+    <div class="demo-body">
+      <div class="stagebar">
+        <div class="st" id="stg0">0 · Start</div>
+        <div class="st" id="stg1">1 · Resample</div>
+        <div class="st" id="stg2">2 · Predict</div>
+        <div class="st" id="stg3">3 · Measure</div>
+        <div class="st" id="stg4">4 · Estimate</div>
+      </div>
+      <canvas id="cvA" width="900" height="360"></canvas>
+      <div class="legend">
+        <span><i style="background:#7ee787"></i> true puppy (hidden from filter)</span>
+        <span><i style="background:#ffb454"></i> bark heard $z_t$</span>
+        <span><i style="background:#41d8c9"></i> particles (dot size = weight)</span>
+        <span><i style="background:#ffffff"></i> filter's answer</span>
+      </div>
+      <div class="controls">
+        <div class="control"><label>particles N <span class="val" id="vAn">60</span></label><input type="range" id="An" min="10" max="200" step="5" value="60"></div>
+        <div class="control"><label>stumble (diffusion σ) <span class="val" id="vAd">10</span></label><input type="range" id="Ad" min="1" max="40" step="1" value="10"></div>
+        <div class="control"><label>bark fuzziness (σ of z) <span class="val" id="vAm">18</span></label><input type="range" id="Am" min="4" max="60" step="2" value="18"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Anext">Next stage ▸</button>
+        <button class="act" id="Around">Full round ⟳</button>
+        <button class="act" id="Aauto">Auto-run</button>
+        <button class="act" id="Areset">Reset</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <ol class="steps">
+    <li><b>Start.</b> N friends stand at random spots. Every one has the same star (weight $=1/N$) because you
+    know nothing yet. Total ignorance = flat distribution.</li>
+    <li><b>Resample (select).</b> Build a new crowd by picking from the old crowd <em>in proportion to the stars</em>.
+    A friend with a fat star gets copied 5 times; a friend with a crumb star vanishes. Crowd size stays N.
+    <em>Nobody moves in this stage — only the identities change.</em></li>
+    <li><b>Predict (drift + diffusion).</b> Every friend walks by their own guessed velocity, then adds a random
+    stumble. This is the motion model $P(x_t \mid x_{t-1})$. <em>The image is not used here at all.</em></li>
+    <li><b>Measure (weight).</b> NOW look at the frame. Score each friend by how well the picture at their spot
+    matches what you are tracking: $\pi^{(n)} = P(z_t \mid x_t = S^{(n)})$. Then normalise so all stars sum to 1.</li>
+    <li><b>Estimate.</b> Report the weighted average (smooth) or the biggest-star particle (sharp but jumpy).
+    Then go back to step 2 for the next frame.</li>
+  </ol>
+
+  <div class="callout key"><span class="lbl">Why resample BEFORE predict?</span>
+    Because you want to spend your N guesses where the probability already is. Copying good guesses and then
+    stumbling them creates a fresh dense cloud around the good area. If you never resampled, after 20 frames
+    one particle would hold 99.99% of the weight and the other 99 would be useless — this is called
+    <strong>degeneracy</strong>.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The roulette wheel (the part exams love)</h2>
+
+  <div class="explain">
+    <span class="explain-label">Why the weird cumulative array C</span>
+    <p>Step 1 of Condensation says: <em>"generate $r$ uniform in $[0,1]$, find the smallest $j$ with
+    $C^{(j)} > r$."</em> That sounds cryptic. It is just a <strong>roulette wheel made of a ruler</strong>.</p>
+    <p>Lay all the weights end to end on a ruler from 0 to 1. A particle with weight 0.4 owns a 40 cm strip of a
+    1 m ruler. Throw a dart at a random spot $r$ on the ruler — whoever owns that spot gets copied. Throw N darts,
+    get N new particles. Heavy particles own long strips, so they get hit often. That is all $C$ is: the
+    <strong>ruler marks</strong>, i.e. the running total of the weights.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — throw darts at the weight ruler</h4><span class="tag">spin</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Five particles with hand-set weights. Left = the weights.
+      Right = the cumulative array $C$ drawn as a staircase. Each spin drops a random $r$ and shows which
+      particle the dart lands on.</p>
+      <canvas id="cvB" width="900" height="330"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Bspin">Spin once</button>
+        <button class="act" id="Bspin50">Spin 50×</button>
+        <button class="act" id="Bshuffle">New random weights</button>
+        <button class="act" id="Breset">Reset counts</button>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <div class="callout note"><span class="lbl">Exam trap</span>
+    After many spins, <em>the fraction of times a particle is picked converges to its weight</em>. Weight 0.4 →
+    picked ~40% of the time. Press "Spin 50×" a few times and watch the percentages line up. If an exam asks
+    "what does the cumulative distribution $C$ do?", the answer is: it turns a uniform random number into a draw
+    from the weighted particle distribution.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Now a real car</h2>
+
+  <div class="explain">
+    <span class="explain-label">Same game, 2-D, with the two things that break Kalman</span>
+    <p>Here the state is 4 numbers per particle: $x = (\text{px}, \text{py}, v_x, v_y)$ — exactly your ex3 state
+    minus the box size. Two switches make this interesting:</p>
+    <ul>
+      <li><strong>Tunnel</strong> — while the car is in the grey band, no measurement arrives. All weights stay
+      equal, so the filter runs on the motion model alone and the cloud <em>spreads out</em> (uncertainty grows).
+      When the car exits, the cloud snaps back. This is prediction earning its keep.</li>
+      <li><strong>Twin car</strong> — a second identical car that keeps drifting across the real one. When they are
+      close, 35% of measurements come from the wrong car and the cloud <strong>splits into two blobs</strong> —
+      watch ESS collapse and the white estimate wobble between them. A Kalman filter cannot represent that: one
+      Gaussian has one bump, so it would sit uselessly in the empty space between the two cars. This is
+      <em>the</em> reason particle filters exist.</li>
+      <li><strong>And the honest limitation:</strong> if the decoy is far away, no particle is sitting there, so
+      its likelihood is numerically zero and the filter simply ignores it. A particle filter can only represent a
+      hypothesis it has particles for — this is why occasionally scattering a few random particles
+      ("re-initialisation") is standard practice in real trackers.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — tracking a car through a tunnel, with a look-alike twin</h4><span class="tag">play · step</span></div>
+    <div class="demo-body">
+      <canvas id="cvC" width="900" height="380"></canvas>
+      <div class="legend">
+        <span><i style="background:#7ee787"></i> real car (truth)</span>
+        <span><i style="background:#ff6b81"></i> twin (decoy)</span>
+        <span><i style="background:#ffb454"></i> measurement $z_t$</span>
+        <span><i style="background:#41d8c9"></i> particles</span>
+        <span><i style="background:#ffffff"></i> weighted estimate</span>
+      </div>
+      <div class="controls">
+        <div class="control"><label>particles N <span class="val" id="vCn">150</span></label><input type="range" id="Cn" min="20" max="500" step="10" value="150"></div>
+        <div class="control"><label>diffusion σ <span class="val" id="vCd">6</span></label><input type="range" id="Cd" min="1" max="25" step="1" value="6"></div>
+        <div class="control"><label>measurement noise σ <span class="val" id="vCm">12</span></label><input type="range" id="Cm" min="3" max="50" step="1" value="12"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Cplay">▶ Play</button>
+        <button class="act" id="Cstep">Step 1 frame</button>
+        <button class="act" id="Creset">Reset</button>
+        <label class="chk"><input type="checkbox" id="Ctwin"> twin car (multi-modal)</label>
+        <label class="chk"><input type="checkbox" id="Ctun" checked> tunnel (missing measurement)</label>
+      </div>
+      <div class="readout" id="Cro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Read the ESS number under the demo</span>
+    <strong>ESS</strong> = effective sample size = $1/\sum_n (\pi^{(n)})^2$. If N = 150 and ESS = 140, your crowd is
+    healthy. If ESS drops to 3, only 3 guesses are really alive — the rest are dead weight. Low ESS means
+    <em>degeneracy</em>; too much resampling with too little diffusion gives <em>sample impoverishment</em>
+    (every particle identical). Turn diffusion down to 1 and watch ESS crash.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Only now, the math</h2>
+
+  <div class="explain">
+    <span class="explain-label">Each symbol is a thing you already saw</span>
+    <p>The recursion in the lecture notes:</p>
+  </div>
+
+  <div class="eq">$$ \underbrace{P(x_t \mid z_{1:t})}_{\text{belief now}} \;=\; C \cdot
+     \underbrace{P(z_t \mid x_t)}_{\text{the star / stage 3}} \cdot
+     \underbrace{P(x_t \mid z_{1:t-1})}_{\text{after the walk / stage 2}} $$</div>
+  <div class="eq">$$ \underbrace{P(x_t \mid z_{1:t-1})}_{\text{after the walk}} \;=\;
+     \int_{x_{t-1}} \underbrace{P(x_t \mid x_{t-1})}_{\text{step + stumble}} \;
+     \underbrace{P(x_{t-1} \mid z_{1:t-1})}_{\text{yesterday's crowd}} \, dx_{t-1} $$</div>
+
+  <div class="explain">
+    <p><strong>That integral is impossible to compute for a real image.</strong> So the particle filter never
+    computes it — it <em>samples</em> it. Sampling N times from $P(x_{t-1}\mid z_{1:t-1})$ (= stage 1, the roulette)
+    and pushing each sample through $P(x_t\mid x_{t-1})$ (= stage 2, the walk) gives you N samples from the
+    integral for free. That single trick is the whole method.</p>
+
+    <h4 class="mini">Two assumptions that make it work</h4>
+    <ul>
+      <li><strong>Markov:</strong> $P(x_t \mid x_{1:t-1}) = P(x_t \mid x_{t-1})$ — the car's next position depends
+      only on where it is now, not on its whole life story. Lets you throw away history.</li>
+      <li><strong>Conditional independence:</strong> $P(z_{1:t}\mid x_{1:t}) = \prod_\tau P(z_\tau \mid x_\tau)$ —
+      given where the car actually is, this frame's pixels tell you nothing about last frame's pixels.
+      Lets the likelihood factor into one term per frame.</li>
+    </ul>
+    <p>Drop either one and the recursion collapses, and you are back to storing the entire video.</p>
+  </div>
+
+  <div class="pdf-block">
+    <span class="pdf-label">Condensation, line by line (as in the notes) — with the plain meaning</span>
+    <p><strong>Input:</strong> $\{S_{t-1}^{(n)}, \Pi_{t-1}^{(n)}, C_{t-1}^{(n)}\}_{n=1}^N$ &nbsp;— last frame's
+    crowd, their stars, and the ruler marks.</p>
+    <p><strong>1) Select:</strong> draw $r \sim U[0,1]$; find smallest $j$ with $C_{t-1}^{(j)} > r$; set
+    $S_t^{'(n)} = S_{t-1}^{(j)}$.<br>
+    <span style="color:#9fb0cc">→ throw a dart at the ruler, copy whoever owns that spot. Repeat N times.</span></p>
+    <p><strong>2) Predict:</strong> $S_t^{(n)} = A\,S_t^{'(n)} + B\,w_t^{(n)}$.<br>
+    <span style="color:#9fb0cc">→ $A$ = the deterministic step (drift, e.g. add velocity to position),
+    $B w$ = the random stumble (diffusion). Nonlinear $A$ is perfectly fine here — that is the freedom Kalman
+    does not have.</span></p>
+    <p><strong>3) Measure:</strong> $\Pi_t^{(n)} = P(Z_t \mid x_t = S_t^{(n)})$, then normalise so
+    $\sum_n \Pi_t^{(n)} = 1$, and rebuild $C_t^{(0)}=0$, $C_t^{(n)} = C_t^{(n-1)} + \Pi_t^{(n)}$.<br>
+    <span style="color:#9fb0cc">→ hand out stars from the image (e.g. $e^{-\text{SSD}}$, or Bhattacharyya on colour
+    histograms as in ex3), then rebuild the ruler for next frame.</span></p>
+    <p><strong>Return</strong> $\sum_n \Pi_t^{(n)} f(S_t^{(n)})$.<br>
+    <span style="color:#9fb0cc">→ the weighted average. With $f = $ identity you get the average box.</span></p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- ==================================================================== -->
+  <h2>6 · Condensation with real numbers</h2>
+
+  <div class="callout warn"><span class="lbl">The one thing that unlocks it</span>
+    <strong>$C$ is not new information.</strong> $C$ is just $\Pi$ added up. If you know the weights you can
+    rebuild $C$ in one line of code. It exists only to make step 1 fast. Read the rest of this section with that
+    in mind and Condensation stops being mysterious.
+  </div>
+
+  <h3>The three arrays</h3>
+  <p class="muted">Input and output are the same three lists, each of length N. All three describe the
+  <em>same</em> N particles — array index $n$ is one particle in all of them.</p>
+  <table class="kv">
+    <tr><th>Array</th><th>Type</th><th>What it holds</th></tr>
+    <tr><td>$S^{(n)}$</td><td>vector (6 numbers in ex3)</td><td>particle n's <strong>guess of the state</strong> — where / how big / how fast</td></tr>
+    <tr><td>$\Pi^{(n)}$</td><td>scalar in [0,1]</td><td>particle n's <strong>weight</strong>. All N of them sum to 1</td></tr>
+    <tr><td>$C^{(n)}$</td><td>scalar in [0,1]</td><td><strong>running total</strong> of the weights: $C^{(n)} = \Pi^{(1)} + \cdots + \Pi^{(n)}$</td></tr>
+  </table>
+  <p class="muted" style="margin-top:12px">Input = last frame's crowd. Output = this frame's crowd. Same three
+  arrays, one timestep later. That is the only reason $C$ appears on <em>both</em> sides — you rebuild it at the
+  end of step 3 so that step 1 of the <em>next</em> frame can use it.</p>
+
+  <h3>What $C$ actually is</h3>
+  <div class="explain">
+    <span class="explain-label">A ruler of length 1, cut into strips</span>
+    <p>Give each particle a strip of the ruler whose <strong>length equals its weight</strong>:</p>
+    <pre class="ruler">&#928;  = [0.05, 0.35, 0.10, 0.40, 0.10]
+
+0     0.05            0.40  0.50              0.90    1.00
+|--P1--|------P2-------|-P3--|-------P4--------|--P5--|
+       &#8593;               &#8593;     &#8593;                 &#8593;      &#8593;
+     C&#185;=0.05        C&#178;=0.40 C&#179;=0.50         C&#8308;=0.90  C&#8309;=1.00</pre>
+    <p><strong>$C$ is the list of cut marks.</strong> Nothing else. Always $C^{(0)}=0$ and $C^{(N)}=1$.
+    Heavy particle = long strip. Light particle = sliver.</p>
+  </div>
+
+  <h3>Why a random number in $[0,1]$</h3>
+  <div class="explain">
+    <p>You want to draw a particle <strong>with probability equal to its weight</strong>. Your computer only gives
+    you <code>uniform(0,1)</code>. So you convert one into the other: throw a dart at a random spot $r$ on the
+    ruler, and whoever owns that spot wins. The probability the dart lands in particle j's strip is the
+    <strong>length of the strip</strong>, which is $\Pi^{(j)}$ — exactly what you asked for.</p>
+    <p>The exam-proof version, one line:</p>
+  </div>
+  <div class="eq">$$ P(\text{pick } j) \;=\; P\big(C^{(j-1)} \le r < C^{(j)}\big) \;=\; C^{(j)} - C^{(j-1)} \;=\; \Pi^{(j)} $$</div>
+  <div class="explain">
+    <p>First equality: "smallest $j$ with $C^{(j)} > r$" means precisely that $r$ fell inside strip $j$.
+    Second equality: for $r \sim U[0,1]$, the probability of landing in an interval <em>is</em> that interval's
+    length.</p>
+    <p>And the range is $[0,1]$ <strong>because the weights were normalised to sum to 1</strong> — so the ruler has
+    length exactly 1. Skip the normalisation and the ruler ends somewhere else, and drawing $r \in [0,1]$ breaks.</p>
+    <p>This trick has a name: <strong>inverse-CDF sampling</strong> (inverse transform sampling). $C$ <em>is</em>
+    the CDF of the discrete particle distribution. The notes calling it a "slack variable" is just unfortunate
+    wording.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 4 — one full Condensation round, dart by dart</h4><span class="tag">next step</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Five particles, the exact numbers from the table below. Press
+      <strong>Next</strong> to throw one dart at a time and watch the new crowd get built. Colours show
+      <em>lineage</em> — which old particle each new particle was copied from.</p>
+      <canvas id="cvD" width="900" height="360"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Dnext">Next ▸</button>
+        <button class="act" id="Dall">Finish the round</button>
+        <button class="act" id="Dreset">Reset</button>
+      </div>
+      <div class="readout" id="Dro"></div>
+    </div>
+  </div>
+
+  <h3>The same round, written out</h3>
+  <p class="muted">States (1-D, to keep it readable): $S = [10,\ 30,\ 50,\ 70,\ 90]$ &nbsp;·&nbsp;
+  weights $\Pi = [0.05,\ 0.35,\ 0.10,\ 0.40,\ 0.10]$ &nbsp;·&nbsp;
+  cut marks $C = [0,\ 0.05,\ 0.40,\ 0.50,\ 0.90,\ 1.00]$.</p>
+  <div class="summary">
+    <span class="summary-label">Five darts → the new crowd</span>
+    <table>
+      <tr><th>dart</th><th>r</th><th>smallest j with $C^{(j)} > r$</th><th>copied</th><th>its state</th></tr>
+      <tr><td>1</td><td>0.62</td><td>$C^{(4)}=0.90 > 0.62$, but $C^{(3)}=0.50$ is not → <b>j = 4</b></td><td>P4</td><td>70</td></tr>
+      <tr><td>2</td><td>0.11</td><td>$C^{(2)}=0.40 > 0.11$ → <b>j = 2</b></td><td>P2</td><td>30</td></tr>
+      <tr><td>3</td><td>0.87</td><td>$C^{(4)}=0.90 > 0.87$ → <b>j = 4</b></td><td>P4</td><td>70</td></tr>
+      <tr><td>4</td><td>0.33</td><td>$C^{(2)}=0.40 > 0.33$ → <b>j = 2</b></td><td>P2</td><td>30</td></tr>
+      <tr><td>5</td><td>0.55</td><td>$C^{(4)}=0.90 > 0.55$ → <b>j = 4</b></td><td>P4</td><td>70</td></tr>
+    </table>
+    <p style="margin-top:12px">New crowd: $S' = [70,\ 30,\ 70,\ 30,\ 70]$. P4 (weight 0.40) got 3 copies,
+    P2 (0.35) got 2, and P1, P3, P5 <strong>died</strong>. Still exactly 5 particles.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The critical follow-up</span>
+    <p style="margin:6px 0 0">After resampling, <strong>all weights reset to $1/N$</strong>. The information did
+    not vanish — it <strong>moved out of the weights and into how many copies each guess has</strong>. Before:
+    one particle at 70 carrying weight 0.40. After: three particles at 70 carrying 0.20 each. Same probability
+    mass, different storage.</p>
+    <p>Three identical copies at 70 would be useless, which is why <strong>step 2 immediately scatters them</strong>
+    with diffusion noise. Copy, then scatter — they become three slightly different hypotheses around 70.</p>
+  </div>
+
+  <h3>What changes on each line</h3>
+  <div class="summary">
+    <span class="summary-label">Follow the arrays, not the symbols</span>
+    <table>
+      <tr><th>Line</th><th>Changes</th><th>Stays the same</th><th>Uses the image?</th><th>ex3 function</th></tr>
+      <tr><td>1 · Select</td><td>$S$ (copies made)</td><td>positions — nobody moves</td><td>no</td><td><code>sample_particles</code></td></tr>
+      <tr><td>2 · Predict</td><td>$S$ (everyone moves)</td><td>$\Pi$ still uniform</td><td>no</td><td><code>predict_particles</code></td></tr>
+      <tr><td>3 · Measure</td><td>$\Pi$, then $C$ rebuilt</td><td>$S$ untouched</td><td><strong>yes — only here</strong></td><td><code>compute_normalized_histogram</code> + <code>bhattacharyya_distance</code></td></tr>
+      <tr><td>Return</td><td>nothing</td><td>everything</td><td>no</td><td>$\sum_n \Pi^{(n)} f(S^{(n)})$</td></tr>
+    </table>
+  </div>
+
+  <div class="callout note"><span class="lbl">Two things exams poke at</span>
+    <p style="margin:6px 0 0"><strong>Why is $C$ monotonically increasing?</strong> Because weights are $\ge 0$,
+    so each step only ever adds. That monotonicity is what makes "find the smallest $j$ with $C^{(j)} > r$"
+    well-defined, and it lets you do the search by <strong>binary search in $O(\log N)$</strong> instead of a
+    linear scan. (Your ex3 uses <code>np.argmax(cdf &gt;= r)</code> — correct, but the $O(N)$ version.)</p>
+    <p><strong>Why random darts instead of just handing P4 exactly $0.4N$ copies?</strong> Randomness keeps the
+    sample unbiased and works for weights that are not neat multiples of $1/N$. A lower-variance middle ground
+    exists and is worth naming: <strong>systematic resampling</strong> — draw a single $r_0 \sim U[0, 1/N]$ and
+    then use the evenly spaced darts $r_i = r_0 + i/N$. Same expected counts, much less noise.</p>
+  </div>
+
+  <h2>7 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. In one sentence, what does a particle filter represent that a Kalman filter cannot?</summary>
+    <p>A non-Gaussian, possibly <strong>multi-modal</strong> posterior — several competing hypotheses at once —
+    and it allows an arbitrary nonlinear motion model and an arbitrary likelihood. Kalman stores one mean and one
+    covariance, so it has exactly one bump and needs linear dynamics with Gaussian noise.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why do we resample at all? What goes wrong without it?</summary>
+    <p><strong>Degeneracy.</strong> Without resampling, weights keep multiplying frame after frame; after a few
+    dozen frames one particle carries essentially all the weight and the rest carry ~0. You are then paying for N
+    particles but effectively running with 1. Resampling kills the near-zero particles and clones the strong ones,
+    keeping all N guesses useful.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. And what is the danger of resampling too aggressively?</summary>
+    <p><strong>Sample impoverishment</strong>: after enough resampling every particle is a copy of the same
+    ancestor, so the cloud has zero spread and cannot recover if the target manoeuvres. The standard fix is the
+    diffusion noise added in the predict stage every single frame — it re-injects diversity. (Try demo 3 with
+    diffusion = 1.)</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Weighted mean or max-weight particle for the final answer?</summary>
+    <p><strong>Weighted mean</strong> is smooth and stable but can land on an empty spot — with two candidate cars
+    it reports the midpoint, where there is no car. <strong>Max-weight</strong> always lands on a real hypothesis
+    but jitters between competing peaks frame to frame. Choose by whether your posterior is uni- or multi-modal.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What exactly is $C^{(n)}$ and why is it monotonically increasing?</summary>
+    <p>$C^{(n)} = \sum_{k \le n} \Pi^{(k)}$, the cumulative sum of the normalised weights, so $C^{(0)}=0$ and
+    $C^{(N)}=1$. It is non-decreasing because weights are non-negative. That monotonicity is what allows the
+    "find the smallest $j$ with $C^{(j)} > r$" search to be a valid inverse-CDF sample — and lets you do it by
+    binary search in $O(\log N)$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. During an occlusion no measurement is available. What should the filter do?</summary>
+    <p>Skip the re-weighting (or give every particle equal weight) and run predict only. The cloud keeps moving
+    with the motion model and spreads out, since diffusion is added but nothing pulls it back in. Uncertainty
+    grows — which is correct — and the filter can re-lock when the target reappears, as long as the cloud has
+    stayed wide enough to cover the true position.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Complexity — why not just use 100,000 particles?</summary>
+    <p>Cost is $O(N \cdot M)$ per frame where $M$ is the cost of one likelihood evaluation — and $M$ is expensive
+    in vision (crop a patch, build a 16×16×16 histogram, compare). Kalman is $O(n^3)$ in the state dimension only.
+    Also, particles needed grows roughly exponentially with state dimension (curse of dimensionality), which is
+    why practical trackers keep the state to 4–6 numbers, exactly as ex3 does.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. In ex3, why is the likelihood $e^{20 \cdot BC}$ and not just $BC$?</summary>
+    <p>$BC = \sum \sqrt{p q}$ is the Bhattacharyya coefficient — 1 for identical histograms, 0 for disjoint ones.
+    Raw $BC$ values for near-matches are all bunched close together, so the weights would be almost uniform and
+    the filter would barely discriminate. The exponential with a large gain sharpens the contrast: a slightly
+    better match gets a disproportionately larger weight, so resampling actually concentrates the cloud.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Symbol</th><th>Name</th><th>Story version</th></tr>
+      <tr><td>$x_t$ / $S_t^{(n)}$</td><td>state / particle</td><td>where a friend thinks the puppy is</td></tr>
+      <tr><td>$z_t$</td><td>measurement</td><td>the fuzzy bark you heard</td></tr>
+      <tr><td>$\pi_t^{(n)}$</td><td>weight = $P(z_t\mid x_t)$</td><td>the size of the star you gave that friend</td></tr>
+      <tr><td>$C_t^{(n)}$</td><td>cumulative weights</td><td>marks on the ruler you throw darts at</td></tr>
+      <tr><td>$P(x_t \mid x_{t-1})$</td><td>motion model</td><td>step forward + random stumble</td></tr>
+      <tr><td>$A$, $Bw$</td><td>drift, diffusion</td><td>the step, the stumble</td></tr>
+      <tr><td>ESS</td><td>$1/\sum \pi^2$</td><td>how many friends are actually still useful</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The loop, five words:</strong> copy the good, wander, score, repeat.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch04_kalman_particle.html"><span class="dir">Back to</span><span class="ttl">Ch 4 · Kalman &amp; Particle Filters</span></a>
+    <a class="next" href="exam04_kalman_particle.html"><span class="dir">Test yourself</span><span class="ttl">Exam 4 · Kalman &amp; Particle ›</span></a>
+  </div>
+</div>
+
+<script>
+/* ================= shared helpers ================= */
+function gauss(mu, sd){
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+/* =========================================================
+   DEMO 1 — four stages of Condensation, in 1-D
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const LEFT = 40, RIGHT = W - 40, SPAN = RIGHT - LEFT;
+
+  const elN = document.getElementById('An'), elD = document.getElementById('Ad'), elM = document.getElementById('Am');
+  const vN = document.getElementById('vAn'), vD = document.getElementById('vAd'), vM = document.getElementById('vAm');
+  const ro = document.getElementById('Aro');
+  const stageEls = [0,1,2,3,4].map(i => document.getElementById('stg' + i));
+
+  let P = [], truth = 0, truthV = 0, z = null, est = null, stage = 0, frame = 0, timer = null;
+
+  function init(){
+    const N = +elN.value;
+    P = [];
+    for (let i = 0; i < N; i++){
+      P.push({ x: LEFT + Math.random() * SPAN, v: gauss(0, 2), w: 1 / N });
+    }
+    truth = LEFT + SPAN * 0.15;
+    truthV = 3.2;
+    z = null; est = null; stage = 0; frame = 0;
+    draw('Stage 0 — N particles scattered at random, all weights equal to 1/N. The filter knows nothing yet.');
+  }
+
+  /* ---- the four stages ---- */
+  function doResample(){
+    const N = P.length;
+    const C = new Float64Array(N + 1);
+    for (let i = 0; i < N; i++) C[i + 1] = C[i] + P[i].w;
+    const out = [];
+    for (let i = 0; i < N; i++){
+      const r = Math.random();
+      let lo = 0, hi = N;                     // smallest j with C[j+1] > r
+      while (lo < hi){ const mid = (lo + hi) >> 1; if (C[mid + 1] > r) hi = mid; else lo = mid + 1; }
+      const src = P[Math.min(lo, N - 1)];
+      out.push({ x: src.x, v: src.v, w: 1 / N });
+    }
+    P = out;
+  }
+  function doPredict(){
+    const sd = +elD.value;
+    for (const p of P){
+      p.x = clamp(p.x + p.v, LEFT - 20, RIGHT + 20);
+      p.x += gauss(0, sd);
+      p.v += gauss(0, sd * 0.12);
+    }
+  }
+  function doMeasure(){
+    const sm = +elM.value;
+    z = truth + gauss(0, sm);
+    let sum = 0;
+    for (const p of P){
+      const d = p.x - z;
+      p.w = Math.exp(-(d * d) / (2 * sm * sm)) + 1e-12;
+      sum += p.w;
+    }
+    for (const p of P) p.w /= sum;
+  }
+  function doEstimate(){
+    let sx = 0; for (const p of P) sx += p.w * p.x;
+    est = sx;
+  }
+  function advanceTruth(){
+    truth += truthV;
+    if (truth > RIGHT - 30 || truth < LEFT + 30) truthV = -truthV;
+    frame++;
+  }
+
+  const msg = [
+    'Stage 0 — N particles scattered at random, all weights equal to 1/N. The filter knows nothing yet.',
+    'Stage 1 · RESAMPLE — new crowd drawn from the old one in proportion to the stars. Fat particles cloned, thin ones deleted. Nobody moved yet: only copies changed.',
+    'Stage 2 · PREDICT — every particle walks by its own velocity, then adds a random stumble (diffusion). The image was NOT used here. The cloud gets wider = uncertainty grows.',
+    'Stage 3 · MEASURE — a bark arrives (amber). Each particle gets a star from exp(-d²/2σ²): close to the bark = big dot, far = tiny dot. Weights normalised to sum 1.',
+    'Stage 4 · ESTIMATE — the white line is Σ πⁿ·xⁿ, the weighted average. Compare it with the green truth. Press again to start the next frame.'
+  ];
+
+  function next(){
+    stage = (stage === 4) ? 1 : stage + 1;
+    if (stage === 1){ advanceTruth(); doResample(); }
+    else if (stage === 2) doPredict();
+    else if (stage === 3) doMeasure();
+    else if (stage === 4) doEstimate();
+    draw(msg[stage]);
+  }
+
+  /* ---- drawing ---- */
+  function draw(text){
+    g.clearRect(0, 0, W, H);
+    stageEls.forEach((e, i) => e.classList.toggle('on', i === stage));
+
+    // ---- the park strip ----
+    g.fillStyle = '#0f1728'; g.fillRect(LEFT, 30, SPAN, 56);
+    g.strokeStyle = '#2c3650'; g.strokeRect(LEFT + .5, 30.5, SPAN, 56);
+    g.fillStyle = '#6b7a99'; g.font = '12px system-ui';
+    g.fillText('the world (1-D park)', LEFT + 6, 24);
+
+    // truth
+    g.fillStyle = '#7ee787';
+    g.beginPath(); g.arc(truth, 58, 9, 0, 7); g.fill();
+    g.font = '11px system-ui'; g.fillText('truth', truth - 13, 100);
+
+    // measurement
+    if (z !== null && stage >= 3){
+      g.strokeStyle = '#ffb454'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(z, 30); g.lineTo(z, 86); g.stroke();
+      g.fillStyle = '#ffb454'; g.beginPath(); g.arc(z, 58, 4, 0, 7); g.fill();
+      g.font = '11px system-ui'; g.fillText('z', z - 3, 24);
+      // likelihood bell
+      const sm = +document.getElementById('Am').value;
+      g.strokeStyle = 'rgba(255,180,84,.5)'; g.lineWidth = 1.5; g.beginPath();
+      for (let x = LEFT; x <= RIGHT; x += 2){
+        const d = x - z, y = 200 - 46 * Math.exp(-(d * d) / (2 * sm * sm));
+        (x === LEFT) ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.stroke();
+      g.fillStyle = 'rgba(255,180,84,.75)'; g.font = '11px system-ui';
+      g.fillText('likelihood  P(z|x)', clamp(z + 10, LEFT, RIGHT - 110), 150);
+    }
+
+    // ---- particle lane ----
+    g.strokeStyle = '#222c44'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, 200); g.lineTo(RIGHT, 200); g.stroke();
+    let wmax = 0; for (const p of P) if (p.w > wmax) wmax = p.w;
+    for (const p of P){
+      const rr = 2.5 + 11 * Math.sqrt(p.w / (wmax || 1));
+      g.fillStyle = 'rgba(65,216,201,.55)';
+      g.beginPath(); g.arc(p.x, 200, rr, 0, 7); g.fill();
+      if (stage === 2){                       // show the velocity arrow after the walk
+        g.strokeStyle = 'rgba(65,216,201,.35)';
+        g.beginPath(); g.moveTo(p.x, 200); g.lineTo(p.x + p.v * 3, 200); g.stroke();
+      }
+    }
+    g.fillStyle = '#6b7a99'; g.font = '12px system-ui';
+    g.fillText('particles  (dot area ∝ weight)', LEFT, 178);
+
+    // ---- weight stems, drawn at each particle's true position ----
+    g.fillStyle = '#6b7a99';
+    g.fillText('weight πⁿ drawn at the particle’s position — this stem plot IS the posterior P(xₜ|z₁:ₜ)', LEFT, 252);
+    for (const p of P){
+      const h = 78 * (p.w / (wmax || 1));
+      g.fillStyle = (stage === 3) ? '#ffb454' : '#41d8c9';
+      g.fillRect(p.x - 1.5, 340 - h, 3, h);
+    }
+    g.strokeStyle = '#2c3650'; g.beginPath(); g.moveTo(LEFT, 340.5); g.lineTo(RIGHT, 340.5); g.stroke();
+
+    // ---- estimate ----
+    if (est !== null && stage === 4){
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(est, 30); g.lineTo(est, 340); g.stroke();
+      g.fillStyle = '#ffffff'; g.font = 'bold 11px system-ui';
+      g.fillText('estimate', clamp(est + 5, LEFT, RIGHT - 60), 320);
+    }
+
+    const err = (est === null) ? '—' : Math.abs(est - truth).toFixed(1) + ' px';
+    ro.innerHTML = '<b>frame ' + frame + '</b> &nbsp;·&nbsp; ' + text +
+      '<br>N = <b>' + P.length + '</b> &nbsp;·&nbsp; error |estimate − truth| = <b>' + err + '</b>';
+  }
+
+  /* ---- wiring ---- */
+  document.getElementById('Anext').onclick = next;
+  document.getElementById('Around').onclick = () => { for (let i = 0; i < 4; i++) next(); };
+  document.getElementById('Areset').onclick = () => { stop(); init(); };
+  const btnAuto = document.getElementById('Aauto');
+  function stop(){ if (timer){ clearInterval(timer); timer = null; btnAuto.textContent = 'Auto-run'; } }
+  btnAuto.onclick = () => {
+    if (timer) stop();
+    else { btnAuto.textContent = '❚❚ Stop'; timer = setInterval(next, 380); }
+  };
+  elN.oninput = () => { vN.textContent = elN.value; stop(); init(); };
+  elD.oninput = () => { vD.textContent = elD.value; };
+  elM.oninput = () => { vM.textContent = elM.value; };
+  init();
+})();
+
+/* =========================================================
+   DEMO 2 — the resampling roulette / cumulative ruler
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvB'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Bro');
+  const COL = ['#41d8c9', '#6ea8ff', '#ffb454', '#ff6b81', '#c792ea'];
+
+  let w = [0.05, 0.35, 0.10, 0.40, 0.10], C = [], counts = [0,0,0,0,0], total = 0;
+  let lastR = null, lastJ = null;
+
+  function buildC(){ C = [0]; for (let i = 0; i < w.length; i++) C.push(C[i] + w[i]); }
+
+  function pick(r){ let j = 0; while (j < w.length && C[j + 1] <= r) j++; return Math.min(j, w.length - 1); }
+
+  function spin(n){
+    for (let i = 0; i < n; i++){
+      const r = Math.random(), j = pick(r);
+      counts[j]++; total++; lastR = r; lastJ = j;
+    }
+    draw();
+  }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+    const N = w.length;
+
+    /* ---------- left panel : the weights ---------- */
+    const LX = 40, LW = 340, BASE = 250, BH = 170;
+    g.fillStyle = '#9fb0cc'; g.font = '13px system-ui';
+    g.fillText('the weights  πⁿ', LX, 30);
+    const bw = LW / N;
+    for (let i = 0; i < N; i++){
+      const h = BH * (w[i] / 0.5);
+      g.fillStyle = (i === lastJ) ? '#ffffff' : COL[i];
+      g.fillRect(LX + i * bw + 6, BASE - h, bw - 12, h);
+      g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+      g.fillText('π' + (i + 1), LX + i * bw + bw / 2 - 8, BASE + 18);
+      g.fillStyle = COL[i]; g.font = 'bold 12px system-ui';
+      g.fillText(w[i].toFixed(2), LX + i * bw + bw / 2 - 12, BASE - h - 6);
+      const pct = total ? (100 * counts[i] / total) : 0;
+      g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+      g.fillText('hit ' + pct.toFixed(0) + '%', LX + i * bw + bw / 2 - 20, BASE + 36);
+    }
+    g.strokeStyle = '#2c3650'; g.beginPath(); g.moveTo(LX, BASE + .5); g.lineTo(LX + LW, BASE + .5); g.stroke();
+
+    /* ---------- right panel : the cumulative ruler ---------- */
+    const RX = 470, RW = 390, RY0 = 40, RY1 = 250;
+    g.fillStyle = '#9fb0cc'; g.font = '13px system-ui';
+    g.fillText('the ruler  Cⁿ = Σ πᵏ   (staircase from 0 to 1)', RX, 30);
+    // axes
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(RX, RY0); g.lineTo(RX, RY1); g.lineTo(RX + RW, RY1); g.stroke();
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('1.0', RX - 26, RY0 + 4); g.fillText('0.0', RX - 26, RY1 + 4);
+    g.fillText('r', RX - 20, (RY0 + RY1) / 2);
+
+    const yOf = v => RY1 - (RY1 - RY0) * v;
+    const xOf = i => RX + RW * (i / N);
+
+    // staircase, one coloured step per particle
+    for (let i = 0; i < N; i++){
+      const y0 = yOf(C[i]), y1 = yOf(C[i + 1]);
+      g.fillStyle = (i === lastJ) ? 'rgba(255,255,255,.85)' : COL[i] + 'aa';
+      g.fillRect(xOf(i), y1, RW / N - 2, y0 - y1);
+      g.fillStyle = '#0e1320'; g.font = 'bold 11px system-ui';
+      g.fillText('P' + (i + 1), xOf(i) + 8, y1 + 14);
+      // step outline
+      g.strokeStyle = COL[i]; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(xOf(i), y0); g.lineTo(xOf(i + 1) - 2, y0); g.lineTo(xOf(i + 1) - 2, y1); g.stroke();
+    }
+
+    // the dart
+    if (lastR !== null){
+      const y = yOf(lastR);
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.setLineDash([6, 4]);
+      g.beginPath(); g.moveTo(RX, y); g.lineTo(RX + RW, y); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+      g.fillText('r = ' + lastR.toFixed(3), RX + RW - 92, y - 7);
+      g.beginPath(); g.arc(RX, y, 5, 0, 7); g.fill();
+    }
+
+    g.fillStyle = '#6b7a99'; g.font = '12px system-ui';
+    g.fillText('rule: take the first step whose top  Cʲ  is above r  →  copy particle Pʲ', RX, RY1 + 26);
+
+    ro.innerHTML = (lastR === null)
+      ? 'Press <b>Spin once</b>. A random r in [0,1] is thrown at the ruler; whichever particle owns that height gets copied into the new crowd.'
+      : 'r = <b>' + lastR.toFixed(3) + '</b> → smallest j with C<sup>j</sup> &gt; r is <b>P' + (lastJ + 1) +
+        '</b> → particle ' + (lastJ + 1) + ' is copied. &nbsp;·&nbsp; total spins: <b>' + total +
+        '</b> &nbsp;·&nbsp; hit-rates should converge to the weights above.';
+  }
+
+  document.getElementById('Bspin').onclick = () => spin(1);
+  document.getElementById('Bspin50').onclick = () => spin(50);
+  document.getElementById('Breset').onclick = () => { counts = w.map(() => 0); total = 0; lastR = null; lastJ = null; draw(); };
+  document.getElementById('Bshuffle').onclick = () => {
+    const raw = w.map(() => 0.02 + Math.random());
+    const s = raw.reduce((a, b) => a + b, 0);
+    w = raw.map(v => +(v / s).toFixed(2));
+    const fix = +(1 - w.slice(1).reduce((a, b) => a + b, 0)).toFixed(2);
+    w[0] = Math.max(0.01, fix);
+    buildC(); counts = w.map(() => 0); total = 0; lastR = null; lastJ = null; draw();
+  };
+
+  buildC(); draw();
+})();
+
+/* =========================================================
+   DEMO 3 — 2-D car tracking, tunnel + twin
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvC'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Cro');
+  const elN = document.getElementById('Cn'), elD = document.getElementById('Cd'), elM = document.getElementById('Cm');
+  const vN = document.getElementById('vCn'), vD = document.getElementById('vCd'), vM = document.getElementById('vCm');
+  const cbTwin = document.getElementById('Ctwin'), cbTun = document.getElementById('Ctun');
+  const btnPlay = document.getElementById('Cplay');
+
+  const TUN_X0 = 470, TUN_X1 = 610;
+  let P = [], car = null, twin = null, z = null, est = null, t = 0, timer = null, occluded = false;
+
+  function carPos(tt){
+    const x = 60 + ((tt * 3.1) % (W + 120));
+    const y = H / 2 + 70 * Math.sin((tt * 3.1) / 110);
+    return { x: x, y: y };
+  }
+  // the decoy drifts around the real car and periodically crosses right over it,
+  // so the two hypotheses really do overlap — that is when the cloud goes bimodal
+  function twinPos(tt, c){
+    return { x: c.x + 120 * Math.cos(tt / 45), y: H - c.y };
+  }
+
+  function init(){
+    const N = +elN.value;
+    t = 0; car = carPos(0); twin = twinPos(0, car);
+    P = [];
+    for (let i = 0; i < N; i++){
+      P.push({ x: Math.random() * W, y: 60 + Math.random() * (H - 120),
+               vx: gauss(3, 1.5), vy: gauss(0, 1), w: 1 / N });
+    }
+    z = null; est = null; occluded = false;
+    draw();
+  }
+
+  function step(){
+    t++;
+    car = carPos(t);
+    twin = twinPos(t, car);
+    const N = P.length, sd = +elD.value, sm = +elM.value;
+
+    /* 1 · resample (roulette, binary search on the cumulative array) */
+    const C = new Float64Array(N + 1);
+    for (let i = 0; i < N; i++) C[i + 1] = C[i] + P[i].w;
+    const out = [];
+    for (let i = 0; i < N; i++){
+      const r = Math.random();
+      let lo = 0, hi = N;
+      while (lo < hi){ const mid = (lo + hi) >> 1; if (C[mid + 1] > r) hi = mid; else lo = mid + 1; }
+      const s = P[Math.min(lo, N - 1)];
+      out.push({ x: s.x, y: s.y, vx: s.vx, vy: s.vy, w: 1 / N });
+    }
+    P = out;
+
+    /* 2 · predict — drift by own velocity, then diffuse */
+    for (const p of P){
+      p.x = clamp(p.x + p.vx + gauss(0, sd), -30, W + 30);
+      p.y = clamp(p.y + p.vy + gauss(0, sd), 20, H - 20);
+      p.vx += gauss(0, sd * 0.10);
+      p.vy += gauss(0, sd * 0.10);
+    }
+
+    /* 3 · measure */
+    occluded = cbTun.checked && car.x > TUN_X0 && car.x < TUN_X1;
+    if (occluded){
+      z = null;
+      for (const p of P) p.w = 1 / N;         // no information → weights untouched
+    } else {
+      // with a twin, the detector sometimes latches onto the wrong car
+      const src = (cbTwin.checked && Math.random() < 0.35) ? twin : car;
+      z = { x: src.x + gauss(0, sm), y: src.y + gauss(0, sm) };
+      let sum = 0;
+      for (const p of P){
+        const dx = p.x - z.x, dy = p.y - z.y;
+        p.w = Math.exp(-(dx * dx + dy * dy) / (2 * sm * sm)) + 1e-12;
+        sum += p.w;
+      }
+      for (const p of P) p.w /= sum;
+    }
+
+    /* 4 · estimate */
+    let ex = 0, ey = 0;
+    for (const p of P){ ex += p.w * p.x; ey += p.w * p.y; }
+    est = { x: ex, y: ey };
+    draw();
+  }
+
+  function drawCar(c, col, label){
+    g.fillStyle = col;
+    g.fillRect(c.x - 22, c.y - 11, 44, 22);
+    g.fillStyle = '#0a0f1c';
+    g.fillRect(c.x - 12, c.y - 7, 14, 14);
+    g.fillStyle = col; g.font = '11px system-ui';
+    g.fillText(label, c.x - 18, c.y - 17);
+  }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+
+    // road
+    g.fillStyle = '#111726'; g.fillRect(0, 60, W, H - 120);
+    g.strokeStyle = '#232c44'; g.setLineDash([16, 14]); g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
+    g.setLineDash([]);
+
+    // tunnel
+    if (cbTun.checked){
+      g.fillStyle = 'rgba(120,132,160,.20)'; g.fillRect(TUN_X0, 60, TUN_X1 - TUN_X0, H - 120);
+      g.strokeStyle = 'rgba(160,172,200,.45)'; g.strokeRect(TUN_X0 + .5, 60.5, TUN_X1 - TUN_X0, H - 120);
+      g.fillStyle = 'rgba(200,210,235,.65)'; g.font = '12px system-ui';
+      g.fillText('TUNNEL — no measurement', TUN_X0 + 6, 78);
+    }
+
+    // particles
+    let wmax = 0; for (const p of P) if (p.w > wmax) wmax = p.w;
+    for (const p of P){
+      const a = 0.20 + 0.75 * (p.w / (wmax || 1));
+      const r = 2 + 5 * Math.sqrt(p.w / (wmax || 1));
+      g.fillStyle = 'rgba(65,216,201,' + a.toFixed(3) + ')';
+      g.beginPath(); g.arc(p.x, p.y, r, 0, 7); g.fill();
+    }
+
+    if (cbTwin.checked) drawCar(twin, '#ff6b81', 'twin');
+    drawCar(car, '#7ee787', 'truth');
+
+    // measurement
+    if (z){
+      g.strokeStyle = '#ffb454'; g.lineWidth = 2;
+      g.beginPath(); g.arc(z.x, z.y, 9, 0, 7); g.stroke();
+      g.beginPath(); g.moveTo(z.x - 14, z.y); g.lineTo(z.x + 14, z.y);
+      g.moveTo(z.x, z.y - 14); g.lineTo(z.x, z.y + 14); g.stroke();
+    }
+
+    // estimate
+    if (est){
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(est.x - 11, est.y - 11); g.lineTo(est.x + 11, est.y + 11);
+      g.moveTo(est.x + 11, est.y - 11); g.lineTo(est.x - 11, est.y + 11); g.stroke();
+    }
+
+    // stats
+    let ss = 0; for (const p of P) ss += p.w * p.w;
+    const ess = ss > 0 ? 1 / ss : 0;
+    const err = est ? Math.hypot(est.x - car.x, est.y - car.y).toFixed(1) : '—';
+    ro.innerHTML =
+      'frame <b>' + t + '</b> &nbsp;·&nbsp; N = <b>' + P.length + '</b>' +
+      ' &nbsp;·&nbsp; ESS = <b>' + ess.toFixed(1) + '</b> / ' + P.length +
+      ' &nbsp;·&nbsp; error = <b>' + err + ' px</b>' +
+      ' &nbsp;·&nbsp; ' + (occluded
+          ? '<span style="color:#ffb454">in tunnel — predict only, weights left uniform, cloud spreading</span>'
+          : (cbTwin.checked
+             ? '<span style="color:#ff6b81">twin on — 35% of measurements come from the decoy, so the cloud goes bimodal</span>'
+             : 'measuring normally'));
+  }
+
+  function stop(){ if (timer){ clearInterval(timer); timer = null; btnPlay.textContent = '▶ Play'; } }
+  btnPlay.onclick = () => { if (timer) stop(); else { btnPlay.textContent = '❚❚ Pause'; timer = setInterval(step, 60); } };
+  document.getElementById('Cstep').onclick = step;
+  document.getElementById('Creset').onclick = () => { stop(); init(); };
+  elN.oninput = () => { vN.textContent = elN.value; stop(); init(); };
+  elD.oninput = () => { vD.textContent = elD.value; };
+  elM.oninput = () => { vM.textContent = elM.value; };
+  cbTun.onchange = draw;
+  cbTwin.onchange = draw;
+
+  init();
+})();
+
+/* =========================================================
+   DEMO 4 — one Condensation round with concrete numbers
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvD'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Dro');
+  const btnNext = document.getElementById('Dnext');
+  const COL = ['#41d8c9', '#6ea8ff', '#ffb454', '#ff6b81', '#c792ea'];
+  const LEFT = 60, RIGHT = 840, SPAN = RIGHT - LEFT;
+  const N = 5;
+  const FIXED_R = [0.62, 0.11, 0.87, 0.33, 0.55];   // same darts as the table below
+
+  const Y_OLD = 78, Y_BAR0 = 140, Y_BAR1 = 178, Y_NEW = 288;
+
+  let old = [], C = [], kids = [], stage = 0, firstPass = true, z = null, ruler = 'old', rNow = null, jNow = null;
+
+  function xOf(s){ return LEFT + SPAN * (s / 100); }
+
+  function buildC(arr){
+    const c = [0];
+    for (let i = 0; i < arr.length; i++) c.push(c[i] + arr[i].w);
+    return c;
+  }
+
+  function init(){
+    old = [
+      { s: 10, w: 0.05, col: COL[0], name: 'P1' },
+      { s: 30, w: 0.35, col: COL[1], name: 'P2' },
+      { s: 50, w: 0.10, col: COL[2], name: 'P3' },
+      { s: 70, w: 0.40, col: COL[3], name: 'P4' },
+      { s: 90, w: 0.10, col: COL[4], name: 'P5' }
+    ];
+    C = buildC(old);
+    kids = []; stage = 0; firstPass = true; z = null; ruler = 'old'; rNow = null; jNow = null;
+    draw();
+  }
+
+  function pick(r){ let j = 0; while (j < N && C[j + 1] <= r) j++; return Math.min(j, N - 1); }
+
+  function next(){
+    if (stage < 5){                                  /* ---- darts 1..5 ---- */
+      const r = firstPass ? FIXED_R[stage] : Math.random();
+      const j = pick(r);
+      rNow = r; jNow = j;
+      kids.push({ s: old[j].s, w: 1 / N, col: old[j].col, from: old[j].name });
+      stage++;
+    } else if (stage === 5){                         /* ---- reset weights ---- */
+      ruler = 'uniform'; rNow = null; jNow = null; stage = 6;
+    } else if (stage === 6){                         /* ---- predict ---- */
+      for (const k of kids) k.s = clamp(k.s + gauss(0, 5), 2, 98);
+      stage = 7;
+    } else if (stage === 7){                         /* ---- measure ---- */
+      z = 74;
+      let sum = 0;
+      for (const k of kids){ const d = k.s - z; k.w = Math.exp(-(d * d) / (2 * 12 * 12)); sum += k.w; }
+      for (const k of kids) k.w /= sum;
+      ruler = 'new';
+      stage = 8;
+    } else {                                         /* ---- promote and loop ---- */
+      old = kids.map((k, i) => ({ s: k.s, w: k.w, col: k.col, name: 'P' + (i + 1) }));
+      C = buildC(old);
+      kids = []; stage = 0; firstPass = false; z = null; ruler = 'old'; rNow = null; jNow = null;
+    }
+    draw();
+  }
+
+  function dot(x, y, r, col, alpha){
+    g.fillStyle = col; g.globalAlpha = alpha === undefined ? 1 : alpha;
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.globalAlpha = 1;
+  }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+    g.font = '12px system-ui';
+
+    /* ---------- row A : the input crowd ---------- */
+    g.fillStyle = '#9fb0cc';
+    g.fillText('INPUT  —  S(n) with weights Π(n)   (dot area ∝ weight)', LEFT, 32);
+    g.strokeStyle = '#222c44'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, Y_OLD); g.lineTo(RIGHT, Y_OLD); g.stroke();
+    for (let i = 0; i < N; i++){
+      const p = old[i], x = xOf(p.s);
+      const hot = (jNow === i);
+      dot(x, Y_OLD, 5 + 20 * Math.sqrt(p.w), p.col, hot ? 1 : 0.6);
+      if (hot){ g.strokeStyle = '#fff'; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, Y_OLD, 5 + 20 * Math.sqrt(p.w) + 4, 0, 7); g.stroke(); }
+      g.fillStyle = p.col; g.font = 'bold 12px system-ui';
+      g.fillText(p.name, x - 9, Y_OLD - 30);
+      g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+      g.fillText('s=' + p.s.toFixed(0) + '  π=' + p.w.toFixed(2), x - 30, Y_OLD + 34);
+    }
+
+    /* ---------- row B : the ruler ---------- */
+    const src = (ruler === 'old') ? old : kids;
+    const cc = (ruler === 'old') ? C : buildC(kids);
+    const label = ruler === 'old'
+      ? 'THE RULER  C(n) = Σ π(k)   — strip length = that particle’s weight'
+      : (ruler === 'uniform'
+         ? 'THE RULER after resampling — every weight is now 1/N, so all strips are equal'
+         : 'THE RULER rebuilt from the NEW weights — this is the C handed to the next frame');
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText(label, LEFT, Y_BAR0 - 16);
+
+    for (let i = 0; i < src.length; i++){
+      const x0 = LEFT + SPAN * cc[i], x1 = LEFT + SPAN * cc[i + 1];
+      g.fillStyle = src[i].col;
+      g.globalAlpha = (jNow === i && ruler === 'old') ? 1 : 0.55;
+      g.fillRect(x0, Y_BAR0, Math.max(1, x1 - x0 - 1.5), Y_BAR1 - Y_BAR0);
+      g.globalAlpha = 1;
+      if (x1 - x0 > 26){
+        g.fillStyle = '#0a0f1c'; g.font = 'bold 11px system-ui';
+        g.fillText(ruler === 'old' ? src[i].name : ('n' + (i + 1)), x0 + 6, Y_BAR0 + 25);
+      }
+      // cut mark + its C value
+      g.strokeStyle = '#6b7a99'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x1, Y_BAR1); g.lineTo(x1, Y_BAR1 + 6); g.stroke();
+      if (i % 1 === 0 && (x1 - x0 > 22 || i === src.length - 1)){
+        g.fillStyle = '#6b7a99'; g.font = '10.5px system-ui';
+        g.fillText(cc[i + 1].toFixed(2), x1 - 12, Y_BAR1 + 19);
+      }
+    }
+    g.fillStyle = '#6b7a99'; g.font = '10.5px system-ui';
+    g.fillText('0.00', LEFT - 8, Y_BAR1 + 19);
+
+    /* ---------- the dart ---------- */
+    if (rNow !== null){
+      const x = LEFT + SPAN * rNow;
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x, Y_BAR0 - 34); g.lineTo(x, Y_BAR0 - 4); g.stroke();
+      g.beginPath(); g.moveTo(x - 5, Y_BAR0 - 12); g.lineTo(x, Y_BAR0 - 3); g.lineTo(x + 5, Y_BAR0 - 12); g.stroke();
+      g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+      g.fillText('r = ' + rNow.toFixed(2), clamp(x - 24, LEFT, RIGHT - 60), Y_BAR0 - 40);
+    }
+
+    /* ---------- row C : the crowd being built ---------- */
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('OUTPUT  —  the new crowd  S′(n)' +
+      (stage >= 8 ? '   with its fresh weights' : (stage >= 6 ? '   after the walk' : '   (copies pile up)')),
+      LEFT, Y_NEW - 52);
+    g.strokeStyle = '#222c44'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, Y_NEW); g.lineTo(RIGHT, Y_NEW); g.stroke();
+
+    const seen = {};
+    for (const k of kids){
+      const key = k.s.toFixed(1);
+      const stack = (stage < 6) ? (seen[key] = (seen[key] || 0) + 1) - 1 : 0;
+      const x = xOf(k.s);
+      dot(x, Y_NEW - stack * 17, 4 + (stage >= 8 ? 18 * Math.sqrt(k.w) : 7), k.col, 0.85);
+      if (stage >= 8){
+        g.fillStyle = '#6b7a99'; g.font = '10.5px system-ui';
+        g.fillText(k.w.toFixed(2), x - 10, Y_NEW + 30);
+      }
+    }
+    if (z !== null){
+      const x = xOf(z);
+      g.strokeStyle = '#ffb454'; g.lineWidth = 2; g.setLineDash([5, 4]);
+      g.beginPath(); g.moveTo(x, Y_NEW - 60); g.lineTo(x, Y_NEW + 16); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#ffb454'; g.font = 'bold 11px system-ui';
+      g.fillText('measurement z', x - 38, Y_NEW - 66);
+    }
+
+    if (kids.length){
+      g.fillStyle = '#6b7a99'; g.font = '12px monospace';
+      g.fillText("S' = [ " + kids.map(k => k.s.toFixed(0)).join(', ') + ' ]', LEFT, H - 14);
+    }
+
+    /* ---------- text ---------- */
+    let t;
+    if (stage === 0)
+      t = 'Three arrays in, three arrays out. Top row = the input particles S with their weights π. ' +
+          'The bar = those same weights laid end to end on a ruler of length 1 — <b>that bar is C</b>. Press Next to throw the first dart.';
+    else if (stage <= 5)
+      t = 'Dart ' + stage + ': r = <b>' + rNow.toFixed(2) + '</b> lands inside <b>' + old[jNow].name +
+          '</b>’s strip, because ' + old[jNow].name + ' is the smallest j with C<sup>j</sup> = ' +
+          C[jNow + 1].toFixed(2) + ' &gt; ' + rNow.toFixed(2) + '. So ' + old[jNow].name +
+          ' is <b>copied</b> into the new crowd (state ' + old[jNow].s.toFixed(0) + '). ' +
+          (stage < 5 ? 'Nobody has moved yet.' : 'Five darts thrown, five particles out — same N as we started with.');
+    else if (stage === 6)
+      t = 'All weights are now <b>1/N</b>. The information moved out of the weights and into <b>how many copies</b> ' +
+          'each guess has: P4 owns 3 of the 5 slots. Notice the copies are stacked on the same spot — identical clones, useless as they are.';
+    else if (stage === 7)
+      t = '<b>Predict.</b> Each copy drifts by its own motion model and adds diffusion noise, so the clones separate ' +
+          'into distinct hypotheses. The image was still not touched.';
+    else
+      t = '<b>Measure.</b> The frame arrives (amber). Each particle is scored by P(z|x), weights normalised, and the ruler ' +
+          'C is <b>rebuilt</b> from the new weights — that rebuilt C is the third output array, ready for the next frame. Press Next to run another round.';
+
+    ro.innerHTML = 'step <b>' + Math.min(stage + 1, 9) + '/9</b> &nbsp;·&nbsp; ' + t;
+    btnNext.textContent = (stage === 8) ? 'Next frame ↺' : 'Next ▸';
+  }
+
+  document.getElementById('Dnext').onclick = next;
+  document.getElementById('Dall').onclick = () => { while (stage !== 8) next(); };
+  document.getElementById('Dreset').onclick = init;
+  init();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intrinsic Images &amp; the online Q3 — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+           border:1px solid var(--line); border-left:4px solid #c792ea; }
+  .story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+           color:#c792ea; font-weight:700; margin-bottom:6px; }
+  .qbox { margin:18px 0; padding:16px 20px; border-radius:12px; background:#101a2b;
+          border:1px solid var(--line); border-left:4px solid var(--accent-3); }
+  .qbox .q-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+          color:var(--accent-3); font-weight:700; margin-bottom:6px; }
+  .steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+  .steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+           background:var(--card); border:1px solid var(--line); border-radius:11px; }
+  .steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+           border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+           display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .steps li b { color:var(--accent-2); }
+  details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+           padding:12px 16px; margin:10px 0; }
+  details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  details.qa summary::marker { color:var(--accent-3); }
+  details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+  .kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+  .kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+  .yes { color:var(--good); font-weight:700; }
+  .no  { color:var(--danger); font-weight:700; }
+  .chk { display:inline-flex; align-items:center; gap:7px; font-size:14px; color:var(--ink-dim);
+         padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:#131a2b; cursor:pointer; }
+  .answerbox { margin:18px 0; padding:18px 22px; border-radius:12px; background:#0f2420;
+         border:1px solid #1d4a42; border-left:4px solid var(--good); }
+  .answerbox .a-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+         color:var(--good); font-weight:700; margin-bottom:8px; }
+  .answerbox p { margin:8px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Extra</b> · Intrinsic Images &amp; Moed A Q3</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch12_intrinsic_images.html">‹ Chapter 12</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="exam07_intrinsic_images.html">Exam 7 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 12 · built around Moed A, question 3</div>
+    <h1>Intrinsic images, and the "online $R_t$" question</h1>
+    <p class="lede">Story first, no formulas. Then the one trap that decides the grade, then the trick the hint is
+    pointing at, and only at the end the math. Three demos you can press along the way.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 3 · 13 points · INTRINSIC IMAGES</span>
+    <p style="margin:0">Suggest an <em>online</em> algorithm for computing the intrinsic reflectance image $R_t$
+    from a sequence $I_1, \dots, I_t$. The algorithm can store as many as <strong>256 input images</strong> (or
+    their equivalent in terms of memory footprint). <strong>Hint:</strong> the intensity values of a pixel in
+    $I_1, \dots, I_t$ are in the range $[0,255]$.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The painted wall and the moving clouds</span>
+    <p>There is a wall with a picture painted on it. The paint <strong>never changes</strong>. It is the same at
+    breakfast and at sunset.</p>
+    <p>All day, clouds drift past the sun. Sometimes a shadow lies on the left of the wall, sometimes on the
+    right, sometimes there is no shadow at all. The <strong>light keeps changing</strong>.</p>
+    <p>You take a photo every minute for a whole day. Now: <em>can you draw the picture on the wall, with no
+    shadows at all — a photo the camera never actually took?</em></p>
+    <p>That shadow-free picture of the pure paint is the <span class="term">reflectance image</span> $R$.
+    The map of shadows and brightness is the <span class="term">illumination image</span> $L$. Every photo you
+    took is just those two multiplied together: <strong>paint × light</strong>.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Why one photo is not enough</span>
+    <p style="margin:6px 0 0">A dark patch in one photo — is it <em>dark paint</em>, or <em>white paint in
+    shadow</em>? A single photo cannot tell. One equation, two unknowns. Hopeless.</p>
+    <p><strong>But a whole sequence can.</strong> Because the paint is the part that <em>stays</em>, and the
+    shadows are the part that <em>moves</em>. Whatever stays put across the whole day is paint. Whatever comes
+    and goes is light. That single sentence is the entire chapter.</p>
+  </div>
+
+  <h3>So how do you decide "what stays"?</h3>
+
+  <p>Take one single spot on the wall and write down its brightness in every photo. You get a long list of
+  numbers. Most of the time that spot is in plain sunlight, so most of the numbers are nearly the same. Once in a
+  while a cloud passes and the number drops hard.</p>
+
+  <p>You want the value that "stays". So:</p>
+
+  <ul>
+    <li><strong>Average?</strong> Bad. A few very dark shadow readings drag the average down. The answer gets
+    bruised by every cloud that ever passed.</li>
+    <li><strong>Minimum?</strong> Worse. It picks the darkest shadow ever seen — the answer is the worst moment
+    of the day.</li>
+    <li><strong>Middle value (median)?</strong> Perfect. Sort the numbers and take the one in the middle. A few
+    crazy values at the ends do not move the middle at all. The middle is where the crowd is, and the crowd is
+    the sunlit paint.</li>
+  </ul>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — one spot on the wall, all day</h4><span class="tag">add photos</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Each bar is one photo's reading at a single spot. Most land on the
+      true paint value; the short ones are cloud moments. Watch which of the three estimators stays glued to the
+      truth.</p>
+      <canvas id="cvA" width="900" height="300"></canvas>
+      <div class="legend">
+        <span><i style="background:#7ee787"></i> true paint value (hidden from the algorithm)</span>
+        <span><i style="background:#41d8c9"></i> median</span>
+        <span><i style="background:#6ea8ff"></i> mean</span>
+        <span><i style="background:#ff6b81"></i> min</span>
+      </div>
+      <div class="controls">
+        <div class="control"><label>how cloudy (fraction of shadowed photos) <span class="val" id="vAc">30%</span></label><input type="range" id="Ac" min="0" max="70" step="5" value="30"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Aadd">+1 photo</button>
+        <button class="act" id="Aadd20">+20 photos</button>
+        <button class="act" id="Areset">Reset</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Push the cloudiness slider past 50%</span>
+    The median breaks. Of course it does — if the spot is in shadow <em>most</em> of the time, the middle value
+    <em>is</em> a shadow value. Remember this; in two sections it becomes the whole problem.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The trap that decides the grade</h2>
+
+  <div class="story">
+    <span class="story-label">The corner that is always dark</span>
+    <p>Imagine a corner of the wall that a big tree keeps shaded for <em>most</em> of the day. Its readings are
+    dark in most photos. Take the middle value there and you get… dark.</p>
+    <p>So the "median of the photos" trick declares: <strong>"that corner is painted dark grey."</strong>
+    Wrong. It is white paint that happens to sit in shade. The shadow got <em>baked into the paint</em>.</p>
+    <p>This is exactly the P and Q pixels in Weiss's Figure 4, and it is the single most common way to lose
+    points on this question.</p>
+  </div>
+
+  <h3>The fix: stop looking at brightness, look at <em>changes</em></h3>
+
+  <p>Instead of asking "how bright is this spot?", ask <strong>"how different is this spot from its
+  neighbour?"</strong></p>
+
+  <p>Why that helps, in two lines:</p>
+
+  <ul>
+    <li>A shadow is <strong>big and smooth</strong>. Inside the shadow, every pixel is darkened by roughly the
+    same amount, so neighbour-minus-neighbour is <strong>zero</strong>. A shadow only shows up at its
+    <em>border</em> — a thin line, and that line <strong>moves</strong> with the cloud.</li>
+    <li>The paint's own edges — where the picture changes colour — are <strong>always in the same place</strong>,
+    in every single photo.</li>
+  </ul>
+
+  <p>So in the "differences" world: the paint's edges are <em>permanent</em>, and the shadow's edges are
+  <em>rare visitors</em> that appear at a different place every time. Take the middle value of the differences
+  and the visitors are voted out, while the permanent edges survive. <strong>That</strong> is the sparseness
+  assumption, in plain words: <em>a shadow's edges are rare; a shadow's darkness is not.</em></p>
+
+  <p>Then you rebuild the picture from its edges — walk across the wall adding up the differences, like
+  reconstructing a staircase from the height of each step.</p>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the whole wall: median of brightness vs median of edges</h4><span class="tag">play · step</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A 1-D wall seen from the front. A shadow band slides around, and it
+      spends most of its time on the right, so the right side is dark in <em>most</em> photos — that is our
+      "always shaded corner". Add photos and compare the two bottom strips.</p>
+      <canvas id="cvB" width="900" height="430"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Bplay">▶ Play</button>
+        <button class="act" id="Bstep">+1 photo</button>
+        <button class="act" id="Bstep25">+25 photos</button>
+        <button class="act" id="Breset">Reset</button>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">What you should be seeing</span>
+    <p style="margin:6px 0 0">Strip 3 (<strong>median of brightness</strong>) keeps a dark bruise on the right —
+    the shadow became "paint". Strip 4 (<strong>median of edges, then rebuild</strong>) comes out flat and clean,
+    because the shadow's <em>edges</em> were never in the same place twice.</p>
+    <p>Say this sentence in the exam and you have the 13 points: <strong>the median is taken on the filtered
+    (derivative) frames, not on the raw frames.</strong></p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · What "online" means, and where this breaks</h2>
+
+  <p><strong>Online</strong> = photos arrive one at a time, you must output an answer after every photo, and you
+  are not allowed to keep them all. Live video, not a folder on disk.</p>
+
+  <p>Walk through the recipe and ask, for each step, "could I do this with just the new photo in my hand?"</p>
+
+  <table class="kv">
+    <tr><th>Step</th><th>What it does</th><th>Online?</th></tr>
+    <tr><td>1</td><td>take the log of the new photo</td><td class="yes">✔ needs only this photo</td></tr>
+    <tr><td>2</td><td>compute the neighbour-differences of it</td><td class="yes">✔ needs only this photo</td></tr>
+    <tr><td>3</td><td><strong>median over all photos so far</strong></td><td class="no">✘ needs all of them</td></tr>
+    <tr><td>4</td><td>rebuild the image from the edges</td><td class="yes">✔ fixed recipe, no history</td></tr>
+    <tr><td>5</td><td>undo the log → output $R_t$</td><td class="yes">✔</td></tr>
+  </table>
+
+  <p style="margin-top:14px"><strong>Exactly one step is the problem: the median.</strong> The usual way to find a
+  middle value is to keep all the numbers and sort them — which means memory that grows forever. After 10,000
+  frames you are storing 10,000 images. That is the whole question, and nothing else.</p>
+
+  <div class="callout key"><span class="lbl">Answer strategy</span>
+    Do not rewrite Weiss. Say "everything is already online except the median", then spend your page fixing the
+    median. That framing alone reads as a confident answer.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Reading the hint</h2>
+
+  <div class="story">
+    <span class="story-label">Counting votes without keeping the ballots</span>
+    <p>You need the middle value of a huge pile of numbers, but you are not allowed to keep the numbers.</p>
+    <p>Here is the thing: those numbers are not arbitrary. Pixel values are <strong>0 to 255</strong> — only 256
+    different values exist. So instead of writing down every number, keep <strong>256 counters</strong>: "how
+    many photos said 0, how many said 1, … how many said 255."</p>
+    <p>That is a <strong>histogram</strong>, and it never grows. One million photos, still 256 counters.</p>
+    <p>Now find the middle value without any sorting: walk the counters from left to right, adding them up, and
+    stop the moment the running total passes <strong>half the number of photos</strong>. That counter is the
+    median. Done.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">The hint was the answer</span>
+    <p style="margin:6px 0 0">"values are in $[0,255]$" → <strong>only 256 possible values</strong> → count them
+    instead of storing them.<br>
+    "you may store 256 images" → <strong>256 counters per pixel</strong> — one image's worth of memory per
+    counter. The exam is telling you the shape of the answer in both halves of the sentence.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">You have already seen this exact trick — twice</span>
+    "Add up the counts and stop when you pass the threshold" is the <strong>cumulative array</strong>.
+    In Q2 of this same exam (the loaded die) you build $C_i$ and stop at the first $C_j > r$. In Condensation's
+    select step you build $C^{(n)}$ and stop at the first $C^{(j)} > r$. Here you build the same cumulative
+    counts and stop at the first bin reaching $t/2$. <strong>One primitive, three questions.</strong> Say so in
+    the exam — it costs one sentence and it shows you see the course as a whole.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — the running median, and what it costs you</h4><span class="tag">stream frames</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">One pixel, one filter. Values stream in; each one just bumps a
+      counter. The white marker is the running median = first bin whose cumulative count reaches $t/2$. Watch the
+      two memory bars on the right: keeping the numbers grows forever, counting them does not.</p>
+      <canvas id="cvC" width="900" height="380"></canvas>
+      <div class="controls">
+        <div class="control"><label>how often a shadow edge lands here <span class="val" id="vCs">25%</span></label><input type="range" id="Cs" min="0" max="60" step="5" value="25"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Cadd">+1 frame</button>
+        <button class="act" id="Cadd50">+50 frames</button>
+        <button class="act" id="Cauto">Auto-run</button>
+        <button class="act" id="Creset">Reset</button>
+      </div>
+      <div class="readout" id="Cro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Only now, the math</h2>
+
+  <div class="explain">
+    <span class="explain-label">Every symbol is a thing you already saw</span>
+    <p>"Paint × light" is a product, and products are annoying. Take logs and it becomes a sum:</p>
+  </div>
+
+  <div class="eq">$$ I(x,y,t) = R(x,y)\,L(x,y,t) \quad \xrightarrow{\ \log\ } \quad i = r + l $$</div>
+
+  <div class="explain">
+    <p>Filter each log-frame with derivative filters $f_n$ (Weiss uses two: horizontal and vertical). Because
+    convolution is linear, the filtered frame splits the same way:</p>
+  </div>
+
+  <div class="eq">$$ o_n(x,y,t) \;=\; f_n * i \;=\; \underbrace{f_n * r}_{\text{permanent — the paint's edges}} \;+\; \underbrace{f_n * l}_{\text{sparse — the shadow's moving border}} $$</div>
+
+  <div class="explain">
+    <p><strong>Claim 1 (the assumption):</strong> the filtered illumination $f_n * l$ is Laplacian-distributed —
+    i.e. usually ≈ 0 with occasional spikes. Under that assumption the maximum-likelihood estimate of the
+    filtered reflectance is the per-pixel <strong>temporal median</strong>:</p>
+  </div>
+
+  <div class="eq">$$ \hat r_n(x,y) \;=\; \mathop{\mathrm{median}}\limits_t\; o_n(x,y,t) \tag{2} $$</div>
+
+  <div class="explain">
+    <p>Why the median falls out: a Laplacian likelihood $e^{-\beta|\cdot|}$ multiplied over all frames becomes
+    one exponential of a <em>sum of absolute errors</em>, and the number minimising total absolute distance to a
+    set of values is their median. Had you assumed a Gaussian you would be minimising <em>squared</em> errors and
+    would get the mean — which, as demo 1 shows, the shadows drag around.</p>
+    <p><strong>Then rebuild the image from its edges.</strong> You know the paint's derivatives, you want the
+    paint. That is an over-constrained linear system, solved once and for all by a fixed pseudo-inverse:</p>
+  </div>
+
+  <div class="eq">$$ f_n * \hat r = \hat r_n \tag{5} \qquad\Longrightarrow\qquad
+      \hat r = g * \Big( \sum_n f_n^{\,r} * \hat r_n \Big) \tag{6} $$</div>
+  <div class="eq">$$ \text{with } f_n^{\,r}(x,y) = f_n(-x,-y) \quad\text{and}\quad g * \Big(\sum_n f_n^{\,r} * f_n\Big) = \delta \tag{7} $$</div>
+
+  <div class="explain">
+    <p>$g$ is a fixed deconvolution filter — it depends only on <em>which filters you picked</em>, never on the
+    photos, so you compute it once, offline, forever. In 1-D with $f = [-1, 1]$ this "reconstruction" is just a
+    <strong>running sum</strong> across the row, which is literally what demo 2 does.</p>
+    <p>Finally $R = e^{\hat r}$, and each frame's lighting comes free: $\hat l(x,y,t) = i(x,y,t) - \hat r(x,y)$.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The online algorithm, written properly</h2>
+
+  <p>Keep, <strong>per pixel and per filter</strong>, a 256-bin histogram $H_k$ of the (quantised) filter
+  responses seen so far. Nothing else. For each arriving frame $I_t$:</p>
+
+  <ol class="steps">
+    <li><b>Log.</b> $i_t = \log I_t$.</li>
+    <li><b>Filter.</b> $o_n = f_n * i_t$ for each derivative filter $f_n$.</li>
+    <li><b>Count.</b> Quantise $o_n(x,y)$ to a bin index $k$ and do $H_k(x,y) \mathrel{+}= 1$. This is
+    <b>$O(1)$ per pixel</b> and it is the only thing you store.</li>
+    <li><b>Running median.</b> $\hat r_n(x,y) \;=\;$ the smallest bin $k$ whose cumulative count
+    $\sum_{j \le k} H_j(x,y)$ reaches $t/2$. (Keep a pointer at the current median bin and shift it as counts
+    change — then this is $O(1)$ too, instead of rescanning 256 bins.)</li>
+    <li><b>Reconstruct.</b> $\hat r = g * \sum_n f_n^{\,r} * \hat r_n$ with the precomputed $g$; output
+    $R_t = e^{\hat r}$.</li>
+    <li><b>Free bonus.</b> $L_t = I_t / R_t$, the illumination for this frame.</li>
+  </ol>
+
+  <div class="summary">
+    <span class="summary-label">Does it satisfy the question?</span>
+    <table>
+      <tr><th>Requirement</th><th>Delivered</th></tr>
+      <tr><td>online</td><td>emits $R_t$ after every single frame, no look-ahead</td></tr>
+      <tr><td>bounded memory</td><td>$256 \times (\#\text{filters})$ counters per pixel — <strong>independent of $t$</strong></td></tr>
+      <tr><td>uses the hint</td><td>the finite $[0,255]$ alphabet is exactly what makes a fixed histogram possible</td></tr>
+      <tr><td>cost</td><td>$O(1)$ per pixel per frame, plus one fixed deconvolution per output frame</td></tr>
+    </table>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The four wrinkles that separate 13/13 from 9/13</h2>
+
+  <div class="callout warn"><span class="lbl">1 · Median of filtered values, not of raw pixels</span>
+    If you histogram $I_t$ itself you have written <em>background subtraction</em>, not intrinsic images, and the
+    always-shaded corner comes out as dark paint (section 2). Histogram the <strong>derivative responses of the
+    log frames</strong>. Write that sentence explicitly — the grader is looking for it.
+  </div>
+
+  <div class="callout warn"><span class="lbl">2 · So the values are not literally in [0,255] — you must quantise</span>
+    $o_n$ is a difference of logs: real-valued, roughly in $[-\log 256, +\log 256] \approx [-5.5, 5.5]$. The hint
+    tells you the <em>input alphabet</em> is finite, which <em>bounds</em> the response range and justifies fixed
+    bins — it does not mean the responses are already integers. One sentence — "bin that fixed range uniformly
+    into 256 levels" — closes the gap.
+  </div>
+
+  <div class="callout warn"><span class="lbl">3 · Budget arithmetic</span>
+    Two filters × 256 bins = 512 count-images, which overshoots a strict reading of "256 images". Handle it in
+    one line: either lean on <em>"or their equivalent in memory footprint"</em> (a counter need not be as wide as
+    a pixel), or use <strong>128 bins per filter</strong> → exactly 256 images' worth, at negligible precision
+    cost. Noticing this earns the point; ignoring it can cost one.
+  </div>
+
+  <div class="callout warn"><span class="lbl">4 · Reflectance is recovered up to a global scale</span>
+    You rebuilt $\hat r$ from its <em>derivatives</em>, and derivatives kill constants — so $\hat r$ is only
+    known up to an additive constant, i.e. $R$ up to a multiplicative one. Fix it with a convention (e.g. scale
+    so the brightest reflectance is 1). Demo 2 does exactly that. Mentioning it shows you understand what
+    equation (6) can and cannot give you.
+  </div>
+
+  <div class="callout note"><span class="lbl">The other reading of the question, and why it is weaker</span>
+    You could read "store 256 images" as <em>keep a sliding window of the last 256 frames and take the window
+    median</em>. That is online and fits the budget. But it throws away everything older than 256 frames, and it
+    makes the $[0,255]$ hint pointless — why mention the intensity range at all? Mention it in one line as a
+    fallback if you like, then commit to the histogram.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, in order</span>
+    <p><strong>Setup.</strong> $I = RL$, so $i = \log I = r + l$. Weiss: filter with derivative filters,
+    $o_n = f_n * i$; assume $f_n * l$ is sparse; then $\hat r_n = \operatorname{median}_t o_n$ (eq. 2), and
+    $\hat r = g * \sum_n f_n^{\,r} * \hat r_n$ (eq. 6–7) with $g$ precomputed once; $R = e^{\hat r}$.</p>
+    <p><strong>What blocks online use.</strong> Log, filtering and reconstruction are all per-frame. Only the
+    temporal median needs the whole history — stored naively that is $O(t)$ memory.</p>
+    <p><strong>Fix — the hint.</strong> Pixel values are in $[0,255]$, so the log-derivative responses lie in a
+    bounded, known range. Quantise it into 256 levels and keep, per pixel and per filter, a <strong>256-bin
+    histogram</strong> of responses. That is the "256 images" of memory, and it is independent of $t$.</p>
+    <p><strong>Per frame:</strong> log → filter → increment one bin per pixel ($O(1)$) → read the running median
+    as the smallest bin whose cumulative count reaches $t/2$ (the same inverse-CDF/cumulative trick as Q2 and as
+    Condensation's select step) → reconstruct with the fixed $g$ → output $R_t$. Lighting follows as
+    $L_t = I_t / R_t$.</p>
+    <p><strong>Properties.</strong> Constant memory ($256 \times \#$filters per pixel), $O(1)$ per pixel per
+    frame, an output at every frame. Note the median must be taken on the <em>filtered</em> frames, not the raw
+    ones, or permanently-shaded regions get baked into the reflectance; and $\hat r$ is recovered up to an
+    additive constant, fixed by a normalisation convention.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>9 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why can't you recover $R$ from a single image?</summary>
+    <p>$I = RL$ is one equation with two unknowns at every pixel — infinitely many factorisations fit. The
+    problem is ill-posed. A sequence breaks the tie by adding a structural assumption: $R$ is constant over time
+    while $L$ changes, and the changes in $L$ have sparse derivatives.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why the median and not the mean?</summary>
+    <p>Because of the noise model. A Laplacian ($e^{-\beta|\cdot|}$) likelihood turns into a sum of
+    <em>absolute</em> errors, minimised by the median; a Gaussian turns into a sum of <em>squared</em> errors,
+    minimised by the mean. Shadow-edge responses are rare, large outliers — the mean is dragged by them, the
+    median is not. Laplacian is the honest model for natural image derivatives.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why median of the <em>filtered</em> images rather than the raw ones?</summary>
+    <p>A raw temporal median is the ML estimate only if $l$ itself were mostly zero — i.e. the scene were mostly
+    pitch dark. False. What <em>is</em> typically true is that the <em>derivatives</em> of $l$ are mostly zero:
+    shadows are large and smooth, so they only produce responses at their moving boundary. So a pixel that is
+    permanently darker (Weiss's Q vs P) contributes no derivative and comes out with the same reflectance as its
+    bright neighbour — which is the correct answer.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What exactly makes the naive algorithm non-online?</summary>
+    <p>Only the median. Finding a middle value normally means keeping every sample, so memory grows as $O(t)$ and
+    you cannot emit an answer until the sequence ends. Log, filtering, and reconstruction are all per-frame
+    operations with fixed cost.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How does a histogram give a median with no sorting?</summary>
+    <p>The histogram <em>is</em> the sorted data, stored as counts per value instead of a list. Sweep the bins
+    left to right accumulating counts; the first bin at which the cumulative count reaches $t/2$ is by definition
+    the value with half the samples below it — the median. Cost is $O(\#\text{bins})$, or $O(1)$ amortised if you
+    keep a pointer at the median bin and shift it as counts arrive.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How much memory, exactly, and why is it independent of $t$?</summary>
+    <p>$256 \times (\#\text{filters})$ counters per pixel — with Weiss's two derivative filters, 512 counters per
+    pixel (or 256 if you use 128 bins each). A new frame only <em>increments</em> counters; it never adds any.
+    So the footprint is fixed at startup no matter how long the video runs, which is exactly the definition of a
+    streaming algorithm.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where does $g$ come from, and does it need recomputing every frame?</summary>
+    <p>$g$ solves $g * (\sum_n f_n^{\,r} * f_n) = \delta$ — it is the deconvolution that inverts the combined
+    blur of the filter bank. It depends only on the chosen filters, never on the data, so it is computed once
+    offline and reused for every frame and every sequence. In practice it is one Fourier-domain (Poisson-style)
+    solve.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. If the same shadow never moves for the entire sequence, what happens?</summary>
+    <p>Its boundary produces a derivative response in <em>every</em> frame, so it is no longer sparse — the
+    median keeps it, and the shadow edge is reconstructed as if it were painted on. This is the honest limit of
+    the method: it separates paint from light only to the extent that the light actually changes. Same reason a
+    single image is hopeless, just slower.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Idea</th><th>Plain version</th></tr>
+      <tr><td>$I = RL$</td><td>every photo = paint × light</td></tr>
+      <tr><td>$\log$</td><td>turns the product into a sum so filters can split it</td></tr>
+      <tr><td>sparse $f_n * l$</td><td>shadows are big and smooth → they only show at their moving edge</td></tr>
+      <tr><td>$\hat r_n = \operatorname{median}_t o_n$</td><td>the permanent edges win the vote; visitors are outvoted</td></tr>
+      <tr><td>eq. (6)–(7)</td><td>rebuild the picture from its edges with a fixed, precomputed filter</td></tr>
+      <tr><td>the online fix</td><td>count values in 256 bins instead of storing them; median = first bin past $t/2$</td></tr>
+      <tr><td>memory</td><td>fixed, $256 \times \#$filters per pixel, forever</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole answer, five words:</strong> median of edges, via histogram.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch12_intrinsic_images.html"><span class="dir">Back to</span><span class="ttl">Ch 12 · Intrinsic Images</span></a>
+    <a class="next" href="particle_filter_for_kids.html"><span class="dir">Other companion</span><span class="ttl">Particle Filter, from zero ›</span></a>
+  </div>
+</div>
+
+<script>
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function medianOf(arr){
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a, b) => a - b), m = s.length >> 1;
+  return (s.length % 2) ? s[m] : 0.5 * (s[m - 1] + s[m]);
+}
+
+/* =========================================================
+   DEMO 1 — one pixel over time: median vs mean vs min
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Aro');
+  const elC = document.getElementById('Ac'), vC = document.getElementById('vAc');
+  const LEFT = 60, RIGHT = 860, BASE = 250, TOP = 40;
+  const TRUE_V = 0.78;                    // the paint value we are trying to recover
+  let vals = [];
+
+  function addOne(){
+    const cloudy = (+elC.value) / 100;
+    const v = (Math.random() < cloudy)
+      ? TRUE_V * (0.20 + 0.35 * Math.random())     // in shadow: much darker
+      : TRUE_V * (0.96 + 0.08 * Math.random());    // sunlit: near the truth
+    vals.push(clamp(v, 0.02, 1));
+    if (vals.length > 90) vals.shift();
+    draw();
+  }
+
+  function yOf(v){ return BASE - (BASE - TOP) * v; }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+    const n = vals.length;
+    g.font = '12px system-ui'; g.fillStyle = '#6b7a99';
+    g.fillText('brightness of ONE spot on the wall, one bar per photo', LEFT, 26);
+
+    // axis
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, BASE + .5); g.lineTo(RIGHT, BASE + .5); g.stroke();
+
+    if (!n){
+      ro.innerHTML = 'No photos yet. Press <b>+1 photo</b>.';
+      return;
+    }
+    const bw = (RIGHT - LEFT) / n;
+    for (let i = 0; i < n; i++){
+      const v = vals[i], y = yOf(v);
+      const shadow = v < TRUE_V * 0.7;
+      g.fillStyle = shadow ? 'rgba(120,132,160,.75)' : 'rgba(65,216,201,.55)';
+      g.fillRect(LEFT + i * bw, y, Math.max(1, bw - 1.5), BASE - y);
+    }
+
+    const med = medianOf(vals);
+    const mean = vals.reduce((a, b) => a + b, 0) / n;
+    const mn = Math.min.apply(null, vals);
+
+    function rule(v, col, label, dy){
+      g.strokeStyle = col; g.lineWidth = 2; g.setLineDash([7, 5]);
+      g.beginPath(); g.moveTo(LEFT, yOf(v)); g.lineTo(RIGHT, yOf(v)); g.stroke(); g.setLineDash([]);
+      g.fillStyle = col; g.font = 'bold 12px system-ui';
+      g.fillText(label + ' = ' + v.toFixed(3), RIGHT - 150, yOf(v) + dy);
+    }
+    rule(TRUE_V, '#7ee787', 'truth', -7);
+    rule(med, '#41d8c9', 'median', -7);
+    rule(mean, '#6ea8ff', 'mean', 15);
+    rule(mn, '#ff6b81', 'min', 15);
+
+    const eM = Math.abs(med - TRUE_V), eA = Math.abs(mean - TRUE_V), eN = Math.abs(mn - TRUE_V);
+    ro.innerHTML = '<b>' + n + '</b> photos &nbsp;·&nbsp; error vs truth — ' +
+      'median <b style="color:#41d8c9">' + eM.toFixed(3) + '</b>, ' +
+      'mean <b style="color:#6ea8ff">' + eA.toFixed(3) + '</b>, ' +
+      'min <b style="color:#ff6b81">' + eN.toFixed(3) + '</b>' +
+      ((+elC.value) > 50 ? ' &nbsp;·&nbsp; <span style="color:#ffb454">over 50% cloudy — the median is now a shadow value too</span>' : '');
+  }
+
+  document.getElementById('Aadd').onclick = addOne;
+  document.getElementById('Aadd20').onclick = () => { for (let i = 0; i < 20; i++) addOne(); };
+  document.getElementById('Areset').onclick = () => { vals = []; draw(); };
+  elC.oninput = () => { vC.textContent = elC.value + '%'; };
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — the wall: raw temporal median vs median-of-edges
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvB'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Bro');
+  const NC = 120, LEFT = 60, SPAN = 780, CW = SPAN / NC;
+  const SH_W = 40;                      // shadow band width, in cells
+  const SH_DARK = 0.32;                 // how much the shadow multiplies the light by
+
+  // ---- the ground truth paint (algorithm never sees this) ----
+  const Rtrue = new Float64Array(NC);
+  for (let x = 0; x < NC; x++){
+    let v = 0.55;
+    if (x >= 18 && x < 40) v = 0.88;
+    if (x >= 58 && x < 74) v = 0.22;
+    if (x >= 88 && x < 112) v = 0.70;
+    Rtrue[x] = v;
+  }
+
+  let rawSamples = [], edgeSamples = [], t = 0, frame = null, shadowC = 0, timer = null;
+
+  function reset(){
+    rawSamples = []; edgeSamples = [];
+    for (let x = 0; x < NC; x++) rawSamples.push([]);
+    for (let x = 0; x < NC - 1; x++) edgeSamples.push([]);
+    t = 0; frame = null;
+    draw();
+  }
+
+  function addFrame(){
+    // shadow sits mostly on the right: its left edge is uniform in [45, 85],
+    // so cells near 85 are shadowed in EVERY frame, but the edges never repeat.
+    shadowC = 45 + Math.random() * 40;
+    const I = new Float64Array(NC), logI = new Float64Array(NC);
+    for (let x = 0; x < NC; x++){
+      const lit = (x >= shadowC && x < shadowC + SH_W) ? SH_DARK : 1.0;
+      I[x] = clamp(Rtrue[x] * lit, 0.004, 1);
+      logI[x] = Math.log(I[x]);
+      rawSamples[x].push(logI[x]);
+    }
+    for (let x = 0; x < NC - 1; x++) edgeSamples[x].push(logI[x + 1] - logI[x]);
+    frame = I; t++;
+    draw();
+  }
+
+  function grey(v){
+    const c = Math.round(255 * Math.pow(clamp(v, 0, 1), 1 / 2.2));
+    return 'rgb(' + c + ',' + c + ',' + c + ')';
+  }
+  function strip(arr, y, h, title, note, noteCol){
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText(title, LEFT, y - 8);
+    if (note){ g.fillStyle = noteCol || '#6b7a99'; g.font = 'italic 11.5px system-ui';
+      g.fillText(note, LEFT + 340, y - 8); }
+    if (!arr){
+      g.fillStyle = '#131a2b'; g.fillRect(LEFT, y, SPAN, h);
+      g.strokeStyle = '#2c3650'; g.strokeRect(LEFT + .5, y + .5, SPAN, h);
+      g.fillStyle = '#6b7a99'; g.font = '12px system-ui';
+      g.fillText('— no photos yet —', LEFT + SPAN / 2 - 55, y + h / 2 + 4);
+      return;
+    }
+    for (let x = 0; x < NC; x++){
+      g.fillStyle = grey(arr[x]);
+      g.fillRect(LEFT + x * CW, y, CW + 0.6, h);
+    }
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.strokeRect(LEFT + .5, y + .5, SPAN, h);
+  }
+
+  function normalise(logArr, n){          // exp, then scale so the brightest is 1
+    const out = new Float64Array(n);
+    let mx = -1e9;
+    for (let x = 0; x < n; x++) mx = Math.max(mx, logArr[x]);
+    for (let x = 0; x < n; x++) out[x] = Math.exp(logArr[x] - mx);
+    return out;
+  }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+
+    strip(Rtrue, 40, 46, 'TRUE PAINT  R   (ground truth — the algorithm never sees this)');
+    strip(frame, 128, 46, 'ONE PHOTO  I t = R × L', t ? 'shadow band currently at cell ' + shadowC.toFixed(0) : '');
+
+    let rawR = null, wsR = null;
+    if (t > 0){
+      // (a) naive: median of the raw log frames
+      const rawMed = new Float64Array(NC);
+      for (let x = 0; x < NC; x++) rawMed[x] = medianOf(rawSamples[x]);
+      rawR = normalise(rawMed, NC);
+
+      // (b) Weiss: median of the derivative responses, then rebuild by running sum
+      const edgeMed = new Float64Array(NC - 1);
+      for (let x = 0; x < NC - 1; x++) edgeMed[x] = medianOf(edgeSamples[x]);
+      const rec = new Float64Array(NC);
+      rec[0] = 0;
+      for (let x = 0; x < NC - 1; x++) rec[x + 1] = rec[x] + edgeMed[x];
+      wsR = normalise(rec, NC);
+    }
+
+    strip(rawR, 216, 46, 'NAIVE:  median of the BRIGHTNESS',
+          t ? 'shadow baked in on the right ✗' : '', '#ff6b81');
+    strip(wsR, 304, 46, 'WEISS:  median of the EDGES, then rebuild',
+          t ? 'clean ✓' : '', '#7ee787');
+
+    // where the shadow always sits
+    if (t > 0){
+      const x0 = LEFT + 85 * CW;
+      g.strokeStyle = 'rgba(255,180,84,.55)'; g.setLineDash([4, 4]); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(x0, 34); g.lineTo(x0, 356); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#ffb454'; g.font = '11px system-ui';
+      g.fillText('this cell is shadowed in EVERY photo', clamp(x0 - 90, LEFT, LEFT + SPAN - 200), 372);
+    }
+
+    // error readout
+    if (t > 0){
+      let eRaw = 0, eWs = 0, mx = 0;
+      for (let x = 0; x < NC; x++) mx = Math.max(mx, Rtrue[x]);
+      for (let x = 0; x < NC; x++){
+        eRaw += Math.abs(rawR[x] - Rtrue[x] / mx);
+        eWs  += Math.abs(wsR[x]  - Rtrue[x] / mx);
+      }
+      eRaw /= NC; eWs /= NC;
+      ro.innerHTML = '<b>' + t + '</b> photos &nbsp;·&nbsp; mean error vs true paint — ' +
+        'median-of-brightness <b style="color:#ff6b81">' + eRaw.toFixed(3) + '</b>, ' +
+        'median-of-edges <b style="color:#7ee787">' + eWs.toFixed(3) + '</b>' +
+        (t < 8 ? ' &nbsp;·&nbsp; add more photos — both are still noisy' : '');
+    } else {
+      ro.innerHTML = 'Press <b>+1 photo</b>. The shadow lands in a different place each time, but it always ' +
+        'covers the right-hand side, so cells there are dark in <em>every</em> photo.';
+    }
+  }
+
+  const btnPlay = document.getElementById('Bplay');
+  function stop(){ if (timer){ clearInterval(timer); timer = null; btnPlay.textContent = '▶ Play'; } }
+  btnPlay.onclick = () => { if (timer) stop(); else { btnPlay.textContent = '❚❚ Pause'; timer = setInterval(addFrame, 160); } };
+  document.getElementById('Bstep').onclick = addFrame;
+  document.getElementById('Bstep25').onclick = () => { for (let i = 0; i < 25; i++) addFrame(); };
+  document.getElementById('Breset').onclick = () => { stop(); reset(); };
+  reset();
+})();
+
+/* =========================================================
+   DEMO 3 — running median from a 256-bin histogram, + memory
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvC'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Cro');
+  const elS = document.getElementById('Cs'), vS = document.getElementById('vCs');
+  const NB = 256, LO = -4, HI = 4;                 // the fixed, known response range
+  const TRUE_R = 0.9;                              // the paint's own edge response
+  const LEFT = 55, SPAN = 545, BASE = 250, TOP = 60;
+
+  let H_ = new Int32Array(NB), t = 0, last = null, timer = null;
+
+  function binOf(v){ return clamp(Math.round((v - LO) / (HI - LO) * (NB - 1)), 0, NB - 1); }
+  function valOf(k){ return LO + (HI - LO) * k / (NB - 1); }
+
+  function addOne(){
+    const p = (+elS.value) / 100;
+    const v = (Math.random() < p)
+      ? TRUE_R + (Math.random() < 0.5 ? -1 : 1) * (1.2 + 2.2 * Math.random())   // a shadow edge landed here
+      : TRUE_R + (Math.random() - 0.5) * 0.18;                                  // just the paint edge
+    last = clamp(v, LO, HI);
+    H_[binOf(last)]++; t++;
+    draw();
+  }
+
+  function runningMedian(){
+    if (!t) return null;
+    let acc = 0;
+    for (let k = 0; k < NB; k++){ acc += H_[k]; if (acc >= t / 2) return k; }
+    return NB - 1;
+  }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+    g.font = '12px system-ui';
+
+    /* ---------- left: the histogram ---------- */
+    g.fillStyle = '#9fb0cc';
+    g.fillText('the 256 counters  H k  — one per possible value. Height = how many frames said that value.', LEFT, 30);
+    let hmax = 1; for (let k = 0; k < NB; k++) hmax = Math.max(hmax, H_[k]);
+    const bw = SPAN / NB;
+    for (let k = 0; k < NB; k++){
+      if (!H_[k]) continue;
+      const h = (BASE - TOP) * (H_[k] / hmax);
+      g.fillStyle = '#41d8c9';
+      g.fillRect(LEFT + k * bw, BASE - h, Math.max(1, bw), h);
+    }
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, BASE + .5); g.lineTo(LEFT + SPAN, BASE + .5); g.stroke();
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('bin 0  (' + LO + ')', LEFT - 6, BASE + 16);
+    g.fillText('bin 255  (+' + HI + ')', LEFT + SPAN - 62, BASE + 16);
+
+    /* ---------- the cumulative curve + the t/2 crossing ---------- */
+    if (t){
+      g.strokeStyle = 'rgba(110,168,255,.85)'; g.lineWidth = 2; g.beginPath();
+      let acc = 0;
+      for (let k = 0; k < NB; k++){
+        acc += H_[k];
+        const x = LEFT + k * bw, y = BASE - (BASE - TOP) * (acc / t);
+        (k === 0) ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.stroke();
+      // half-way line
+      const yHalf = BASE - (BASE - TOP) * 0.5;
+      g.strokeStyle = 'rgba(255,180,84,.8)'; g.setLineDash([6, 5]); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(LEFT, yHalf); g.lineTo(LEFT + SPAN, yHalf); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#ffb454'; g.font = '11px system-ui';
+      g.fillText('half the frames  (t/2)', LEFT + SPAN - 130, yHalf - 6);
+      g.fillStyle = 'rgba(110,168,255,.9)';
+      g.fillText('cumulative count', LEFT + 6, TOP + 4);
+
+      // the median marker
+      const km = runningMedian(), xm = LEFT + km * bw;
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(xm, TOP - 16); g.lineTo(xm, BASE); g.stroke();
+      g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+      g.fillText('median = bin ' + km, clamp(xm - 40, LEFT, LEFT + SPAN - 110), TOP - 22);
+
+      // the newest sample
+      if (last !== null){
+        const xl = LEFT + binOf(last) * bw;
+        g.strokeStyle = '#7ee787'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(xl, BASE + 4); g.lineTo(xl, BASE + 16); g.stroke();
+        g.fillStyle = '#7ee787'; g.font = '11px system-ui';
+        g.fillText('newest', clamp(xl - 18, LEFT, LEFT + SPAN - 45), BASE + 30);
+      }
+    }
+
+    /* ---------- right: the memory comparison ---------- */
+    const RX = 660, RW = 190, RB = 250, RT = 70;
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('memory used', RX, 30);
+    const cap = 600;                                   // scale: 600 samples fills the bar
+    const hNaive = (RB - RT) * clamp(t / cap, 0, 1);
+    const hHist = (RB - RT) * (NB / cap);
+    g.fillStyle = 'rgba(255,107,129,.75)'; g.fillRect(RX, RB - hNaive, 78, hNaive);
+    g.fillStyle = 'rgba(65,216,201,.75)';  g.fillRect(RX + 100, RB - hHist, 78, hHist);
+    g.strokeStyle = '#2c3650'; g.beginPath(); g.moveTo(RX - 6, RB + .5); g.lineTo(RX + RW, RB + .5); g.stroke();
+    g.fillStyle = '#ff6b81'; g.font = 'bold 11px system-ui';
+    g.fillText('keep all', RX + 14, RB + 16); g.fillText(t + ' values', RX + 8, RB + 30);
+    g.fillStyle = '#41d8c9';
+    g.fillText('histogram', RX + 106, RB + 16); g.fillText('256 counters', RX + 100, RB + 30);
+    g.fillStyle = '#6b7a99'; g.font = 'italic 11px system-ui';
+    g.fillText('one grows forever,', RX, RB + 56);
+    g.fillText('the other never moves', RX, RB + 72);
+    g.fillStyle = (t > NB) ? '#7ee787' : '#ffb454'; g.font = '11px system-ui';
+    g.fillText(t > NB ? 'past frame 256 — counting now wins,' : 'below frame 256 the histogram costs more —',
+               RX, RB + 96);
+    g.fillText(t > NB ? 'and the gap grows without limit' : 'but it stops there, and t does not', RX, RB + 111);
+
+    const km = runningMedian();
+    ro.innerHTML = (!t)
+      ? 'No frames yet. Press <b>+1 frame</b> — each frame just bumps one counter, nothing is stored.'
+      : '<b>' + t + '</b> frames &nbsp;·&nbsp; running median = <b>' + valOf(km).toFixed(3) +
+        '</b> (bin ' + km + ') &nbsp;·&nbsp; true paint edge = <b style="color:#7ee787">' + TRUE_R.toFixed(3) +
+        '</b> &nbsp;·&nbsp; error <b>' + Math.abs(valOf(km) - TRUE_R).toFixed(3) + '</b>' +
+        ' &nbsp;·&nbsp; memory: <span style="color:#41d8c9">256 counters, whatever t is</span>';
+  }
+
+  document.getElementById('Cadd').onclick = addOne;
+  document.getElementById('Cadd50').onclick = () => { for (let i = 0; i < 50; i++) addOne(); };
+  const btnAuto = document.getElementById('Cauto');
+  function stop(){ if (timer){ clearInterval(timer); timer = null; btnAuto.textContent = 'Auto-run'; } }
+  btnAuto.onclick = () => { if (timer) stop(); else { btnAuto.textContent = '❚❚ Stop'; timer = setInterval(addOne, 70); } };
+  document.getElementById('Creset').onclick = () => { stop(); H_ = new Int32Array(NB); t = 0; last = null; draw(); };
+  elS.oninput = () => { vS.textContent = elS.value + '%'; };
+  draw();
+})();
+</script>
+
+</body>
+</html>

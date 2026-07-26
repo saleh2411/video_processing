@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Processing — Pre-Exam Cram Summary</title>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{
+  --bg:#0e1320; --card:#1b2336; --card2:#161f33; --ink:#e6ecf7; --ink-dim:#9fb0cc;
+  --ink-faint:#6b7a99; --accent:#41d8c9; --accent2:#5aa2ff; --amber:#ffca6b;
+  --danger:#ff6b81; --good:#7ee787; --line:#2c3650;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:64px}
+body{margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent)}
+.topbar{position:sticky; top:0; z-index:20; background:rgba(10,15,26,.93);
+  backdrop-filter:blur(6px); border-bottom:1px solid var(--line);
+  padding:12px 20px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+.topbar b{font-size:17px}
+.topbar .sub{color:var(--ink-faint); font-size:13px}
+.wrap{max-width:1000px; margin:0 auto; padding:22px 20px 90px}
+h1{font-size:30px; margin:.2em 0 .1em}
+h2{font-size:23px; margin:1.6em 0 .5em; padding-bottom:.25em; border-bottom:1px solid var(--line)}
+h3{font-size:18px; margin:1.2em 0 .3em}
+.lede{color:var(--ink-dim)}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin:14px 0 4px}
+.chips a{display:inline-block; text-decoration:none; font-size:12.5px; color:var(--ink-dim);
+  background:var(--card2); border:1px solid var(--line); border-radius:20px; padding:4px 11px}
+.chips a:hover{border-color:var(--accent); color:var(--ink)}
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px;
+  padding:2px 20px 16px; margin:20px 0; scroll-margin-top:64px}
+.card > h2{border:0; margin-top:.7em}
+.tag{display:inline-block; font-size:11px; letter-spacing:.5px; text-transform:uppercase;
+  color:#07221f; background:var(--accent); border-radius:6px; padding:2px 8px; font-weight:700;
+  vertical-align:middle; margin-left:8px}
+.blk{border-left:3px solid var(--line); padding:2px 0 2px 14px; margin:12px 0}
+.blk .h{font-size:12px; text-transform:uppercase; letter-spacing:.6px; font-weight:700; margin-bottom:3px}
+.core{border-color:var(--accent)} .core .h{color:var(--accent)}
+.math{border-color:var(--accent2)} .math .h{color:var(--accent2)}
+.steps{border-color:var(--ink-faint)} .steps .h{color:var(--ink-dim)}
+.fail{border-color:var(--danger)} .fail .h{color:var(--danger)}
+.exam{border-color:var(--amber); background:rgba(255,202,107,.05)} .exam .h{color:var(--amber)}
+ul,ol{margin:.3em 0 .3em; padding-left:1.3em}
+li{margin:.18em 0}
+code{background:#0c1322; border:1px solid var(--line); border-radius:5px; padding:.5px 5px; font-size:13.5px}
+.callout{background:var(--card2); border:1px solid var(--line); border-left:4px solid var(--accent);
+  border-radius:10px; padding:12px 16px; margin:16px 0}
+.callout.warn{border-left-color:var(--amber)}
+table{width:100%; border-collapse:collapse; margin:10px 0; font-size:14px; display:block; overflow-x:auto}
+th,td{border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top}
+th{background:var(--card2); color:var(--ink-dim); font-size:12px; text-transform:uppercase; letter-spacing:.4px}
+td b{color:var(--accent)}
+.mini{color:var(--ink-faint); font-size:13px}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}}
+.kbd{color:var(--good)}
+hr{border:0; border-top:1px solid var(--line); margin:26px 0}
+.recall li{margin:.35em 0}
+.recall b{color:var(--amber)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <b>Video Processing — Pre-Exam Cram</b>
+  <span class="sub">Avidan · TAU 0512-4263 · 12-chapter book, distilled for the exam</span>
+</div>
+
+<div class="wrap">
+
+<h1>Read-before-the-exam summary</h1>
+<p class="lede">One core idea, the key equations, the algorithm in steps, when it breaks, and <b>how it gets asked</b> — for each of the 12 chapters. Built from the book and the two real 2022 exams. Pair this with your formula sheet (<code>StudyReference</code>) and the solved exams (<code>exams/exams_solved</code>).</p>
+
+<div class="callout warn">
+<b>The exam format (from both 2022 papers).</b> 8 questions, 100 points (mix of 12/13 pts), 3 hours, one page per answer. Every prompt says <b>“show all work, justify, be brief.”</b> Almost no question asks you to recite an algorithm. They ask you to <b>(a) modify</b> a known algorithm to accept an extra input, <b>(b) derive</b> a stated equation, or <b>(c) reason</b> about a property (symmetric? terminates? which parameter?). Know each method well enough to <i>bend</i> it.
+</div>
+
+<div class="chips">
+  <a href="#map">🗺 Exam-pattern map</a>
+  <a href="#tools">🧰 Recurring toolbox</a>
+  <a href="#c1">1 · Motion</a>
+  <a href="#c2">2 · Optical Flow</a>
+  <a href="#c3">3 · Motion Apps</a>
+  <a href="#c4">4 · Kalman/Particle</a>
+  <a href="#c5">5 · Texture</a>
+  <a href="#c6">6 · Layers</a>
+  <a href="#c7">7 · Magnification</a>
+  <a href="#c8">8 · Bg Subtraction</a>
+  <a href="#c9">9 · Colorization</a>
+  <a href="#c10">10 · Matting</a>
+  <a href="#c11">11 · Retarget/PatchMatch</a>
+  <a href="#c12">12 · Intrinsic Images</a>
+  <a href="#recall">⚡ Last-minute one-liners</a>
+</div>
+
+<!-- ================= EXAM PATTERN MAP ================= -->
+<h2 id="map">🗺 Exam-pattern map — the 8 slots</h2>
+<p class="mini">Both 2022 exams reused the same 8 “slots.” Same skill, different dressing. Expect the same slots again.</p>
+<table>
+<thead><tr><th>Slot</th><th>Moed A (19/6/22)</th><th>Moed B (1/8/22)</th><th>Chapter / method</th></tr></thead>
+<tbody>
+<tr><td><b>Optic flow, modified</b></td><td>HS + semantic-segmentation maps</td><td>HS + sparse LiDAR depth</td><td>Ch 2 — add a per-pixel prior term to Horn–Schunck</td></tr>
+<tr><td><b>Tracking theory</b></td><td>Simulate a loaded die from <code>rand()</code></td><td>Derive the Bayes recursion (1)</td><td>Ch 4 — resampling (CDF inversion) / filter derivation</td></tr>
+<tr><td><b>Synthesis from a model</b></td><td>Online reflectance $R_t$ (256-buffer)</td><td>Text synthesis from Word2Vec</td><td>Ch 12 / Ch 5 — Weiss median / dynamic-texture state-space</td></tr>
+<tr><td><b>Space–time / novel view</b></td><td>Iguazu: reverse the pan, water still falls</td><td>Rotating camera → virtual inside view</td><td>Paper-based — time-fronts / light fields (lighter in book)</td></tr>
+<tr><td><b>PatchMatch family</b></td><td>Clone detection</td><td>Extend 1-NN → k-NN PatchMatch</td><td>Ch 11 — nearest-neighbour patch field</td></tr>
+<tr><td><b>Geodesic distance</b></td><td>Effect of the $\gamma$ parameter</td><td>Trace a path along Lena’s hat edge</td><td>Ch 9 — content-aware distance / Dijkstra</td></tr>
+<tr><td><b>Segmentation / labels on a graph</b></td><td>3-D point cloud + scribbles</td><td>Social network, mixed interests</td><td>Ch 9/6 — scribble propagation, geodesic/graph, K-means</td></tr>
+<tr><td><b>Prove a property</b></td><td>Is BDS distance $D$ symmetric?</td><td>Does k-means terminate?</td><td>Ch 11 / Ch 6 — counter-example / monotone-decrease argument</td></tr>
+</tbody>
+</table>
+<div class="callout"><b>Fast answers to the two “property” questions.</b><br>
+• <b>Is $D(P,Q)=\max_{p}\min_{q}\lVert p-q\rVert$ symmetric?</b> <b class="kbd">No.</b> Counter-example: $P=\{0\}$, $Q=\{0,10\}$. $D(P,Q)=0$ (the single $p$ has an exact match), but $D(Q,P)=10$ (the point $10\in Q$ is far from all of $P$). It’s a directed Hausdorff-type distance.<br>
+• <b>Does k-means terminate?</b> <b class="kbd">Yes.</b> Each step (assign, then recompute means) never increases the distortion $\sum\lVert x-\mu_{c(x)}\rVert^2$; there are finitely many possible assignments, and no assignment repeats before convergence ⇒ it stops in finite steps (at a local minimum).</div>
+
+<!-- ================= TOOLBOX ================= -->
+<h2 id="tools">🧰 Recurring toolbox — the moves behind everything</h2>
+<p class="mini">The whole course is a handful of tools reused. If you can name the tool a question wants, you’re half done.</p>
+<div class="grid2">
+<div class="callout"><b>Count unknowns vs. equations.</b> Model has $k$ params, each match gives $m$ equations ⇒ need $\ge k/m$ matches. Linear→2 pairs, affine→3, homography→4. More = over-determined ⇒ <b>Least Squares</b> $x=(A^\top A)^{-1}A^\top b$.</div>
+<div class="callout"><b>Data term + prior (ML vs MAP).</b> When data alone is ambiguous/under-determined, add a <b>smoothness prior</b> (Laplacian of the field). HS, super-resolution, matting all = “fit the data <i>and</i> look smooth/real.” Weight $\alpha$ = how much to trust the prior.</div>
+<div class="callout"><b>Iterate: predict → correct.</b> Kalman/particle (predict motion, correct with measurement), iterative LK (guess $P$, linearize, update), PatchMatch (propagate, randomize). Linearize a hard non-linear problem into a sequence of easy linear ones.</div>
+<div class="callout"><b>Dynamic programming / Bellman.</b> “Any sub-path of an optimal path is optimal.” Powers Dijkstra, fast sweeping, geodesic distance, hyperlapse frame selection.</div>
+<div class="callout"><b>Model = signal + noise + likelihood.</b> Choose a noise model ⇒ get an estimator: Gaussian ⇒ minimize squared error ⇒ <b>mean</b>; Laplacian/sparse ⇒ minimize absolute error ⇒ <b>median</b> (robust to outliers). This <i>is</i> Weiss.</div>
+<div class="callout"><b>Low-rank / SVD.</b> If a matrix has effective rank $p\ll\min(m,n)$, replace an $O(mn)$ job with $O((m+n)p)$. Texture state-space (Ch 5) and fast KDE (Ch 10) are the same trick.</div>
+</div>
+
+<hr>
+
+<!-- ================= CH1 ================= -->
+<div class="card" id="c1">
+<h2>1 · Motion Representation <span class="tag">geometry ladder</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Motion = a matrix acting on point coordinates. Climb the ladder of models only as far as you must; each rung adds flexibility <i>and</i> noise sensitivity. Homogeneous coordinates (append a “1”) are the trick that lets a matrix also <b>translate</b> and <b>project</b>.</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Linear</b> $2\times2$: $p'=Ap$ — 4 params, needs 2 pairs. Can never translate ($A\cdot(0,0)=(0,0)$).</li>
+<li><b>Affine</b> $2\times3$: $p'=Ap+t$ — 6 params, 3 pairs. Keeps parallel lines parallel (no perspective).</li>
+<li><b>Homography</b> $3\times3$: $p'\sim Hp$, meaningful <b>up to scale</b> (divide by 3rd coord) — 8 DOF, 4 pairs. Adds true perspective.</li>
+<li><b>Projection</b> $3\times4$: $P=K[R\,|\,t]$. Pinhole: image $=Xf/Z$ (the $1/Z$ shrinks far things). $K$=intrinsics $(f,k_u,k_v,u_0,v_0)$, $[R|t]$=extrinsics.</li>
+</ul></div>
+<div class="blk exam"><div class="h">Exam angle</div>
+Rarely a whole question — it’s the <b>vocabulary</b> for everything else. Be able to say which model fits (small&far→linear, medium→affine, planar/perspective→homography) and count minimum correspondences. “Intrinsics vs extrinsics,” “up to scale,” and “why homogeneous coords” are one-line gimmes.</div>
+</div>
+
+<!-- ================= CH2 ================= -->
+<div class="card" id="c2">
+<h2>2 · Optical Flow <span class="tag">the bedrock — appears every exam</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+For every pixel find its motion arrow $(u,v)$ under <b>brightness constancy</b> (a point keeps its intensity when it moves). One pixel gives one equation for two unknowns ⇒ under-determined ⇒ you need an extra assumption (a window, or global smoothness).</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Brightness-constancy / flow constraint:</b> $I_x u + I_y v + I_t = 0$ (one line in $(u,v)$-space per pixel).</li>
+<li><b>Lucas–Kanade</b> — assume one flow per window, solve the $2\times2$ over-determined system:
+$$\begin{bmatrix}\sum I_x^2 & \sum I_xI_y\\ \sum I_xI_y & \sum I_y^2\end{bmatrix}\!\begin{bmatrix}u\\v\end{bmatrix}=-\begin{bmatrix}\sum I_xI_t\\ \sum I_yI_t\end{bmatrix}$$
+Solvable iff the structure tensor $A^\top A$ has <b>rank 2</b>.</li>
+<li><b>Rank test:</b> 0 = flat (untrackable), 1 = edge (aperture problem), 2 = corner (trackable).</li>
+<li><b>Harris</b> = the same $A^\top A$, repurposed to <i>find</i> corners (both eigenvalues large).</li>
+<li><b>Horn–Schunck</b> — global, add a smoothness prior:
+$$\min_{u,v}\iint (I_xu+I_yv+I_t)^2+\alpha^2\big(\lVert\nabla u\rVert^2+\lVert\nabla v\rVert^2\big)\,dx\,dy$$
+$\alpha$ small→trust data (choppy); $\alpha$ large→assume smooth world. Huge <b>sparse</b> linear system, solved iteratively.</li>
+</ul></div>
+<div class="blk steps"><div class="h">LK vs HS</div>
+LK = local, per-window, <b>sparse</b> output, tiny fast solve. HS = global, <b>dense</b> output, smoothness couples every pixel. Both are the same data term; HS just adds the prior. Large motion? <b>Pyramid</b> LK (a 32-px motion is 1 px at 1/32 scale).</div>
+<div class="blk fail"><div class="h">Fails when</div>
+Brightness constancy breaks (specular highlights, shadows, auto-exposure); large jumps; textureless regions; motion along an edge (aperture). Basic HS blurs motion boundaries.</div>
+<div class="blk exam"><div class="h">Exam angle — the #1 slot</div>
+<b>“Modify Horn–Schunck to also use extra input X.”</b> The template answer: keep the data term, and <b>add a new penalty term</b> that uses X to gate the smoothness. General recipe for a per-pixel side-signal $S$:
+<ul>
+<li>Add a term that only smooths flow between neighbours that <b>agree on $S$</b>: replace $\alpha^2\lVert\nabla u\rVert^2$ with $\sum_{\text{nbrs}} w_{pq}\lVert u_p-u_q\rVert^2$, where $w_{pq}=1$ if $S_p=S_q$ (same class / similar depth) and $\approx 0$ across a boundary. Now flow stays smooth <i>within</i> an object and is free to jump between objects.</li>
+<li><b>Semantic segmentation (Moed A):</b> $w_{pq}=1$ iff $S_1$ labels match ⇒ don’t smooth flow across a car/road boundary. Optionally forbid matches whose labels differ ($S_1(x)\ne S_2(x{+}u)$).</li>
+<li><b>Sparse depth / LiDAR (Moed B):</b> where depth is known, points at similar depth share motion ⇒ weight smoothness by depth similarity; can also add a data term rewarding flow consistent with the known depth (equal-depth pixels move together).</li>
+</ul>
+Always state: (1) the objective, (2) what term you added and why, (3) that it’s still a sparse linear system solved iteratively.</div>
+</div>
+
+<!-- ================= CH3 ================= -->
+<div class="card" id="c3">
+<h2>3 · Applications of Motion Estimation <span class="tag">super-res · RANSAC · hyperlapse</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Once you know motion, redistribute pixel information across time to get something a single frame can’t give: more detail (super-resolution), fewer/smoother frames (hyperlapse), robust fitting despite bad matches (RANSAC).</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Super-resolution forward model:</b> $Y_i = D\,H\,F_i\,X$ (decimate · blur · warp · HR image). <b>ML:</b> $\min_X\sum_i\lVert DHF_iX-Y_i\rVert^2$, solved by gradient descent $X_{n+1}=X_n-\beta\sum_i F_i^\top H^\top D^\top(DHF_iX_n-Y_i)$. <b>MAP:</b> add a smoothness prior so $X$ also looks like a real image. Works only because hand-shake puts each frame on a different <b>sub-pixel</b> grid.</li>
+<li><b>RANSAC:</b> pick the <b>minimum</b> sample (2 pts→line, 3→affine), count inliers, repeat, keep the model with most votes, refit on inliers. Iterations $K=\dfrac{\log(1-P)}{\log(1-w^n)}$ ($w$=inlier fraction, $n$=sample size).</li>
+<li><b>Hyperlapse:</b> pick a frame subset minimizing $C=C_m(\text{smoothness})+C_s(\text{hit target speed }\mu)+C_a(\text{even pacing})$ by <b>dynamic programming</b>; uniform sub-sampling fails (random phase = looks like shake). BRIEF descriptor + Hamming distance for fast matching.</li>
+</ul></div>
+<div class="blk exam"><div class="h">Exam angle</div>
+Know RANSAC cold (minimum sample size + why, the $K$ formula) — it’s the generic robust-fitting tool that shows up inside other answers. Super-res = the clean example of ML vs MAP and “iterate instead of invert.”</div>
+</div>
+
+<!-- ================= CH4 ================= -->
+<div class="card" id="c4">
+<h2>4 · Kalman &amp; Particle Filters <span class="tag">online tracking</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Online = frames arrive one at a time. A filter fuses <b>belief-so-far</b> with <b>each new measurement</b>: predict with a motion model, then correct with data. Store only a small state, not the whole video.</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Bayes recursion</b> (Moed B derivation): with the <b>Markov</b> assumption $p(x_t|x_{1:t-1})=p(x_t|x_{t-1})$ and <b>conditional independence of observations</b> $p(z_t|x_{1:t},z_{1:t-1})=p(z_t|x_t)$,
+$$p(x_{1:t}|z_{1:t})\ \propto\ \underbrace{p(z_t|x_t)}_{\text{measure}}\,\underbrace{p(x_t|x_{t-1})}_{\text{motion}}\,p(x_{1:t-1}|z_{1:t-1}).$$
+Derive it by Bayes on $z_t$, then split the joint using the two assumptions.</li>
+<li><b>Kalman</b> (optimal for linear + Gaussian). Predict: $\hat x^-=\Phi\hat x,\ P^-=\Phi P\Phi^\top+Q$. Update: gain $K=P^-H^\top(HP^-H^\top+R)^{-1}$, $\hat x=\hat x^-+K(z-H\hat x^-)$, $P=(I-KH)P^-$. Gain is a <b>trust dial</b>: $R\to0\Rightarrow K\to1$ (trust data); $R\to\infty\Rightarrow K\to0$ (trust model). $H$ projects state→measurement (e.g. it exposes position but not velocity).</li>
+</ul></div>
+<div class="blk steps"><div class="h">Particle filter (Condensation)</div>
+Represent <b>any</b> (multimodal, non-Gaussian) belief as $N$ weighted samples. Loop: <b>Resample</b> (draw $N$ new particles ∝ weights — the cumulative-array + uniform-$r$ roulette wheel) → <b>Predict</b> (push each through motion + noise) → <b>Measure</b> (weight ∝ $e^{-\text{SSD}}$) → <b>Normalize</b>. Output = weighted mean (smooth) or max-weight (sharp). Add diffusion noise every step to avoid sample impoverishment.</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Simulate a loaded die from <code>rand()</code>” (Moed A) = the resampling step.</b> Build the CDF $c_k=p_1+\dots+p_k$; draw $r\sim U[0,1]$; return the first face $k$ with $c_k\ge r$. That’s exactly how a particle filter samples ∝ weights.<br>
+Also common: <b>derive the Bayes recursion</b> (state both assumptions!). Kalman vs particle: use particles for non-linear / non-Gaussian / multimodal; Kalman is far cheaper for small linear-Gaussian states.</div>
+</div>
+
+<!-- ================= CH5 ================= -->
+<div class="card" id="c5">
+<h2>5 · Texture Synthesis (Dynamic Texture) <span class="tag">SVD + state-space</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+A “dynamic texture” (flame, water, swaying grass) has <b>stationary statistics</b> — it looks similar over time without literally repeating. Model each frame as generated by a small hidden state that drifts by a linear rule + noise.</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>State-space (ARMA):</b> $x_{t+1}=A x_t + v(t)$ (state drift), $\ y_t = C x_t + w(t)$ (render frame).</li>
+<li><b>Learn from a clip:</b> stack frames into $Y$, take <b>SVD</b> $Y=U\Sigma V^\top$; set $C=U$ (eigen-images), states $x_t=\Sigma V_t^\top$; fit $A$ by least squares on the state sequence. Constraint $C^\top C=I$ fixes the otherwise non-unique ($TAT^{-1}$) solution.</li>
+<li><b>Generate forever:</b> pick a start state, push through $A$ with random $v(t)$, render with $C$, add pixel noise $w(t)$. Noise is essential — without it the state dies, explodes, or cycles.</li>
+</ul></div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Synthesize long text from a short seed using Word2Vec” (Moed B)</b> = dynamic texture by analogy: map words→vectors (Word2Vec = the “render” map $C$), learn the linear state transition $A$ from the seed’s vector sequence by LS, then roll forward with noise and map each generated vector back to the nearest word. State the model + noise + how you learn $A,C$.</div>
+</div>
+
+<!-- ================= CH6 ================= -->
+<div class="card" id="c6">
+<h2>6 · Layer Image Representation <span class="tag">LK + K-means</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Video = stacked layers (background, actors, effects) composited by alpha. The inverse problem — recover layers from the final video — becomes tractable if you assume each layer moves by <b>one affine motion</b> (6 numbers), so pixels form a few “motion groups.”</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Alpha compositing:</b> $I_k=I_{k-1}(1-\alpha_k)+E_k\alpha_k$ (the workhorse of every compositor). $\alpha\!=\!0$ transparent, $1$ opaque.</li>
+<li><b>Layer recovery (EM-style loop):</b> run LK on many random windows → each window = a point in $\mathbb{R}^6$ (its affine motion) → <b>K-means</b> in motion space → each cluster = one layer → re-fit motion per layer → repeat.</li>
+</ul></div>
+<div class="blk steps"><div class="h">K-means in 4 lines</div>
+Drop $k$ centres → assign each point to nearest centre → move each centre to its members’ mean → repeat. Distortion never increases ⇒ <b>always converges</b> (to a possibly-local min; depends on init). Choose $k$ via MDL, or just try 2–5. This “assume one, solve the other, swap” is the same chicken-and-egg as EM.</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Does k-means terminate?” (Moed B) → Yes</b>, monotone-decreasing distortion + finitely many assignments (see the map box). Also: <b>label propagation on a graph</b> (social network / point cloud) reuses “group by similarity + a few labelled seeds.”</div>
+</div>
+
+<!-- ================= CH7 ================= -->
+<div class="card" id="c7">
+<h2>7 · Video Magnification <span class="tag">Eulerian</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Reveal invisible motion (a pulse, a swaying bridge). <b>Lagrangian</b> = follow each pixel (needs motion estimation). <b>Eulerian</b> = sit at a fixed pixel and amplify how its value changes over time — <b>no motion estimation at all</b>, just temporal filtering.</div>
+<div class="blk math"><div class="h">Key equation</div>
+Taylor: $I(x,t)\approx f(x)+\delta(t)f'(x)$. The temporal change is $B(x,t)=\delta(t)f'(x)\approx I_2-I_1$. Amplify by adding $\alpha$ copies back:
+$$I_1+\alpha B\ \approx\ f\big(x+(1{+}\alpha)\delta\big)$$
+— the motion is magnified $\times\alpha$ without ever computing $\delta$. In practice: $B\approx I_2-I_1$, scale by $\alpha$, add to $I_1$. <b>Band-pass</b> the temporal signal first (e.g. 1–2 Hz for heart-rate) so you don’t amplify lighting drift and noise.</div>
+<div class="blk fail"><div class="h">Fails when</div>
+Motion $\gtrsim 1$ px — Taylor breaks ⇒ ringing/ghosting. Fix: pyramid, amplify each spatial scale separately.</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+Know <b>why no motion estimation is needed</b> (the temporal difference <i>is</i> the change-in-value) and why sub-pixel motion is recoverable. Contrast Eulerian vs Lagrangian in one line.</div>
+</div>
+
+<!-- ================= CH8 ================= -->
+<div class="card" id="c8">
+<h2>8 · Background Subtraction <span class="tag">per-pixel GMM</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+A pixel’s value over time isn’t constant but isn’t random — it oscillates among a few modes (sky, leaf, passing car). Model <b>each pixel independently</b> as a mixture of a few Gaussians; anything matching no mode is foreground.</div>
+<div class="blk steps"><div class="h">Algorithm (per pixel, per frame)</div>
+Keep $K\!=\!3\text{–}5$ Gaussians, each with mean $\mu_k$, width $\sigma_k$, weight $\omega_k$.
+<ol>
+<li>Does the new value match a Gaussian within <b>2.5σ</b>? If yes → nudge its $\mu,\sigma$ toward it, bump $\omega$. If no → replace the weakest Gaussian with one centred here (probably a moving object).</li>
+<li>Renormalize weights.</li>
+<li><b>Decide:</b> sort by $\omega/\sigma$ (frequent <i>and</i> tight = strong background); the top ones whose weights sum past threshold $T$ are background, the rest foreground.</li>
+</ol>
+Why $\omega/\sigma$? Background is seen <b>often</b> (high $\omega$) and is <b>stable</b> (low $\sigma$); a fresh moving object has low $\omega$, high $\sigma$.</div>
+<div class="blk fail"><div class="h">Fails when</div>
+Sudden lighting change (all modes stale → false positives), camera shake, and slow/parked objects get absorbed into background (learning rate $\alpha$ sets how fast). Plain frame-differencing fails on rustling trees — GMM learns that flicker as normal.</div>
+</div>
+
+<!-- ================= CH9 ================= -->
+<div class="card" id="c9">
+<h2>9 · Video Colorization &amp; Geodesic Distance <span class="tag">geodesic · Dijkstra</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Colour a B&amp;W video from a few scribbles by <b>propagating chrominance</b> (invent U,V; keep the original luminance Y). Works because colour edges coincide with luminance edges. The engine is <b>geodesic distance</b>: distance that follows image content instead of straight lines.</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Geodesic distance:</b> path cost = how much it crosses image edges, $d(a,b)=\inf_\Gamma\int_0^{l(\Gamma)}\sqrt{1+\gamma^2\big(\nabla I(s)\cdot\Gamma'(s)\big)^2}\,ds$. Staying inside one region is cheap; crossing a boundary is expensive. $D_k(x)$ = geodesic distance from $x$ to scribble $k$.</li>
+<li><b>The $\gamma$ parameter (Moed A):</b> $\gamma=0$ ⇒ the integrand is $1$ ⇒ pure <b>Euclidean</b> distance (ignores image, smooth round contours). $\gamma>0$ ⇒ image gradients dominate ⇒ distance <b>hugs edges</b>, contours wrap around objects. So the smooth/round map is $\gamma=0$; the one that follows the silhouette is $\gamma>0$.</li>
+<li><b>Blend:</b> $c(x)=\dfrac{\sum_k W(D_k)\,c_k}{\sum_k W(D_k)}$, weights $W(D)=1/D^{\,b}$; larger $b$ = sharper boundary.</li>
+</ul></div>
+<div class="blk steps"><div class="h">Computing it</div>
+<b>Bellman:</b> a sub-path of a shortest path is shortest. <b>Dijkstra</b>: nodes=pixels, edge weight=|gradient|, scribbles=0, pop-smallest + relax, $O(N\log N)$. <b>Fast sweeping (Danielsson)</b>: raster scans instead of a priority queue — GPU-friendly, ~4 sweeps. <b>Video</b>: gradient has a time component (x,y,t), 6 neighbours ⇒ far fewer scribbles (colour flows across frames when objects touch).</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Draw the path along Lena’s hat edge from A to B” (Moed B)</b> = shortest path where edge weight rewards <i>staying on</i> a strong gradient (intelligent scissors / Dijkstra with cost low along edges). <b>“Segment a 3-D point cloud / social graph from scribbles” (Moed A/B)</b> = the same engine: build a graph, weight edges by similarity, compute geodesic distance from each labelled seed, assign each node to its nearest seed (or a $1/D$-weighted mix for “30% finance / 70% fashion”).</div>
+</div>
+
+<!-- ================= CH10 ================= -->
+<div class="card" id="c10">
+<h2>10 · Video Matting <span class="tag">trimap → alpha → composite</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Extract a foreground (person, with wispy hair) and place it on a new background. Every observed pixel is a mix $I=\alpha F+(1-\alpha)B$; the hard part is the fuzzy boundary where $0<\alpha<1$.</div>
+<div class="blk steps"><div class="h">Three stages</div>
+<ol>
+<li><b>Trimap</b> — label each pixel foreground(1)/background(0)/unsure(φ). Built with <b>KDE</b> (Gaussian bump per scribble → colour likelihoods $f(c|F),f(c|B)$) → Bayes $P(F|c)=\tfrac{f(c|F)}{f(c|F)+f(c|B)}$ → geodesic distances $D_F,D_B$ → classify; pixels within band $\rho$ of the boundary = unsure.</li>
+<li><b>Opacity map</b> — re-estimate colour stats <i>locally</i> near the boundary, assign each unsure pixel a continuous $\alpha\in[0,1]$.</li>
+<li><b>Matting</b> — naive $J=\alpha c+(1-\alpha)B_{\text{new}}$ drags the <i>old</i> background colour onto the new one. Fix: recover the <b>pure</b> foreground colour by searching a window for the confident-FG/confident-BG pair $(x_F^\ast,x_B^\ast)$ that best explains the mixed pixel, composite with $c(x_F^\ast)$.</li>
+</ol></div>
+<div class="blk math"><div class="h">Worth knowing</div>
+Geodesic distance breaks colour ties (man in brown jacket vs brown sofa) using spatial proximity through edges. <b>Fast KDE via low-rank kernel:</b> $K(x,y)=\sum_{i=1}^p\phi_i(x)\psi_i(y)$ factors the double sum into $O((N+M)p)$ instead of $O(NM)$ — the same low-rank trick as texture synthesis.</div>
+</div>
+
+<!-- ================= CH11 ================= -->
+<div class="card" id="c11">
+<h2>11 · Re-targeting &amp; PatchMatch <span class="tag">bidirectional similarity</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Resize a photo to a new aspect ratio by preserving important regions and squeezing repetitive ones (sky, grass) — not squashing or cropping. A good result is <b>complete</b> (keeps all source content) and <b>coherent</b> (invents nothing).</div>
+<div class="blk math"><div class="h">Key equations</div>
+<ul>
+<li><b>Bidirectional similarity:</b> $D=\alpha\,D_{\text{com}}+(1-\alpha)\,D_{\text{coh}}$. Completeness = every source patch has a match in the target (don’t lose content); Coherence = every target patch has a match in the source (don’t hallucinate). Each output pixel = weighted average of matching source patches. Needs <b>hierarchical (pyramid) initialization</b> — starting from black lands in a bad local minimum.</li>
+<li><b>Is $D$ symmetric?</b> The directed $D(P,Q)=\max_p\min_q d(p,q)$ is <b>not</b> symmetric (counter-example in the map box). That’s exactly why re-targeting needs <i>both</i> completeness and coherence.</li>
+</ul></div>
+<div class="blk steps"><div class="h">PatchMatch (the fast NN-field)</div>
+Insight: neighbouring patches share almost the same offset. Two ops per iteration:
+<ol>
+<li><b>Propagation</b> (raster order): each pixel keeps the best of its own, its left, and its above neighbour’s offset. Alternate scan direction each iteration so info flows all ways.</li>
+<li><b>Random search</b> around the current best with shrinking radius (catches what propagation missed).</li>
+</ol>
+4–5 iterations, ~$O(N\log W)$, ~1000× faster than brute force. Powers Content-Aware Fill. Apps: inpainting, reshuffling, object removal (<b>weight = 0</b> makes an object invisible to the loss). Per-pixel update is convex given the matches.</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Extend 1-NN → k-NN PatchMatch” (Moed B):</b> keep a max-heap of the $k$ best offsets per patch; in propagation, offer all $k$ of the neighbour’s candidates and keep the best $k$; in random search, sample near <i>each</i> of the $k$ (or the best) and re-heap. Same two ops, just maintain $k$ instead of 1.<br>
+<b>“Clone detection” (Moed A):</b> run PatchMatch from the image <b>to itself</b>; a cloned region produces a large block of patches whose nearest neighbour sits far away at a <b>consistent offset</b> — detect coherent clusters of equal, non-trivial offset vectors.</div>
+</div>
+
+<!-- ================= CH12 ================= -->
+<div class="card" id="c12">
+<h2>12 · Intrinsic Images from Sequences — Weiss ICCV’01 <span class="tag">median of derivatives</span></h2>
+<div class="blk core"><div class="h">Core idea</div>
+Every photo is $I=R\cdot L$ (reflectance/“paint” × illumination/“light”). From one image this is hopelessly ill-posed. But from <b>many frames of a fixed scene</b> with changing light (a webcam over a day), the paint is constant and only shadows move — and one gentle statistical assumption gives a one-line recipe: <b>take the median</b>.</div>
+<div class="blk math"><div class="h">The derivation (know this cold)</div>
+<ul>
+<li><b>Log turns product into sum:</b> $i = r + l$ (lowercase = logs).</li>
+<li><b>Assumption:</b> derivative-filter responses of the lighting are <b>sparse</b> — mostly zero (a Laplacian distribution $P(x)\propto e^{-\alpha|x|}$). Lighting is smooth almost everywhere, with rare sharp shadow edges.</li>
+<li>Filtered frame $o_n=i\star f_n=r_n+(l\star f_n)$: constant paint part $r_n$ + sparse lighting part. Laplacian likelihood over frames ⇒ maximizing probability = minimizing $\sum_t|o_n-r_n|$ ⇒ the minimizer is the <b>median</b>:
+$$\hat r_n=\operatorname{median}_t\{\,i(x,y,t)\star f_n\,\}.$$
+(Gaussian would give the <b>mean</b>, which outliers/shadows drag off; the median shrugs them off.)</li>
+<li><b>Reconstruct</b> the paint image $\hat r$ from its filtered responses $\hat r_n$ by least squares — a fixed deconvolution $g$ that depends only on the filters (precompute once). Then lighting falls out for free: $\hat l(x,y,t)=i-\hat r$.</li>
+</ul></div>
+<div class="blk steps"><div class="h">The crucial subtlety</div>
+Take the median of the <b>edge (filtered)</b> frames, <b>not</b> the raw pixels. A permanently-shadowed corner has a constant brightness offset → produces <b>zero edge</b> → cancels, so it recovers the same reflectance as a lit region. Raw temporal median would bake that permanent shadow into the paint. Only <b>2 filters</b> (horizontal + vertical difference) are used. Even an 85%-sparse cast shadow: with <b>3 frames</b> paint edges recover with prob ≥ 0.93; <b>5 frames</b> ≥ 0.97 (binomial — a majority of frames just needs to be “clean” at each pixel).</div>
+<div class="blk exam"><div class="h">Exam angle</div>
+<b>“Online reflectance $R_t$ from a stream, storing ≤256 images” (Moed A):</b> reflectance = the median over time, and the hint “values are [0,255]” screams a <b>histogram</b>. Keep, per pixel, a 256-bin count of the filtered values (or of intensities) — that’s $O(256)$ memory, independent of $t$. Each new frame increments bins; the running median is read off the histogram in $O(256)$. Emit $R_t$ = reconstruct from the current per-pixel medians. This streams forever within the 256-buffer budget. State: median (not mean) because lighting is sparse/outlier-like, and histogram gives an online median.</div>
+</div>
+
+<hr>
+
+<!-- ================= LAST MINUTE ================= -->
+<h2 id="recall">⚡ Last-minute one-liners</h2>
+<ul class="recall">
+<li><b>Ch 1 Motion:</b> matrix on coordinates; homogeneous “1” enables translate/project; params set min matches (2/3/4); LS for over-determined.</li>
+<li><b>Ch 2 Optical flow:</b> $I_xu+I_yv+I_t=0$; LK = window + $2\times2$; rank 0/1/2 = flat/edge/corner; HS = global + $\alpha$ smoothness. <b>To modify HS: add a weighted term using the extra signal to gate smoothness across boundaries.</b></li>
+<li><b>Ch 3 Apps:</b> super-res $Y=DHFX$ (ML/MAP, iterate); RANSAC = min-sample + vote, $K=\log(1-P)/\log(1-w^n)$; hyperlapse = cost + DP.</li>
+<li><b>Ch 4 Tracking:</b> predict+correct; Kalman gain = trust dial ($R\!\downarrow\!\Rightarrow$ trust data); particles for multimodal; <b>loaded die = CDF + uniform-$r$ resampling</b>; know the Bayes-recursion derivation + its 2 assumptions.</li>
+<li><b>Ch 5 Texture:</b> $x_{t+1}=Ax_t+v$, $y_t=Cx_t+w$; learn via SVD ($C=U$); noise essential; Word2Vec text = same recipe.</li>
+<li><b>Ch 6 Layers:</b> $I_k=I_{k-1}(1-\alpha)+E_k\alpha$; LK→$\mathbb{R}^6$→K-means; <b>k-means terminates</b> (monotone distortion, finite assignments).</li>
+<li><b>Ch 7 Magnification:</b> Eulerian, no motion estimation; $I_1+\alpha(I_2-I_1)$; band-pass first; breaks past ~1 px.</li>
+<li><b>Ch 8 Bg subtraction:</b> per-pixel GMM; match 2.5σ else replace weakest; sort by $\omega/\sigma$; top-to-$T$ = background.</li>
+<li><b>Ch 9 Geodesic:</b> distance follows edges; $\gamma=0$ Euclidean / $\gamma>0$ hugs edges; Dijkstra vs fast sweeping; scribble propagation = segmentation on any graph.</li>
+<li><b>Ch 10 Matting:</b> trimap (1/0/φ) → $\alpha$ map → composite with <b>pure</b> $F$; KDE+Bayes+geodesic; low-rank KDE for speed.</li>
+<li><b>Ch 11 Retarget/PatchMatch:</b> completeness + coherence; <b>$D$ not symmetric</b>; PatchMatch = propagation + random search; k-NN = keep a heap of $k$; clone = self-match consistent offsets.</li>
+<li><b>Ch 12 Intrinsic:</b> $I=RL$; log ⇒ sum; sparse lighting edges ⇒ ML = <b>median of filtered frames</b> (not raw pixels); reconstruct via fixed deconv; online = per-pixel histogram median.</li>
+</ul>
+
+<div class="callout" style="margin-top:26px">
+<b>Exam-day plan.</b> For each question ask: <i>which chapter’s method is this, and which of the three moves — modify / derive / prove?</i> Then: (1) state the base algorithm in 2 lines, (2) name the exact change or assumption, (3) write the one governing equation, (4) note that it stays a tractable solve (sparse LS / iterate / DP). Keep it to one page. Justify every choice.
+</div>
+
+<p class="mini" style="margin-top:24px">Companion files in this repo: <code>StudyReference/video_processing_reference</code> (formula sheet + glossary) · <code>exams/exams_solved</code> (both 2022 exams fully worked + patterns) · the 12 chapter pages in this folder for the interactive demos.</p>
+
+</div>
+</body>
+</html>
