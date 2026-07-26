@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q2 · The loaded die — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed A · Q2</b> · Tracking / the loaded die</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch04_kalman_particle.html">‹ Chapter 4</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="q5_clone_detection.html">Q5 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 4 · Moed A, question 2</div>
+    <h1>Rolling an unfair die with a fair coin</h1>
+    <p class="lede">The friendliest 12 points on the paper — and secretly the same machine as the particle
+    filter's resampling step. Story, a demo you can spin, then the proof.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 2 · 12 points · TRACKING</span>
+    <p style="margin:0">We wish to simulate rolling a loaded (unfair) six-sided (cube-shape) die, whose
+    probabilities are $(p_1, \dots, p_6)$. We only have access to the function $rand()$ that returns a
+    pseudo-random number $r$ sampled uniformly in the range $[0,1]$. Suggest a way to run the simulation using
+    $rand()$.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">Why is this in the TRACKING section?</span>
+    Because it is <strong>step 1 of Condensation</strong>, stripped of all the tracking language. "Pick a particle
+    with probability proportional to its weight, using one uniform random number" <em>is</em> "roll a loaded die."
+    Faces = particles, $p_i$ = weights. If you can answer this you can answer the resampling step, and vice versa.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The unfair pizza</span>
+    <p>You want a die where 6 comes up half the time and 1 almost never. All you own is a
+    <strong>perfectly fair spinner</strong>: it lands at a completely random spot on a circle, no favourites.</p>
+    <p>So you cheat — not on the spinner, on the <em>board</em>.</p>
+    <p>Cut a pizza into six slices, but make the slices <strong>different sizes</strong>: face 6 gets a huge slice,
+    face 1 gets a sliver. Now spin the fair spinner and read off whichever slice it lands in.</p>
+    <p>The spinner is still perfectly fair. But a big slice catches the pointer more often <em>simply because it
+    is bigger</em>. The unfairness lives in the board, not in the randomness.</p>
+    <p><strong>Probability of landing on a slice = the size of that slice.</strong> Make each slice's size equal
+    to $p_i$ and you're done. That's the entire answer.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">From pizza to ruler</span>
+    A circle is awkward in code, so unroll it into a straight line of length 1. Each face owns a strip of the
+    line whose <strong>length is its probability</strong>. $rand()$ throws a dart uniformly at that line. Whoever
+    owns the spot the dart hit, wins. The list of the cut positions is called the <strong>cumulative
+    distribution</strong>, $C$.
+  </div>
+
+  <pre class="ruler">p  = [0.10, 0.05, 0.20, 0.05, 0.10, 0.50]
+
+0    0.10      0.15            0.35   0.40    0.50                    1.00
+|-f1--|--f2----|------f3-------|--f4--|--f5---|---------f6------------|
+      &#8593;        &#8593;               &#8593;      &#8593;       &#8593;                     &#8593;
+    C&#8321;=.10   C&#8322;=.15          C&#8323;=.35 C&#8324;=.40  C&#8325;=.50               C&#8326;=1.00</pre>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the unfair pizza and the fair spinner</h4><span class="tag">spin · drag the weights</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: the pizza, slice size = $p_i$. Right: the same thing unrolled
+      into the ruler $C$. Each spin drops a uniform $r$ and reports which face owns it. The bars underneath count
+      how often each face has actually come up — watch them converge to the $p_i$ you set.</p>
+      <canvas id="cvA" width="900" height="420"></canvas>
+      <div class="controls">
+        <div class="control"><label>p₁ <span class="val" id="v1">0.10</span></label><input type="range" id="s1" min="1" max="60" value="10"></div>
+        <div class="control"><label>p₃ <span class="val" id="v3">0.20</span></label><input type="range" id="s3" min="1" max="60" value="20"></div>
+        <div class="control"><label>p₆ <span class="val" id="v6">0.50</span></label><input type="range" id="s6" min="1" max="60" value="50"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Aspin">Roll once</button>
+        <button class="act" id="Aspin100">Roll 100×</button>
+        <button class="act" id="Aspin5k">Roll 5000×</button>
+        <button class="act" id="Areset">Reset counts</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Why it works — the one-line proof</h2>
+
+  <div class="explain">
+    <span class="explain-label">This is what earns the points, not the algorithm</span>
+    <p>Build the cumulative sums $C_0 = 0$, $C_i = C_{i-1} + p_i$ for $i=1..6$, so $C_6 = \sum_i p_i = 1$.
+    Draw $r = rand() \sim U[0,1]$ and return the smallest $j$ with $C_j > r$.</p>
+    <p>Returning face $j$ happens <strong>exactly when</strong> $r$ lands in the interval $[C_{j-1}, C_j)$ —
+    that is what "smallest $j$ with $C_j > r$" means. So:</p>
+  </div>
+
+  <div class="eq">$$ P(\text{face } j) \;=\; P\big(C_{j-1} \le r < C_j\big) \;=\; C_j - C_{j-1} \;=\; p_j \qquad\blacksquare $$</div>
+
+  <div class="explain">
+    <p>The middle step is the only fact used: for a <strong>uniform</strong> variable on $[0,1]$, the probability
+    of landing in a sub-interval <em>is that interval's length</em>. That is the definition of uniform, and it is
+    why the method needs $r$ to be uniform on exactly $[0,1]$ — the ruler has total length
+    $\sum_i p_i = 1$, so it matches the range of $rand()$ perfectly.</p>
+    <p>The technique has a name worth writing down: <strong>inverse-CDF sampling</strong> (inverse transform
+    sampling). $C$ is the CDF of the discrete distribution, and you are evaluating $C^{-1}(r)$.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">If the $p_i$ don't sum to 1</span>
+    Normalise first: $p_i \leftarrow p_i / \sum_k p_k$. Otherwise the ruler is shorter or longer than the range of
+    $rand()$ — too short and some darts land past the end (undefined); too long and the last faces can never be
+    reached. In the particle filter this is exactly the "normalise the weights so $\sum_n \Pi^{(n)} = 1$" line.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Writing it as code</h2>
+
+  <pre class="ruler">C[0] = 0
+for i = 1..6:  C[i] = C[i-1] + p[i]        # cumulative sums, C[6] = 1
+
+roll():
+    r = rand()                              # uniform in [0,1]
+    for j = 1..6:                           # smallest j with C[j] > r
+        if C[j] &gt; r: return j</pre>
+
+  <div class="explain">
+    <p>The loop is $O(n)$ per roll, with $n=6$ — irrelevant here. But say the improvement anyway, because it
+    shows you know <em>why</em> $C$ is built the way it is:</p>
+    <p><strong>$C$ is sorted</strong> (probabilities are non-negative, so the cumulative sums never decrease).
+    A sorted array means you can find the right bin by <strong>binary search in $O(\log n)$</strong> instead of
+    scanning. For a die that's nothing; for a particle filter with $N=200$ particles resampled $N$ times per
+    frame, it turns $O(N^2)$ into $O(N\log N)$.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Bonus answers, if you want to show off (one line each)</span>
+    <p style="margin:6px 0 0">• <strong>Fair die as a sanity check:</strong> with all $p_i = 1/6$ the method
+    reduces to $j = \lfloor 6r \rfloor + 1$ — the familiar formula, which is just the equal-slices special case.</p>
+    <p>• <strong>Alias method (Walker):</strong> $O(1)$ per roll after $O(n)$ setup, using one uniform draw and a
+    table of "each bin holds at most two faces". Better when you roll the same die millions of times.</p>
+    <p>• <strong>Systematic sampling:</strong> if you need $N$ draws at once (as resampling does), draw a single
+    $r_0 \sim U[0, 1/N]$ and use the evenly spaced darts $r_i = r_0 + i/N$. Same expected counts, lower variance
+    than $N$ independent draws.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — scanning vs binary search on $C$</h4><span class="tag">why sorted matters</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The same lookup, done both ways on a 32-bin cumulative array. The
+      linear scan checks every bin from the left; the binary search halves the range each time. Press to throw a
+      new dart.</p>
+      <canvas id="cvB" width="900" height="290"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Bnew">New dart</button>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The link back to Chapter 4</h2>
+
+  <div class="summary">
+    <span class="summary-label">The same machine, two names</span>
+    <table>
+      <tr><th></th><th>Loaded die (this question)</th><th>Condensation, step 1</th></tr>
+      <tr><td>The items</td><td>6 faces</td><td>$N$ particles $S^{(n)}$</td></tr>
+      <tr><td>Their sizes</td><td>probabilities $p_i$</td><td>weights $\Pi^{(n)}$, normalised to sum 1</td></tr>
+      <tr><td>The ruler</td><td>$C_i = C_{i-1} + p_i$</td><td>$C^{(n)} = C^{(n-1)} + \Pi^{(n)}$</td></tr>
+      <tr><td>The draw</td><td>$r = rand()$, smallest $j$ with $C_j > r$</td><td>$r \sim U[0,1]$, smallest $j$ with $C^{(j)} > r$</td></tr>
+      <tr><td>How many draws</td><td>one per roll</td><td>$N$ of them, to build the next generation</td></tr>
+      <tr><td>The result</td><td>a face, with probability $p_j$</td><td>a copied particle, with probability $\Pi^{(j)}$</td></tr>
+    </table>
+    <p style="margin-top:12px">Also the same primitive as the running median in the Moed A Q3 intrinsic-images
+    answer (walk the cumulative counts, stop at $t/2$). <strong>Three questions, one idea.</strong></p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Half a page is plenty — but include the proof</span>
+    <p><strong>Method (inverse-CDF sampling).</strong> Precompute the cumulative sums $C_0 = 0$,
+    $C_i = C_{i-1} + p_i$ for $i = 1,\dots,6$; note $C_6 = \sum_i p_i = 1$ (normalise the $p_i$ first if they do
+    not already sum to 1). To simulate one roll: draw $r = rand() \sim U[0,1]$ and return the smallest index $j$
+    such that $C_j > r$, i.e. the $j$ with $C_{j-1} \le r < C_j$.</p>
+    <p><strong>Correctness.</strong> Face $j$ is returned precisely when $r$ falls in $[C_{j-1}, C_j)$. Since $r$
+    is uniform on $[0,1]$, the probability of landing in an interval equals that interval's length, so
+    $P(\text{face } j) = C_j - C_{j-1} = p_j$, as required.</p>
+    <p><strong>Cost.</strong> $O(n)$ setup once; $O(n)$ per roll by scanning, or $O(\log n)$ by binary search
+    since $C$ is non-decreasing (the $p_i$ are non-negative). With all $p_i = 1/6$ this reduces to
+    $j = \lfloor 6r\rfloor + 1$. For very many rolls, the alias method gives $O(1)$ per roll.</p>
+    <p><strong>Connection.</strong> This is exactly the select stage of the Condensation / particle-filter
+    algorithm, where the faces are particles and the $p_i$ are the normalised particle weights $\Pi^{(n)}$.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why must $r$ be uniform on $[0,1]$ specifically?</summary>
+    <p>Because the proof uses "probability of landing in an interval = length of the interval", which is the
+    defining property of the uniform distribution, and because the ruler's total length is $\sum_i p_i = 1$. Any
+    other range would either leave part of the ruler unreachable or send darts past its end.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is $C$ guaranteed to be non-decreasing, and why do you care?</summary>
+    <p>Each step adds $p_i \ge 0$, so $C$ never decreases. That makes "the smallest $j$ with $C_j > r$"
+    well-defined and unique, and it means $C$ is a sorted array — so the search can be done by binary search in
+    $O(\log n)$ rather than a linear scan.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What if some $p_i = 0$?</summary>
+    <p>That face owns an empty interval ($C_{j-1} = C_j$), so no $r$ can ever fall strictly inside it, and it is
+    never returned — which is exactly correct. The strict inequality in "smallest $j$ with $C_j > r$" is what
+    guarantees a zero-width bin is skipped.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How does this generalise to a continuous distribution?</summary>
+    <p>Identically: build the CDF $F$, draw $r \sim U[0,1]$, and return $F^{-1}(r)$. The discrete case here is
+    just $F$ being a step function, and "smallest $j$ with $C_j > r$" is how you invert a step function. This is
+    why the technique is called inverse transform sampling.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Someone hands you $N$ rolls to generate at once. Anything better than $N$ independent draws?</summary>
+    <p>Systematic sampling: draw one $r_0 \sim U[0,1/N]$ and use $r_i = r_0 + i/N$ for $i = 0..N-1$. The expected
+    count for each face is unchanged ($N p_j$) but the variance is much lower, because the darts are spread evenly
+    instead of clumping by chance. Standard practice in particle filters for exactly this reason.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where does this exact construction appear in the tracking chapter?</summary>
+    <p>Condensation, step 1 (select): "generate $r$ at random, $r \in [0,1]$; find the smallest $j$ such that
+    $C_{t-1}^{(j)} > r$; set $S_t'^{(n)} = S_{t-1}^{(j)}$." Faces become particles and $p_i$ becomes the
+    normalised weight $\Pi^{(n)}$. Repeating the draw $N$ times builds the resampled particle set.</p>
+  </details>
+
+  <div class="pager">
+    <a href="q1_optic_flow_segmentation.html"><span class="dir">Previous</span><span class="ttl">Q1 · Optic flow + segmentation</span></a>
+    <a class="next" href="q5_clone_detection.html"><span class="dir">Next question</span><span class="ttl">Q5 · Clone detection ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO 1 — the unfair pizza + the ruler + convergence bars
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const ro = document.getElementById('Aro');
+  const COL = ['#41d8c9', '#6ea8ff', '#ffb454', '#ff6b81', '#c792ea', '#7ee787'];
+  const sl = { 1: document.getElementById('s1'), 3: document.getElementById('s3'), 6: document.getElementById('s6') };
+  const lb = { 1: document.getElementById('v1'), 3: document.getElementById('v3'), 6: document.getElementById('v6') };
+
+  let p = [], C = [], counts = new Int32Array(6), total = 0, lastR = null, lastJ = null;
+
+  function rebuild(){
+    // the three sliders set faces 1,3,6; faces 2,4,5 share whatever is left
+    const a = (+sl[1].value) / 100, b = (+sl[3].value) / 100, c = (+sl[6].value) / 100;
+    let rest = Math.max(0.03, 1 - (a + b + c));
+    const each = rest / 3;
+    const raw = [a, each, b, each, each, c];
+    const s = raw.reduce((x, y) => x + y, 0);
+    p = raw.map(v => v / s);
+    C = [0]; for (let i = 0; i < 6; i++) C.push(C[i] + p[i]);
+    lb[1].textContent = p[0].toFixed(2); lb[3].textContent = p[2].toFixed(2); lb[6].textContent = p[5].toFixed(2);
+    draw();
+  }
+
+  function roll(n){
+    for (let k = 0; k < n; k++){
+      const r = Math.random();
+      let j = 0; while (j < 6 && C[j + 1] <= r) j++;
+      j = Math.min(j, 5);
+      counts[j]++; total++; lastR = r; lastJ = j;
+    }
+    draw();
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.font = '12px system-ui';
+
+    /* ---------- the pizza ---------- */
+    const CX = 165, CY = 175, R = 118;
+    g.fillStyle = '#9fb0cc'; g.fillText('the board: slice size = pᵢ', 60, 30);
+    let a0 = -Math.PI / 2;
+    for (let i = 0; i < 6; i++){
+      const a1 = a0 + p[i] * Math.PI * 2;
+      g.beginPath(); g.moveTo(CX, CY); g.arc(CX, CY, R, a0, a1); g.closePath();
+      g.fillStyle = COL[i]; g.globalAlpha = (lastJ === i) ? 1 : 0.55; g.fill(); g.globalAlpha = 1;
+      g.strokeStyle = '#0e1320'; g.lineWidth = 1.5; g.stroke();
+      if (p[i] > 0.045){
+        const am = (a0 + a1) / 2;
+        g.fillStyle = '#0a0f1c'; g.font = 'bold 12px system-ui';
+        g.fillText(String(i + 1), CX + Math.cos(am) * R * 0.66 - 3, CY + Math.sin(am) * R * 0.66 + 4);
+      }
+      a0 = a1;
+    }
+    // the fair spinner
+    if (lastR !== null){
+      const ang = -Math.PI / 2 + lastR * Math.PI * 2;
+      g.strokeStyle = '#ffffff'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(CX, CY); g.lineTo(CX + Math.cos(ang) * (R + 12), CY + Math.sin(ang) * (R + 12)); g.stroke();
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(CX, CY, 5, 0, 7); g.fill();
+    }
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('the spinner is perfectly fair —', 60, 316);
+    g.fillText('the slices are not', 60, 331);
+
+    /* ---------- the ruler ---------- */
+    const RX = 340, RW = 520, RY = 70, RH = 44;
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('unrolled into the ruler  Cᵢ = Σ pₖ   (total length 1)', RX, 30);
+    for (let i = 0; i < 6; i++){
+      const x0 = RX + RW * C[i], x1 = RX + RW * C[i + 1];
+      g.fillStyle = COL[i]; g.globalAlpha = (lastJ === i) ? 1 : 0.55;
+      g.fillRect(x0, RY, Math.max(1, x1 - x0 - 1.5), RH); g.globalAlpha = 1;
+      if (x1 - x0 > 20){
+        g.fillStyle = '#0a0f1c'; g.font = 'bold 11px system-ui';
+        g.fillText('f' + (i + 1), x0 + 5, RY + 27);
+      }
+      g.strokeStyle = '#6b7a99'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x1, RY + RH); g.lineTo(x1, RY + RH + 5); g.stroke();
+    }
+    g.fillStyle = '#6b7a99'; g.font = '10.5px system-ui';
+    g.fillText('0', RX - 4, RY + RH + 18); g.fillText('1', RX + RW - 4, RY + RH + 18);
+
+    if (lastR !== null){
+      const x = RX + RW * lastR;
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x, RY - 22); g.lineTo(x, RY - 3); g.stroke();
+      g.beginPath(); g.moveTo(x - 5, RY - 11); g.lineTo(x, RY - 2); g.lineTo(x + 5, RY - 11); g.stroke();
+      g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+      g.fillText('r = ' + lastR.toFixed(3), Math.min(x - 26, RX + RW - 74), RY - 28);
+    }
+
+    /* ---------- convergence bars ---------- */
+    const BX = 340, BY = 330, BW = 520;
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('how often each face actually came up  vs  its slice size', BX, 178);
+    const bw = BW / 6;
+    for (let i = 0; i < 6; i++){
+      const obs = total ? counts[i] / total : 0;
+      const hT = 118 * p[i], hO = 118 * obs;
+      g.fillStyle = 'rgba(255,255,255,.16)';
+      g.fillRect(BX + i * bw + 8, BY - hT, bw - 30, hT);            // target = the slice size
+      g.fillStyle = COL[i];
+      g.fillRect(BX + i * bw + 8, BY - hO, (bw - 30) * 0.55, hO);   // observed
+      g.fillStyle = '#9fb0cc'; g.font = '11px system-ui';
+      g.fillText('f' + (i + 1), BX + i * bw + 24, BY + 15);
+      g.fillStyle = '#6b7a99'; g.font = '10px system-ui';
+      g.fillText(p[i].toFixed(2), BX + i * bw + 8, BY + 29);
+      g.fillStyle = COL[i];
+      g.fillText(obs.toFixed(2), BX + i * bw + 46, BY + 29);
+    }
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(BX, BY + .5); g.lineTo(BX + BW, BY + .5); g.stroke();
+    g.fillStyle = '#6b7a99'; g.font = '10.5px system-ui';
+    g.fillText('pale = target pᵢ    solid = observed', BX, BY + 46);
+
+    let worst = 0;
+    for (let i = 0; i < 6; i++) worst = Math.max(worst, Math.abs((total ? counts[i] / total : 0) - p[i]));
+    ro.innerHTML = (!total)
+      ? 'Press <b>Roll once</b>. One uniform <b>r</b>, one lookup — no other randomness anywhere.'
+      : 'rolls: <b>' + total + '</b> &nbsp;·&nbsp; last: r = <b>' + lastR.toFixed(3) +
+        '</b> → smallest j with C<sub>j</sub> &gt; r is <b>face ' + (lastJ + 1) +
+        '</b> &nbsp;·&nbsp; largest gap between observed and target: <b>' + worst.toFixed(3) + '</b>' +
+        (total >= 1000 ? ' <span style="color:#7ee787">— converged</span>' : ' — roll more to shrink it');
+  }
+
+  document.getElementById('Aspin').onclick = () => roll(1);
+  document.getElementById('Aspin100').onclick = () => roll(100);
+  document.getElementById('Aspin5k').onclick = () => roll(5000);
+  document.getElementById('Areset').onclick = () => { counts = new Int32Array(6); total = 0; lastR = null; lastJ = null; draw(); };
+  for (const k in sl) sl[k].oninput = () => { counts = new Int32Array(6); total = 0; lastR = null; lastJ = null; rebuild(); };
+  rebuild();
+})();
+
+/* =========================================================
+   DEMO 2 — linear scan vs binary search on the sorted C
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvB'), g = cv.getContext('2d');
+  const ro = document.getElementById('Bro');
+  const NB = 32, LEFT = 55, SPAN = 800;
+  let p = [], C = [], r = 0.5, scanSteps = [], binSteps = [], ans = 0;
+
+  function build(){
+    const raw = [];
+    for (let i = 0; i < NB; i++) raw.push(0.2 + Math.random());
+    const s = raw.reduce((a, b) => a + b, 0);
+    p = raw.map(v => v / s);
+    C = [0]; for (let i = 0; i < NB; i++) C.push(C[i] + p[i]);
+  }
+
+  function lookup(){
+    r = Math.random();
+    scanSteps = [];
+    let j = 0; while (j < NB && C[j + 1] <= r){ scanSteps.push(j); j++; }
+    ans = Math.min(j, NB - 1); scanSteps.push(ans);
+
+    binSteps = [];
+    let lo = 0, hi = NB;
+    while (lo < hi){
+      const mid = (lo + hi) >> 1;
+      binSteps.push(mid);
+      if (C[mid + 1] > r) hi = mid; else lo = mid + 1;
+    }
+    draw();
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.font = '12px system-ui';
+    const bw = SPAN / NB;
+
+    function row(y, steps, title, col){
+      g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+      g.fillText(title + ' — ' + steps.length + ' bins inspected', LEFT, y - 10);
+      for (let i = 0; i < NB; i++){
+        const touched = steps.indexOf(i) >= 0;
+        g.fillStyle = (i === ans) ? '#7ee787' : (touched ? col : 'rgba(65,216,201,.16)');
+        g.fillRect(LEFT + i * bw, y, bw - 2, 34);
+      }
+      // the order in which they were visited
+      g.fillStyle = '#0a0f1c'; g.font = 'bold 10px system-ui';
+      steps.forEach((b, k) => { if (steps.length <= 12) g.fillText(String(k + 1), LEFT + b * bw + bw / 2 - 3, y + 22); });
+    }
+
+    row(60, scanSteps, 'LINEAR SCAN  —  check every bin from the left', 'rgba(255,107,129,.8)');
+    row(150, binSteps, 'BINARY SEARCH  —  halve the range each time (only valid because C is sorted)', 'rgba(110,168,255,.85)');
+
+    // the dart
+    const x = LEFT + SPAN * r;
+    g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.setLineDash([5, 4]);
+    g.beginPath(); g.moveTo(x, 40); g.lineTo(x, 220); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+    g.fillText('r = ' + r.toFixed(3), Math.min(x + 6, LEFT + SPAN - 70), 232);
+    g.fillStyle = '#7ee787'; g.font = '12px system-ui';
+    g.fillText('green = the answer, bin ' + ans, LEFT, 258);
+
+    ro.innerHTML = 'r = <b>' + r.toFixed(3) + '</b> &nbsp;·&nbsp; answer = bin <b>' + ans +
+      '</b> &nbsp;·&nbsp; linear scan inspected <b style="color:#ff6b81">' + scanSteps.length +
+      '</b> bins, binary search <b style="color:#6ea8ff">' + binSteps.length + '</b>' +
+      ' &nbsp;·&nbsp; with N = 32, log₂N ≈ 5. For a particle filter resampling N times per frame this is the difference between O(N²) and O(N log N).';
+  }
+
+  document.getElementById('Bnew').onclick = lookup;
+  build(); lookup();
+})();
+</script>
+
+</body>
+</html>

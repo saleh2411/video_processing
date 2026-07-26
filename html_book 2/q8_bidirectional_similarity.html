@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q8 · Is D symmetric? — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed A · Q8</b> · Bidirectional similarity</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">‹ Chapter 11</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="q1_optic_flow_segmentation.html">Q1 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 11 · Moed A, question 8</div>
+    <h1>"How far is A from B?" is not the same question as "how far is B from A?"</h1>
+    <p class="lede">Twelve points for one two-point counter-example — as long as you find it. Story, a demo where
+    you drag the points yourself, then the proof and the reason the course cares.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 8 · 12 points · BIDIRECTIONAL SIMILARITY</span>
+    <p>Given point sets $P = \{p_1,\dots,p_n\}$ and $Q = \{q_1,\dots,q_m\}$ in some Euclidean space, define the
+    "distance" $D(P,Q)$:</p>
+    <div class="eq">$$ D(P,Q) = \max_{p \in P} d(p, Q), \quad\text{with}\tag{3} $$</div>
+    <div class="eq">$$ d(p,Q) = \min_{q \in Q} d(p,q) \tag{4} $$</div>
+    <p style="margin-bottom:0">and $d(p,q)$ is the usual Euclidean distance between points $p$ and $q$.
+    <strong>Is $D$ symmetric?</strong> That is, show that $D(P,Q) = D(Q,P)$ or give a counter-example.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · First, read the definition out loud</h2>
+
+  <div class="explain">
+    <span class="explain-label">Two lines, two different words: min and max</span>
+    <p><strong>Inner (4):</strong> $d(p,Q) = \min_q d(p,q)$ — "from this one point $p$, how far is the
+    <em>nearest</em> member of $Q$?" That's <em>one</em> number per point of $P$.</p>
+    <p><strong>Outer (3):</strong> $D(P,Q) = \max_p d(p,Q)$ — "over all points of $P$, which one is the
+    <strong>worst off</strong>?" i.e. which point of $P$ is most abandoned by $Q$.</p>
+    <p>Put together in one sentence:</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">$D(P,Q)$ in plain words</span>
+    <strong>"How far do I have to travel from the loneliest point of $P$ to reach anything in $Q$?"</strong>
+    <br>Or equivalently: how big does a ball around each point of $Q$ have to be before those balls cover all of $P$?
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The village and the country</span>
+    <p>$P$ is one tiny <strong>village</strong>. $Q$ is a whole <strong>country</strong> — and the village happens
+    to sit inside the country's borders.</p>
+    <p><strong>Ask the villager:</strong> "how far to the nearest bit of the country?" Answer: <em>zero</em>. You
+    are standing in it. So $D(\text{village}, \text{country}) = 0$.</p>
+    <p><strong>Now ask the country:</strong> "over all your citizens, who is furthest from the village?" That's
+    somebody way out at the far border, a thousand kilometres away. So
+    $D(\text{country}, \text{village}) = 1000$.</p>
+    <p>Same two sets. Two completely different numbers. Nothing was computed wrongly — the two questions were
+    simply never the same question.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">Where the asymmetry comes from, structurally</span>
+    The $\max$ runs over the <strong>first</strong> argument and the $\min$ over the <strong>second</strong>.
+    Swapping $P$ and $Q$ swaps which set gets to nominate the worst case and which set gets to be the target.
+    An expression that treats its two arguments differently has no reason to be symmetric — <em>that observation
+    alone is most of the answer</em>, and the counter-example just proves it.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo — drag the points and watch the two numbers disagree</h4><span class="tag">drag · presets</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag any dot left or right. The top row measures every
+      <span style="color:#41d8c9">P</span> point to its nearest <span style="color:#ffb454">Q</span>; the bottom
+      row does the reverse. In each row the <strong>longest</strong> arrow is the one that counts — that's the
+      $\max$.</p>
+      <canvas id="cvA" width="900" height="380"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Acx">The counter-example: P={0}, Q={0,10}</button>
+        <button class="act" id="Asym">A symmetric case</button>
+        <button class="act" id="Aadd">Add a Q point</button>
+        <button class="act" id="Areset">Reset</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout note"><span class="lbl">Try to make them equal on purpose</span>
+    Press "A symmetric case". Equality <em>can</em> happen — e.g. two identical sets, or two sets whose worst-case
+    gaps coincide. That is exactly why the question says "show that $D(P,Q)=D(Q,P)$ <strong>or</strong> give a
+    counter-example": occasional equality proves nothing. One counter-example kills symmetry for good.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The answer</h2>
+
+  <div class="explain">
+    <span class="explain-label">The smallest counter-example there is</span>
+    <p>Work on the real line. Take</p>
+  </div>
+
+  <div class="eq">$$ P = \{0\}, \qquad Q = \{0, 10\} $$</div>
+
+  <div class="explain">
+    <p><strong>Direction 1.</strong> $P$ has one point, $p = 0$. Its nearest neighbour in $Q$:</p>
+  </div>
+
+  <div class="eq">$$ d(0, Q) = \min\{\,d(0,0),\, d(0,10)\,\} = \min\{0, 10\} = 0 \;\Longrightarrow\; D(P,Q) = \max\{0\} = 0 $$</div>
+
+  <div class="explain">
+    <p><strong>Direction 2.</strong> $Q$ has two points, each measured to the only point of $P$:</p>
+  </div>
+
+  <div class="eq">$$ d(0,P) = 0, \qquad d(10,P) = 10 \;\Longrightarrow\; D(Q,P) = \max\{0, 10\} = 10 $$</div>
+
+  <div class="eq">$$ \boxed{\;D(P,Q) = 0 \;\neq\; 10 = D(Q,P)\;} $$</div>
+
+  <div class="explain">
+    <p>So <strong>$D$ is not symmetric.</strong> $\blacksquare$</p>
+    <p>Note how extreme this is: $D(P,Q)=0$ while $D(Q,P)$ can be made as large as you like by moving the second
+    point of $Q$ further away. The two directions aren't just occasionally different — they can disagree
+    arbitrarily.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">Bonus observations, cheap to add and they read well</span>
+    <p style="margin:6px 0 0">• <strong>$D(P,Q) = 0 \iff P \subseteq Q$</strong> (for finite sets). So $D(P,Q)=0$
+    says "$P$ is contained in $Q$", which is a one-directional statement by nature — containment is not symmetric,
+    so $D$ cannot be either.</p>
+    <p>• <strong>$D$ is the directed Hausdorff distance.</strong> Symmetrising it by
+    $D_H(P,Q) = \max\{D(P,Q),\,D(Q,P)\}$ gives the <em>Hausdorff distance</em>, which <em>is</em> a genuine metric
+    on compact sets. That is the standard repair.</p>
+    <p>• $D$ also fails to be a metric for a second reason: $D(P,Q)=0$ does not imply $P=Q$ (take
+    $P=\{0\}, Q=\{0,10\}$ again).</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Why the course asks this</h2>
+
+  <div class="explain">
+    <span class="explain-label">This is completeness vs coherence, in disguise</span>
+    <p>The asymmetry you just proved is exactly the reason Chapter 11's retargeting needs <em>two</em> terms
+    instead of one. With $S$ the source image and $T$ the target, patches playing the role of points:</p>
+  </div>
+
+  <div class="eq">$$ D_{com}(S,T) = \frac{1}{N_S}\sum_{P \in S}\ \min_{Q \in T} d^2(P,Q), \qquad
+      D_{coh}(S,T) = \frac{1}{N_T}\sum_{Q \in T}\ \min_{P \in S} d^2(P,Q) $$</div>
+
+  <div class="explain">
+    <p>Same shape as this question — an outer aggregation over one set, an inner $\min$ over the other — and the
+    two directions mean genuinely different things:</p>
+    <ul>
+      <li><strong>Completeness</strong> ($S \to T$): every patch of the <em>original</em> should appear somewhere
+      in the output. Violated ⇒ <em>you lost content</em>.</li>
+      <li><strong>Coherence</strong> ($T \to S$): every patch of the <em>output</em> should have come from
+      somewhere in the original. Violated ⇒ <em>you invented content</em> (artefacts).</li>
+    </ul>
+    <p>Neither alone is enough: minimising only completeness lets you duplicate everything; minimising only
+    coherence lets you output a patch of sky and call it a day. So Chapter 11 symmetrises them exactly the way
+    you'd repair $D$:</p>
+  </div>
+
+  <div class="eq">$$ D(S,T) = \alpha\, D_{com}(S,T) + (1-\alpha)\, D_{coh}(S,T) $$</div>
+
+  <div class="explain">
+    <p>If $D$ had been symmetric, one term would have sufficed and the whole bidirectional-similarity idea would
+    not exist. <strong>Saying this in the exam turns a two-line answer into a complete one.</strong></p>
+    <p>(One honest difference worth noting: Chapter 11 aggregates the inner distances with a <em>sum/average</em>,
+    whereas this question uses a $\max$. The asymmetry argument is identical either way — it comes from the outer
+    aggregation ranging over one set and the inner $\min$ over the other, not from which aggregator you pick.)</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Short — but give the structural reason, not just the numbers</span>
+    <p><strong>No, $D$ is not symmetric.</strong></p>
+    <p><strong>Why to expect it.</strong> In $D(P,Q) = \max_{p\in P}\min_{q\in Q} d(p,q)$ the outer $\max$ ranges
+    over the first argument while the inner $\min$ ranges over the second. The two arguments play different roles,
+    so there is no reason for the value to be preserved under swapping them.</p>
+    <p><strong>Counter-example.</strong> On $\mathbb{R}$, let $P = \{0\}$ and $Q = \{0,10\}$. Then
+    $d(0,Q) = \min\{0,10\} = 0$, so $D(P,Q) = 0$; while $d(0,P)=0$ and $d(10,P)=10$, so
+    $D(Q,P) = \max\{0,10\} = 10$. Since $0 \neq 10$, $D(P,Q) \neq D(Q,P)$. $\blacksquare$</p>
+    <p><strong>Remarks.</strong> $D$ is the <em>directed</em> Hausdorff distance; $D(P,Q)=0$ iff $P \subseteq Q$,
+    which is inherently one-directional. It is symmetrised by
+    $D_H(P,Q) = \max\{D(P,Q), D(Q,P)\}$, the Hausdorff distance, which is a true metric.</p>
+    <p><strong>Relevance.</strong> This is precisely the completeness/coherence asymmetry of Chapter 11:
+    $D_{com}(S,T)$ penalises losing content from the source, $D_{coh}(S,T)$ penalises inventing content in the
+    target, and they are different quantities. Retargeting therefore optimises the symmetrised combination
+    $\alpha D_{com} + (1-\alpha)D_{coh}$.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Give the counter-example from memory, with both numbers.</summary>
+    <p>$P=\{0\}$, $Q=\{0,10\}$ on the real line. $D(P,Q)=\max\{\min\{0,10\}\}=0$.
+    $D(Q,P)=\max\{d(0,P),d(10,P)\}=\max\{0,10\}=10$. Not equal, so not symmetric.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Explain the asymmetry <em>without</em> using numbers.</summary>
+    <p>$D(P,Q)$ asks "how abandoned is the loneliest point of $P$ by the set $Q$". The $\max$ is taken over the
+    first set and the $\min$ over the second, so the first set nominates the worst case and the second merely acts
+    as a target. Swapping the arguments swaps those two roles, which is a genuinely different question — like
+    asking "how far is the village from the country" versus "how far is the country from the village".</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. When <em>is</em> $D(P,Q) = D(Q,P)$?</summary>
+    <p>Trivially when $P = Q$ (both are 0), and more generally whenever the two worst-case gaps happen to
+    coincide — e.g. two sets that are reflections of one another about a common configuration. Such cases exist,
+    which is why the question offers "prove it or find a counter-example": equality in particular instances is not
+    a proof of symmetry, while one counter-example is a disproof.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What does $D(P,Q) = 0$ tell you?</summary>
+    <p>That every point of $P$ has distance 0 to $Q$, i.e. $P \subseteq Q$ for finite sets (more generally, $P$ is
+    contained in the closure of $Q$). Containment is a one-directional relation, which is another way of seeing
+    immediately that $D$ cannot be symmetric — and also shows $D$ is not a metric, since $D(P,Q)=0$ does not force
+    $P = Q$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How do you repair it into a real distance?</summary>
+    <p>Take the larger of the two directions: $D_H(P,Q) = \max\{D(P,Q), D(Q,P)\}$ — the Hausdorff distance. It is
+    symmetric by construction, is zero only when the sets are equal (for compact sets), and satisfies the triangle
+    inequality, so it is a genuine metric. Chapter 11's retargeting uses the analogous repair, a weighted sum of
+    the two directions.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Which of the two directions corresponds to completeness, and which to coherence?</summary>
+    <p>Measuring from source patches to the target ($S \to T$) is <strong>completeness</strong>: every patch of the
+    original should still be found in the output, so violating it means content was lost. Measuring from target
+    patches to the source ($T \to S$) is <strong>coherence</strong>: every patch of the output should come from the
+    original, so violating it means content was invented — visible as artefacts.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What goes wrong if a retargeting method optimises only one of them?</summary>
+    <p>Only completeness: the output is rewarded for containing everything from the source, so it can duplicate
+    content repeatedly and produce incoherent junk that nonetheless "covers" the source. Only coherence: the
+    output is rewarded for having every patch explainable by the source, which a uniform patch of sky satisfies
+    perfectly — so entire objects can vanish. Both terms are needed, weighted by $\alpha$.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Symbol</th><th>Plain version</th></tr>
+      <tr><td>$d(p,Q) = \min_q d(p,q)$</td><td>from this point, how far is the nearest thing in $Q$</td></tr>
+      <tr><td>$D(P,Q) = \max_p d(p,Q)$</td><td>how abandoned is the loneliest point of $P$</td></tr>
+      <tr><td>why asymmetric</td><td>max over the 1st set, min over the 2nd — different roles</td></tr>
+      <tr><td>counter-example</td><td>$P=\{0\}$, $Q=\{0,10\}$ → $0$ vs $10$</td></tr>
+      <tr><td>$D(P,Q)=0$</td><td>means $P \subseteq Q$ — inherently one-directional</td></tr>
+      <tr><td>the repair</td><td>$\max\{D(P,Q),D(Q,P)\}$ = Hausdorff distance, a true metric</td></tr>
+      <tr><td>in Ch.11</td><td>completeness vs coherence, blended by $\alpha$</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole answer, five words:</strong> village in country; country isn't.</p>
+  </div>
+
+  <div class="pager">
+    <a href="q6_geodesic_gamma.html"><span class="dir">Previous</span><span class="ttl">Q6 · The γ parameter</span></a>
+    <a class="next" href="index.html"><span class="dir">Back to</span><span class="ttl">All companions ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO — drag P and Q points, watch D(P,Q) vs D(Q,P)
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const ro = document.getElementById('Aro');
+  const LEFT = 70, SPAN = 780, Y_P = 120, Y_Q = 270;
+  const XMIN = 0, XMAX = 20;                       // world coordinates shown on the axis
+
+  let P = [], Q = [], drag = null;
+
+  function toX(v){ return LEFT + SPAN * (v - XMIN) / (XMAX - XMIN); }
+  function toV(x){ return XMIN + (x - LEFT) / SPAN * (XMAX - XMIN); }
+
+  function preset(which){
+    if (which === 'counter'){ P = [0]; Q = [0, 10]; }
+    // a NON-trivial equality: different sets, but both worst-case gaps are 5
+    else if (which === 'sym'){ P = [5, 15]; Q = [10]; }
+    else { P = [3, 7]; Q = [5, 14, 18]; }
+    draw();
+  }
+
+  function nearest(v, set){
+    let bd = Infinity, bi = -1;
+    set.forEach((w, i) => { const d = Math.abs(v - w); if (d < bd){ bd = d; bi = i; } });
+    return { d: bd, i: bi };
+  }
+  function directed(A, B){                          // D(A,B) = max_a min_b |a-b|
+    let best = -Infinity, arg = -1, tgt = -1;
+    A.forEach((a, i) => { const n = nearest(a, B); if (n.d > best){ best = n.d; arg = i; tgt = n.i; } });
+    return { val: best, from: arg, to: tgt };
+  }
+
+  function drawRow(y, A, B, colA, colB, label, res, sublabel){
+    // axis
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, y); g.lineTo(LEFT + SPAN, y); g.stroke();
+    for (let v = XMIN; v <= XMAX; v += 2){
+      const x = toX(v);
+      g.strokeStyle = '#222c44'; g.beginPath(); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.stroke();
+      g.fillStyle = '#4c5a75'; g.font = '10px system-ui'; g.fillText(String(v), x - 4, y + 18);
+    }
+
+    g.fillStyle = '#9fb0cc'; g.font = 'bold 12.5px system-ui';
+    g.fillText(label, LEFT, y - 66);
+    g.fillStyle = '#6b7a99'; g.font = '11.5px system-ui';
+    g.fillText(sublabel, LEFT, y - 50);
+
+    // every a → its nearest b
+    A.forEach((a, i) => {
+      const n = nearest(a, B);
+      const isMax = (i === res.from);
+      const x0 = toX(a), x1 = toX(B[n.i]);
+      g.strokeStyle = isMax ? '#ffffff' : 'rgba(155,170,200,.35)';
+      g.lineWidth = isMax ? 2.5 : 1.2;
+      const arcY = y - 26;
+      g.beginPath(); g.moveTo(x0, y - 2); g.lineTo(x0, arcY); g.lineTo(x1, arcY); g.lineTo(x1, y - 2); g.stroke();
+      if (isMax){
+        g.fillStyle = '#ffffff'; g.font = 'bold 12px system-ui';
+        g.fillText(n.d.toFixed(1), (x0 + x1) / 2 - 8, arcY - 6);
+      }
+    });
+
+    // the points
+    B.forEach(b => { const x = toX(b);
+      g.fillStyle = colB; g.globalAlpha = .45;
+      g.fillRect(x - 5, y - 5, 10, 10); g.globalAlpha = 1; });
+    A.forEach((a, i) => { const x = toX(a);
+      g.fillStyle = colA;
+      g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill();
+      if (i === res.from){ g.strokeStyle = '#fff'; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, y, 11, 0, 7); g.stroke(); } });
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    const r1 = directed(P, Q), r2 = directed(Q, P);
+
+    drawRow(Y_P, P, Q, '#41d8c9', '#ffb454', 'D(P, Q)  =  max over P  of  (distance to nearest Q)',
+            'circles = P (drag them) · squares = Q · white arc = the max, i.e. the value of D(P,Q)', r1);
+    drawRow(Y_Q, Q, P, '#ffb454', '#41d8c9', 'D(Q, P)  =  max over Q  of  (distance to nearest P)',
+            'circles = Q (drag them) · squares = P · same two sets, opposite question', r2);
+
+    const eq = Math.abs(r1.val - r2.val) < 1e-9;
+    g.fillStyle = eq ? '#7ee787' : '#ff6b81';
+    g.font = 'bold 15px system-ui';
+    g.fillText('D(P,Q) = ' + r1.val.toFixed(1) + '     ' + (eq ? '=' : '≠') + '     D(Q,P) = ' + r2.val.toFixed(1),
+               LEFT, 355);
+
+    ro.innerHTML = 'P = {' + P.map(v => v.toFixed(1)).join(', ') + '} &nbsp;·&nbsp; Q = {' +
+      Q.map(v => v.toFixed(1)).join(', ') + '}<br>' +
+      'D(P,Q) = <b>' + r1.val.toFixed(2) + '</b> &nbsp;·&nbsp; D(Q,P) = <b>' + r2.val.toFixed(2) + '</b> &nbsp;·&nbsp; ' +
+      (eq ? '<span style="color:#7ee787">equal here — but equality in one example proves nothing</span>'
+          : '<span style="color:#ff6b81">different ⇒ D is not symmetric</span>');
+  }
+
+  /* ---- dragging (canvas is CSS-scaled, so convert properly) ---- */
+  function pos(ev){
+    const r = cv.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * (cv.width / r.width),
+             y: (ev.clientY - r.top) * (cv.height / r.height) };
+  }
+  cv.addEventListener('pointerdown', ev => {
+    const { x, y } = pos(ev);
+    const row = (Math.abs(y - Y_P) < Math.abs(y - Y_Q)) ? 'P' : 'Q';
+    const set = row === 'P' ? P : Q;
+    let bi = -1, bd = 18;
+    set.forEach((v, i) => { const d = Math.abs(toX(v) - x); if (d < bd){ bd = d; bi = i; } });
+    if (bi >= 0){ drag = { row: row, i: bi }; cv.setPointerCapture(ev.pointerId); }
+  });
+  cv.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    const { x } = pos(ev);
+    const v = Math.max(XMIN, Math.min(XMAX, toV(x)));
+    (drag.row === 'P' ? P : Q)[drag.i] = Math.round(v * 2) / 2;
+    draw();
+  });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('pointercancel', () => { drag = null; });
+
+  document.getElementById('Acx').onclick = () => preset('counter');
+  document.getElementById('Asym').onclick = () => preset('sym');
+  document.getElementById('Areset').onclick = () => preset('default');
+  document.getElementById('Aadd').onclick = () => { Q.push(Math.round(Math.random() * XMAX)); draw(); };
+  preset('counter');
+})();
+</script>
+
+</body>
+</html>

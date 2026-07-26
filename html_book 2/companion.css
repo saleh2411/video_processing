@@ -1,0 +1,54 @@
+/* ===========================================================
+   Video Processing — shared styles for the "companion" pages
+   (story-first exam walkthroughs). Loaded AFTER styles.css.
+   =========================================================== */
+
+.story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+         border:1px solid var(--line); border-left:4px solid #c792ea; }
+.story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+         color:#c792ea; font-weight:700; margin-bottom:6px; }
+
+.qbox { margin:18px 0; padding:16px 20px; border-radius:12px; background:#101a2b;
+        border:1px solid var(--line); border-left:4px solid var(--accent-3); }
+.qbox .q-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+        color:var(--accent-3); font-weight:700; margin-bottom:6px; }
+
+.answerbox { margin:18px 0; padding:18px 22px; border-radius:12px; background:#0f2420;
+        border:1px solid #1d4a42; border-left:4px solid var(--good); }
+.answerbox .a-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+        color:var(--good); font-weight:700; margin-bottom:8px; }
+.answerbox p { margin:8px 0; }
+
+.steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+.steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+         background:var(--card); border:1px solid var(--line); border-radius:11px; }
+.steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+         border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+         display:flex; align-items:center; justify-content:center; font-size:15px; }
+.steps li b { color:var(--accent-2); }
+
+details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+         padding:12px 16px; margin:10px 0; }
+details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+details.qa summary::marker { color:var(--accent-3); }
+details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+
+.kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+.kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+.kv th { color:var(--accent); }
+.kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+.kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+
+.yes { color:var(--good); font-weight:700; }
+.no  { color:var(--danger); font-weight:700; }
+
+.chk { display:inline-flex; align-items:center; gap:7px; font-size:14px; color:var(--ink-dim);
+       padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:#131a2b; cursor:pointer; }
+
+.stagebar { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; }
+.stagebar .st { flex:1; min-width:110px; text-align:center; padding:8px 6px; border-radius:9px;
+         border:1px solid var(--line); background:#131a2b; color:var(--ink-faint); font-size:13px; }
+.stagebar .st.on { border-color:var(--accent-3); color:#07221f; background:var(--accent-3); font-weight:700; }
+
+pre.ruler { background:#0a0f1c; border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+       overflow-x:auto; color:var(--accent); font-size:13.5px; line-height:1.5; margin:12px 0; }

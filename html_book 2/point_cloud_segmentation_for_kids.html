@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Point-cloud segmentation (Moed A Q7) — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+           border:1px solid var(--line); border-left:4px solid #c792ea; }
+  .story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+           color:#c792ea; font-weight:700; margin-bottom:6px; }
+  .qbox { margin:18px 0; padding:16px 20px; border-radius:12px; background:#101a2b;
+          border:1px solid var(--line); border-left:4px solid var(--accent-3); }
+  .qbox .q-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+          color:var(--accent-3); font-weight:700; margin-bottom:6px; }
+  .steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+  .steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+           background:var(--card); border:1px solid var(--line); border-radius:11px; }
+  .steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+           border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+           display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .steps li b { color:var(--accent-2); }
+  details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+           padding:12px 16px; margin:10px 0; }
+  details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  details.qa summary::marker { color:var(--accent-3); }
+  details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+  .kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+  .kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+  .answerbox { margin:18px 0; padding:18px 22px; border-radius:12px; background:#0f2420;
+         border:1px solid #1d4a42; border-left:4px solid var(--good); }
+  .answerbox .a-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+         color:var(--good); font-weight:700; margin-bottom:8px; }
+  .answerbox p { margin:8px 0; }
+  .chk { display:inline-flex; align-items:center; gap:7px; font-size:14px; color:var(--ink-dim);
+         padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:#131a2b; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Extra</b> · Point clouds &amp; Moed A Q7</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch09_video_colorization.html">‹ Chapter 9</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="exam08_video_colorization.html">Exam 8 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 9 · built around Moed A, question 7</div>
+    <h1>Colouring a cloud of dots</h1>
+    <p class="lede">First: what the question is even asking, in ordinary words. Then a story, then three demos you
+    can press, then the math. By the end this should feel like the easiest 13 points on the page.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 7 · 13 points · SEGMENTATION</span>
+    <p style="margin:0">Consider Figure 5. The left part shows two 3D point clouds (a plane and a motorcycle) with
+    user scribbles superimposed (diamond-shaped points with different colours). A 3D point cloud is simply an
+    unordered list of 3D points. Suggest an algorithm that takes a 3D point cloud and user scribbles and produces
+    the segmentation results seen on the right side of the figure.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · What is the question even asking?</h2>
+
+  <p>Three nouns to unpack. None of them are hard, they just sound hard.</p>
+
+  <table class="kv">
+    <tr><th>Word</th><th>What it actually is</th></tr>
+    <tr><td>3D point cloud</td><td>A <strong>bag of dots</strong>. Literally a list: <code>(x,y,z), (x,y,z), …</code>
+      That's it. If you scanned a motorcycle with a laser, you'd get a few thousand dots floating in space in the
+      shape of a motorcycle. <strong>No pixels, no grid, no order, and — crucially — nobody tells you which dot is
+      next to which.</strong></td></tr>
+    <tr><td>User scribbles</td><td>A person clicked on <strong>a handful of dots</strong> and marked them:
+      "these few are <span style="color:#ff6b81">wing</span>", "these few are
+      <span style="color:#6ea8ff">body</span>", "these few are <span style="color:#41d8c9">tail</span>". The
+      diamonds in the figure. Maybe 20 dots out of 5000. They are <strong>seeds</strong>.</td></tr>
+    <tr><td>The expected output</td><td>Give <strong>every single dot</strong> a label. The right side of the
+      figure is the same cloud with every dot coloured by which part it belongs to. Nothing is left grey.</td></tr>
+  </table>
+
+  <div class="callout key"><span class="lbl">So the task in one sentence</span>
+    <strong>A few dots are labelled. Spread those labels to all the other dots, sensibly.</strong>
+    That's the entire question. "Sensibly" is where the 13 points live.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The playground with no map</span>
+    <p>Imagine thousands of little stepping stones floating in the air, arranged in the shape of a motorcycle.
+    You are standing on one of them. Somebody has painted <strong>a few</strong> stones red and a few stones blue.
+    Every other stone is grey.</p>
+    <p>Your job: paint every grey stone either red or blue.</p>
+    <p>The rule a five-year-old would invent, and it's the right one: <strong>"paint me the colour of whichever
+    painted stone I can walk to fastest."</strong></p>
+    <p>Walk. Not fly. That word is the entire answer.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">Why "walk" and not "fly"</span>
+    <p style="margin:6px 0 0">Think of a motorcycle. The <strong>front wheel</strong> and the
+    <strong>handlebar</strong> are very close together <em>as the crow flies</em> — a few centimetres of empty
+    air. But to actually <em>travel</em> from one to the other along the metal, you go down the fork, along the
+    frame, and back up. They are near in space and far along the object.</p>
+    <p>If you measure "fastest" by straight-line distance, the wheel's colour leaks onto the handlebar
+    <strong>through empty air</strong>. If you measure it by walking along the object, it doesn't. That is the
+    whole difference between the wrong answer and the right one.</p>
+  </div>
+
+  <p>Straight-line distance has a name: <span class="term">Euclidean</span>. Walking-along-the-object distance
+  has a name: <span class="term">geodesic</span>. Chapter 9 is entirely about the second one.</p>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — flying vs walking, side by side</h4><span class="tag">the whole idea</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A horseshoe-shaped cloud of dots (think: a bent piece of a
+      motorcycle frame). Two scribbles: <span style="color:#ff6b81">red</span> at the top tip,
+      <span style="color:#6ea8ff">blue</span> on the far side. The two tips are close <em>through the air</em> but
+      very far <em>along the shape</em>. Watch what each rule does to the bottom tip.</p>
+      <canvas id="cvA" width="900" height="400"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Ashow">Show the mistakes</button>
+        <button class="act" id="Anew">New cloud</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Read the left panel again</span>
+    Euclidean labelling paints the bottom tip <span style="color:#ff6b81">red</span> — because red is only a
+    short hop away <em>across the gap</em>. But you cannot get there without leaving the object. Geodesic
+    labelling walks the long way round and correctly calls it
+    <span style="color:#6ea8ff">blue</span>. Same dots, same scribbles, one word changed.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · But wait — how do you "walk" on a bag of dots?</h2>
+
+  <div class="story">
+    <span class="story-label">Building the bridges yourself</span>
+    <p>Here is the catch, and it is the one genuinely new thing in this question. In Chapter 9 you propagated
+    colour across an <strong>image</strong>. An image is a grid — every pixel already knows its four neighbours.
+    Walking is obvious: step left, right, up, down.</p>
+    <p>A point cloud is an <em>unordered list</em>. Dot #417 has no idea which dot is beside it. There are no
+    neighbours. There is nothing to walk along.</p>
+    <p><strong>So you build the walkways yourself:</strong> for each dot, find the handful of dots physically
+    nearest to it, and lay a little bridge to each. Do that for every dot and suddenly the bag of dots is a
+    connected network you can walk on.</p>
+    <p>That's a <span class="term">k-nearest-neighbour graph</span>. It is the <em>only</em> step in this whole
+    question that isn't already in Chapter 9 — and it is the step that earns you the points, because it is
+    exactly what the examiner is checking you noticed.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">And k matters — a lot</span>
+    <p style="margin:6px 0 0"><strong>k too small</strong> → the network falls apart into disconnected islands.
+    A dot in an island with no scribble can never be reached: its distance is infinite and it gets no label.</p>
+    <p><strong>k too big</strong> → you start building bridges <em>across empty air</em>, from the wheel straight
+    to the handlebar. Now the "walk" can cheat through the gap and you're back to the Euclidean mistake, just
+    slower.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — building the walkways: choosing k</h4><span class="tag">drag k</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Slide k and watch the bridges appear. Bridges that jump the gap are
+      drawn in <span style="color:#ff6b81">red</span> — those are the cheats that will ruin your segmentation.
+      The readout tells you how many separate islands the network currently has (you want exactly 1).</p>
+      <canvas id="cvB" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>k  (neighbours per dot) <span class="val" id="vBk">6</span></label><input type="range" id="Bk" min="1" max="14" step="1" value="6"></div>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Now spread the paint</h2>
+
+  <div class="story">
+    <span class="story-label">Two floods racing</span>
+    <p>Pour red water onto the red stones and blue water onto the blue stones at the same moment. Both floods
+    spread outwards along the bridges, one step at a time, always going to the nearest unflooded stone first.</p>
+    <p>Every stone gets the colour of whichever flood <strong>reaches it first</strong>. Where the two floods meet
+    is the boundary between the parts.</p>
+    <p>That flood is <span class="term">Dijkstra's algorithm</span>. Nothing more mysterious than that.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — the two floods (Dijkstra), one step at a time</h4><span class="tag">step · auto</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Bright dots = already settled (their distance is final). The pale
+      ring = the current frontier, the dots the floods are about to reach. Press step slowly at the start and
+      you'll see both floods creeping outward from their scribbles.</p>
+      <canvas id="cvC" width="900" height="400"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="Cstep">Step ×5</button>
+        <button class="act" id="Cauto">Auto-run</button>
+        <button class="act" id="Cfin">Finish</button>
+        <button class="act" id="Creset">Reset</button>
+        <label class="chk"><input type="checkbox" id="Cdist"> show distance instead of labels</label>
+      </div>
+      <div class="readout" id="Cro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Why "nearest unflooded stone first" is not arbitrary</span>
+    That ordering is what makes Dijkstra correct. Once you pick the closest remaining dot, no later path can ever
+    reach it more cheaply — every other route would have to pass through something already further away, and
+    weights are never negative. So its distance is final the moment you pick it, and you never revisit it. That's
+    the <strong>Bellman principle</strong> from Chapter 9: any piece of a shortest path is itself a shortest path.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Only now, the math</h2>
+
+  <div class="explain">
+    <span class="explain-label">Every symbol is a thing you already saw</span>
+    <p>Chapter 9 defined a path, its length, and then a distance. Same three definitions here, just on a graph
+    instead of a pixel grid.</p>
+  </div>
+
+  <div class="eq">$$ L(P) \;=\; \sum_{e \in P} W_e \qquad\qquad d_L(x,y) \;=\; \min_{P:\,x \to y} L(P) $$</div>
+
+  <div class="explain">
+    <p>Then the <strong>point-to-set</strong> distance — the distance from a dot to a whole scribble, which is
+    just the distance to its closest member:</p>
+  </div>
+
+  <div class="eq">$$ d_L(x, \Omega_k) \;=\; \min_{y \in \Omega_k} d_L(x,y) \qquad\Longrightarrow\qquad D_k(x) = d_L(x, \Omega_k) $$</div>
+
+  <div class="explain">
+    <p>$D_k$ is the <strong>distance map</strong> for scribble $k$: zero on the scribble, growing as you walk
+    away from it. One map per scribble colour. Then the label is simply whoever is closest:</p>
+  </div>
+
+  <div class="eq">$$ \mathrm{label}(x) \;=\; \arg\min_k \; D_k(x) $$</div>
+
+  <div class="explain">
+    <p>Ties — where two maps are equal — are the boundary between parts. (In Chapter 9's colorization you did not
+    take the $\arg\min$; you <em>blended</em> with $c(x) = \sum_k W(D_k)c_k / \sum_k W(D_k)$, $W(D)=1/D^b$,
+    because colour should fade smoothly. Segmentation wants a hard decision, so $\arg\min$. Worth one sentence in
+    the exam — it shows you know why the two chapters differ.)</p>
+
+    <h4 class="mini">The only genuinely new part: what is $W_e$ here?</h4>
+    <p>In Chapter 9 the graph was the pixel grid and the weight was the brightness jump,
+    $W_e = |Y(x) - Y(x')|$ — crossing an intensity edge is expensive. On a point cloud there is no brightness, so
+    you pick weights from geometry:</p>
+    <ul>
+      <li><strong>Base:</strong> $W_e = \|p - q\|$, the plain 3D distance. Already enough to produce
+      "walk along the object, don't fly", because there simply are no edges across empty air.</li>
+      <li><strong>Better:</strong> add a term that makes crossing a sharp geometric boundary expensive, e.g.
+      $W_e = \|p - q\| \cdot \big(1 + \lambda(1 - \langle n_p, n_q\rangle)\big)$ where $n_p$ is the surface
+      normal at $p$ (estimated by fitting a plane to $p$'s neighbours). Two dots on the same flat panel have
+      parallel normals → cheap. Two dots across a crease → normals disagree → expensive. That is the exact analogue
+      of "crossing an image edge costs a lot".</li>
+      <li>Colour, if the scan has it, joins the same product.</li>
+    </ul>
+    <p>Everything else — Bellman, Dijkstra, $D_k$, the $O(N\log N)$ with a priority queue — transfers unchanged
+    from Chapter 9.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The algorithm, written properly</h2>
+
+  <ol class="steps">
+    <li><b>Build a graph</b> $G=(V,E)$. Nodes = the points. Since the list is unordered, connect each point to its
+    <b>k nearest neighbours</b> in 3D (k ≈ 6–10), found with a k-d tree. Optionally cap the edge length so no
+    bridge crosses empty space.</li>
+    <li><b>Weight the edges</b> so distance grows across boundaries:
+    $W_e = \|p-q\|$, optionally $\times \big(1+\lambda(1-\langle n_p,n_q\rangle)\big)$ using estimated surface
+    normals (and colour, if available).</li>
+    <li><b>Seeds.</b> $\Omega_k$ = the set of points carrying scribble colour $k$. Set $D_k = 0$ on them.</li>
+    <li><b>Distance maps.</b> For each label $k$, run <b>multi-source Dijkstra</b> from $\Omega_k$ to get
+    $D_k(v) = d_L(v, \Omega_k)$ for every point. (Or run one Dijkstra with all seeds at once, carrying an owner
+    label — same result, one pass.)</li>
+    <li><b>Assign.</b> $\mathrm{label}(v) = \arg\min_k D_k(v)$. Ties mark the boundary between segments.</li>
+    <li><b>Output.</b> Colour each point by its label — the right-hand side of Figure 5.</li>
+  </ol>
+
+  <div class="summary">
+    <span class="summary-label">What transfers from Ch.9, and what is new</span>
+    <table>
+      <tr><th></th><th>Ch.9 colorization</th><th>This question</th></tr>
+      <tr><td>Domain</td><td>pixel grid — neighbours are free</td><td><strong>unordered points — you must build a kNN graph</strong></td></tr>
+      <tr><td>Edge weight</td><td>$|Y(x)-Y(x')|$, the brightness jump</td><td>$\|p-q\|$, optionally × a normal-difference term</td></tr>
+      <tr><td>Distance</td><td>geodesic $d_L$, Bellman + Dijkstra</td><td>identical</td></tr>
+      <tr><td>Per-seed map</td><td>$D_k(x) = d_L(x,\Omega_k)$</td><td>identical</td></tr>
+      <tr><td>Final step</td><td>soft blend $\sum W(D_k)c_k / \sum W(D_k)$</td><td>hard $\arg\min_k D_k$</td></tr>
+      <tr><td>Cost</td><td>$O(N \log N)$</td><td>$O(N\log N)$ + $O(N\log N)$ to build the kNN graph</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>One sentence version:</strong> it is Chapter 9 with the pixel grid replaced
+    by a k-nearest-neighbour graph.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The traps</h2>
+
+  <div class="callout warn"><span class="lbl">1 · Do not answer "nearest scribble by Euclidean distance"</span>
+    That's demo 1's left panel. It leaks labels across empty air between parts that are spatially close but
+    structurally far — precisely the motorcycle wheel/handlebar case. Saying the word <em>geodesic</em> and
+    explaining <em>why</em> is most of the grade.
+  </div>
+
+  <div class="callout warn"><span class="lbl">2 · Do not forget that you have to CREATE the neighbourhood</span>
+    "An unordered list of 3D points" is in the question for a reason. If your answer says "run Dijkstra on the
+    point cloud" without saying what the edges are, you have skipped the only step that differs from the lecture.
+    Say <strong>k-nearest-neighbour graph, built with a k-d tree</strong>.
+  </div>
+
+  <div class="callout warn"><span class="lbl">3 · Handle disconnection</span>
+    If a component of the graph contains no scribble at all, every point in it has $D_k=\infty$ for all $k$ and
+    is unlabelled. Say what you'd do: increase $k$, or use a radius-graph with a larger radius, or assign that
+    component by its nearest labelled component. Mentioning this failure mode reads as engineering maturity and
+    is cheap.
+  </div>
+
+  <div class="callout note"><span class="lbl">4 · Nice-to-have extras (one line each, if you have room)</span>
+    <p style="margin:6px 0 0">• <strong>One Dijkstra, not k of them</strong> — push all seeds into the queue at
+    once, each carrying its label; the first flood to settle a node owns it. Same answer, one pass instead of
+    $k$.</p>
+    <p>• <strong>Soft version</strong> — keep the $D_k$ maps and blend as in Chapter 9 if you want soft
+    boundaries or a confidence value per point.</p>
+    <p>• <strong>Fast sweeping</strong> — the GPU-friendly alternative to Dijkstra from Chapter 9. It needs a
+    grid-like sweep order, so on an unordered cloud Dijkstra is the natural pick; saying so shows you know the
+    difference.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, in order</span>
+    <p><strong>Idea.</strong> This is Chapter 9's scribble propagation by geodesic distance, moved from a pixel
+    grid to a point cloud. The only new step is that the cloud is unordered, so the neighbourhood structure has to
+    be constructed before any distance can be computed.</p>
+    <p><strong>1 · Graph.</strong> $G=(V,E)$ with $V$ = the points; connect each point to its $k$ nearest
+    neighbours in 3D ($k\approx 6\text{–}10$, via a k-d tree), optionally discarding edges longer than a cap so no
+    edge bridges empty space.</p>
+    <p><strong>2 · Weights.</strong> $W_e = \|p-q\|$, optionally multiplied by
+    $\big(1+\lambda(1-\langle n_p,n_q\rangle)\big)$ with $n_p$ the local surface normal, so that crossing a sharp
+    geometric boundary is expensive — the analogue of the intensity-gradient weight used for images.</p>
+    <p><strong>3 · Seeds.</strong> $\Omega_k$ = points carrying scribble label $k$, with $D_k|_{\Omega_k}=0$.</p>
+    <p><strong>4 · Distance maps.</strong> Run multi-source Dijkstra to obtain
+    $D_k(v)=d_L(v,\Omega_k)=\min_{y\in\Omega_k} \min_P \sum_{e\in P} W_e$ for every point and every label
+    ($O(N\log N)$, justified by the Bellman principle).</p>
+    <p><strong>5 · Label.</strong> $\mathrm{label}(v)=\arg\min_k D_k(v)$; ties are the segment boundaries. (Chapter
+    9 blends with $W(D)=1/D^b$ instead, because colorization wants soft transitions; segmentation wants a hard
+    decision.)</p>
+    <p><strong>Notes.</strong> Euclidean nearest-scribble would fail: parts that are close in space but far along
+    the object (motorcycle wheel vs handlebar) would leak labels across empty air. $k$ must be large enough to
+    keep the graph connected but small enough not to bridge distinct parts; a component containing no scribble
+    stays unlabelled and must be handled separately.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>9 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why not simply label each point by its nearest scribble in Euclidean distance?</summary>
+    <p>Because Euclidean distance travels through empty space. Two parts of an object can be centimetres apart in
+    space while being far apart along the object — a motorcycle's front wheel and handlebar, or the two tips of a
+    horseshoe. Euclidean labelling leaks a label across that gap. Geodesic distance is constrained to the graph,
+    which only contains edges between genuinely adjacent points, so it must travel along the object.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What is the single thing that makes this different from Chapter 9's colorization?</summary>
+    <p>The domain has no built-in neighbourhood. An image is a grid where every pixel's four neighbours are known
+    for free; a point cloud is an unordered list. So you must <em>construct</em> the graph — k-nearest neighbours
+    in 3D — before any of the Chapter 9 machinery applies. Everything after that (Bellman, Dijkstra, $D_k$,
+    $\arg\min$) is unchanged.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How would you choose the edge weights, and why does that choice matter?</summary>
+    <p>Minimum: $W_e = \|p-q\|$ so distance measures travel along the surface. Better: multiply by a term that
+    grows when the two surface normals disagree, $1+\lambda(1-\langle n_p,n_q\rangle)$, so crossing a crease or a
+    part boundary is expensive. This is the direct analogue of weighting by the intensity gradient in an image:
+    you want the distance to grow fast exactly where a segment boundary should be, so the two floods meet there.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What happens if k is too small? Too large?</summary>
+    <p>Too small: the graph fragments into disconnected components; any component with no scribble gets
+    $D_k=\infty$ everywhere and is left unlabelled. Too large: edges start bridging genuinely separate parts
+    across empty space, which reintroduces the Euclidean shortcut and lets labels leak — the exact failure you
+    built the graph to avoid. A length cap on edges is the standard guard.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Do you need one Dijkstra run per scribble colour?</summary>
+    <p>No. Push every seed of every colour into one priority queue at distance 0, each carrying its label; when a
+    node is settled it inherits the label of whichever flood reached it. One pass gives the $\arg\min$ directly.
+    Running $k$ separate Dijkstras and taking the $\arg\min$ afterwards gives the identical answer, and is worth
+    doing if you also want the individual $D_k$ maps (e.g. for soft blending or confidence).</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is Dijkstra correct here — what property is it relying on?</summary>
+    <p>Non-negative edge weights plus the Bellman principle: any sub-path of a shortest path is itself a shortest
+    path. When you extract the minimum-distance unsettled node, no alternative route can improve it, because any
+    such route would have to pass through a node that is already further away, and adding non-negative weights
+    can only increase the total. So its distance is final on extraction and it never needs revisiting.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Complexity?</summary>
+    <p>Building the kNN graph with a k-d tree: $O(N \log N)$. Dijkstra with a binary-heap priority queue:
+    $O(|E| \log N) = O(kN \log N)$, which is $O(N \log N)$ for constant $k$. Total $O(N \log N)$ — with a small $k$
+    the graph is sparse, exactly like the 7-nonzeros-per-row sparsity that makes Horn–Schunck's system fast.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where else in this course have you seen this exact pattern?</summary>
+    <p>Chapter 9 colorization (scribbles → geodesic distance → blend), Chapter 10 matting (trimap → geodesic
+    distance maps → opacity), and here. The recurring recipe is: <em>define a graph, define a cost that is small
+    within a region and large across boundaries, run Dijkstra from seeds, decide by comparing the resulting
+    distance maps.</em> If a question gives you seeds and a domain, this is almost always the answer.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Thing</th><th>Plain version</th></tr>
+      <tr><td>point cloud</td><td>a bag of dots with no neighbours listed</td></tr>
+      <tr><td>scribbles $\Omega_k$</td><td>a few dots someone already labelled — the seeds</td></tr>
+      <tr><td>kNN graph</td><td>the bridges you build so "walking" means something</td></tr>
+      <tr><td>$W_e$</td><td>the cost of one step: far apart or across a crease = expensive</td></tr>
+      <tr><td>$D_k(x)$</td><td>how long the walk is from $x$ back to scribble $k$</td></tr>
+      <tr><td>$\arg\min_k D_k$</td><td>whichever flood got here first owns this dot</td></tr>
+      <tr><td>Dijkstra</td><td>the flood, always spreading to the nearest dry stone next</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole answer, six words:</strong> build a graph, then flood from the scribbles.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch09_video_colorization.html"><span class="dir">Back to</span><span class="ttl">Ch 9 · Colorization &amp; Geodesic Distance</span></a>
+    <a class="next" href="intrinsic_images_for_kids.html"><span class="dir">Other companion</span><span class="ttl">Intrinsic Images, online ›</span></a>
+  </div>
+</div>
+
+<script>
+/* ================= shared: the horseshoe point cloud ================= */
+const A0 = 9, A1 = 351;                                  // the arc runs 9° → 351° through 180°;
+const ARC = A1 - A0;                                     // the GAP is the narrow wedge on the right
+function makeCloud(n){
+  const pts = [];
+  const R = 120, BAND = 24;
+  for (let i = 0; i < n; i++){
+    const f = i / (n - 1);
+    const a = A0 + f * ARC;
+    const rr = R + (Math.random() - 0.5) * BAND;
+    pts.push({
+      x: Math.cos(a * Math.PI / 180) * rr + (Math.random() - 0.5) * 6,
+      y: -Math.sin(a * Math.PI / 180) * rr + (Math.random() - 0.5) * 6,
+      ang: a
+    });
+  }
+  return pts;
+}
+function dist(a, b){ const dx = a.x - b.x, dy = a.y - b.y; return Math.hypot(dx, dy); }
+
+/* build a symmetric k-nearest-neighbour graph */
+function knnGraph(pts, k){
+  const n = pts.length, adj = [];
+  for (let i = 0; i < n; i++) adj.push([]);
+  for (let i = 0; i < n; i++){
+    const d = [];
+    for (let j = 0; j < n; j++) if (j !== i) d.push({ j: j, w: dist(pts[i], pts[j]) });
+    d.sort((a, b) => a.w - b.w);
+    for (let m = 0; m < Math.min(k, d.length); m++){
+      adj[i].push(d[m]);
+      adj[d[m].j].push({ j: i, w: d[m].w });               // keep it undirected
+    }
+  }
+  return adj;
+}
+
+/* multi-source Dijkstra; sources = [{i, label}] */
+function dijkstra(pts, adj, sources){
+  const n = pts.length;
+  const D = new Float64Array(n).fill(Infinity);
+  const owner = new Int32Array(n).fill(-1);
+  const done = new Uint8Array(n);
+  for (const s of sources){ D[s.i] = 0; owner[s.i] = s.label; }
+  for (let it = 0; it < n; it++){
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < n; i++) if (!done[i] && D[i] < bd){ bd = D[i]; best = i; }
+    if (best < 0) break;
+    done[best] = 1;
+    for (const e of adj[best]){
+      const nd = D[best] + e.w;
+      if (!done[e.j] && nd < D[e.j]){ D[e.j] = nd; owner[e.j] = owner[best]; }
+    }
+  }
+  return { D: D, owner: owner };
+}
+
+const COL = ['#ff6b81', '#6ea8ff'];
+const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
+
+/* =========================================================
+   DEMO 1 — Euclidean labelling vs geodesic labelling
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const ro = document.getElementById('Aro');
+  let pts, adj, seeds, eucLab, geoLab, showErr = false;
+
+  function build(){
+    pts = makeCloud(300);
+    adj = knnGraph(pts, 6);
+    // seed 0 (red) at the TOP tip (angle ≈ 20°), seed 1 (blue) on the FAR side (angle ≈ 180°)
+    let iTop = 0, iFar = 0;
+    for (let i = 0; i < pts.length; i++){
+      if (Math.abs(pts[i].ang - A0) < Math.abs(pts[iTop].ang - A0)) iTop = i;
+      if (Math.abs(pts[i].ang - 180) < Math.abs(pts[iFar].ang - 180)) iFar = i;
+    }
+    seeds = [{ i: iTop, label: 0 }, { i: iFar, label: 1 }];
+
+    // (a) Euclidean: nearest seed as the crow flies
+    eucLab = pts.map(p => (dist(p, pts[iTop]) <= dist(p, pts[iFar])) ? 0 : 1);
+    // (b) geodesic: shortest walk along the graph
+    geoLab = Array.from(dijkstra(pts, adj, seeds).owner);
+    draw();
+  }
+
+  function panel(ox, title, labels, markErrors, sub, subCol){
+    const CX = ox + 215, CY = 205;
+    g.fillStyle = '#9fb0cc'; g.font = 'bold 13px system-ui';
+    g.fillText(title, ox + 20, 34);
+    if (sub){ g.fillStyle = subCol; g.font = 'italic 12px system-ui'; g.fillText(sub, ox + 20, 54); }
+    g.strokeStyle = '#222c44'; g.lineWidth = 1;
+    g.strokeRect(ox + 10.5, 66.5, 420, 320);
+
+    for (let i = 0; i < pts.length; i++){
+      const x = CX + pts[i].x, y = CY + pts[i].y;
+      const wrong = markErrors && showErr && (eucLab[i] !== geoLab[i]);
+      g.fillStyle = wrong ? '#ffb454' : COL_SOFT[labels[i]];
+      g.beginPath(); g.arc(x, y, wrong ? 4.6 : 3.4, 0, 7); g.fill();
+      if (wrong){ g.strokeStyle = 'rgba(255,180,84,.85)'; g.lineWidth = 1;
+        g.beginPath(); g.arc(x, y, 7.5, 0, 7); g.stroke(); }
+    }
+    // the scribbles, drawn as diamonds like in the exam figure
+    for (const s of seeds){
+      const x = CX + pts[s.i].x, y = CY + pts[s.i].y;
+      g.fillStyle = COL[s.label];
+      g.beginPath(); g.moveTo(x, y - 9); g.lineTo(x + 9, y); g.lineTo(x, y + 9); g.lineTo(x - 9, y); g.closePath(); g.fill();
+      g.strokeStyle = '#0e1320'; g.lineWidth = 1.5; g.stroke();
+    }
+    // mark the gap
+    g.strokeStyle = 'rgba(255,255,255,.22)'; g.setLineDash([4, 4]); g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(CX + Math.cos(A0 * Math.PI / 180) * 120, CY - Math.sin(A0 * Math.PI / 180) * 120);
+    g.lineTo(CX + Math.cos(A1 * Math.PI / 180) * 120, CY - Math.sin(A1 * Math.PI / 180) * 120);
+    g.stroke(); g.setLineDash([]);
+    g.fillStyle = 'rgba(255,255,255,.45)'; g.font = '11px system-ui';
+    g.fillText('the gap', CX + 128, CY + 4);
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    panel(0,   'FLYING — nearest scribble by straight line (Euclidean)', eucLab, true,
+          showErr ? 'orange dots = labelled wrong' : 'press "Show the mistakes"', '#ffb454');
+    panel(455, 'WALKING — nearest scribble along the shape (geodesic)', geoLab, false,
+          'this is the correct answer', '#7ee787');
+    let bad = 0;
+    for (let i = 0; i < pts.length; i++) if (eucLab[i] !== geoLab[i]) bad++;
+    ro.innerHTML = 'Both panels use the <b>same dots</b> and the <b>same two scribbles</b>. Only the meaning of ' +
+      '"nearest" changed. &nbsp;·&nbsp; Euclidean gets <b style="color:#ffb454">' + bad + ' of ' + pts.length +
+      '</b> dots wrong — the whole bottom tip, which is a short hop across the gap but a long walk along the shape.';
+  }
+
+  document.getElementById('Ashow').onclick = () => { showErr = !showErr; draw(); };
+  document.getElementById('Anew').onclick = build;
+  build();
+})();
+
+/* =========================================================
+   DEMO 2 — the kNN graph and the choice of k
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvB'), g = cv.getContext('2d');
+  const ro = document.getElementById('Bro');
+  const elK = document.getElementById('Bk'), vK = document.getElementById('vBk');
+  const pts = makeCloud(220);
+  const CX = 450, CY = 205;
+
+  function components(adj, n){
+    const seen = new Int32Array(n).fill(-1);
+    let c = 0;
+    for (let i = 0; i < n; i++){
+      if (seen[i] >= 0) continue;
+      const st = [i]; seen[i] = c;
+      while (st.length){
+        const u = st.pop();
+        for (const e of adj[u]) if (seen[e.j] < 0){ seen[e.j] = c; st.push(e.j); }
+      }
+      c++;
+    }
+    return c;
+  }
+
+  function draw(){
+    const k = +elK.value;
+    const adj = knnGraph(pts, k);
+    g.clearRect(0, 0, cv.width, cv.height);
+
+    // an edge "jumps the gap" when it links two points that are far apart ALONG the shape
+    let cheats = 0;
+    for (let i = 0; i < pts.length; i++){
+      for (const e of adj[i]){
+        if (e.j < i) continue;
+        const bad = Math.abs(pts[i].ang - pts[e.j].ang) > 90;
+        if (bad) cheats++;
+        g.strokeStyle = bad ? 'rgba(255,107,129,.85)' : 'rgba(65,216,201,.22)';
+        g.lineWidth = bad ? 2 : 1;
+        g.beginPath();
+        g.moveTo(CX + pts[i].x, CY + pts[i].y);
+        g.lineTo(CX + pts[e.j].x, CY + pts[e.j].y);
+        g.stroke();
+      }
+    }
+    for (const p of pts){
+      g.fillStyle = 'rgba(230,236,247,.75)';
+      g.beginPath(); g.arc(CX + p.x, CY + p.y, 2.6, 0, 7); g.fill();
+    }
+
+    g.fillStyle = '#9fb0cc'; g.font = '13px system-ui';
+    g.fillText('the k-nearest-neighbour graph — these bridges are what "walking" means', 40, 34);
+
+    const nc = components(adj, pts.length);
+    let verdict, col;
+    if (nc > 1){ verdict = 'graph is broken into ' + nc + ' islands — dots in an island with no scribble can never be labelled'; col = '#ff6b81'; }
+    else if (cheats > 0){ verdict = cheats + ' bridge(s) jump straight across the gap — the walk can now cheat, and labels will leak'; col = '#ffb454'; }
+    else { verdict = 'one connected graph, no bridges across empty space — this is what you want'; col = '#7ee787'; }
+
+    ro.innerHTML = 'k = <b>' + k + '</b> &nbsp;·&nbsp; islands: <b>' + nc + '</b> &nbsp;·&nbsp; gap-jumping bridges: <b>' +
+      cheats + '</b><br><span style="color:' + col + '">' + verdict + '</span>';
+  }
+
+  elK.oninput = () => { vK.textContent = elK.value; draw(); };
+  draw();
+})();
+
+/* =========================================================
+   DEMO 3 — Dijkstra as two floods
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvC'), g = cv.getContext('2d');
+  const ro = document.getElementById('Cro');
+  const cbD = document.getElementById('Cdist');
+  const CX = 450, CY = 205;
+  const pts = makeCloud(260);
+  const adj = knnGraph(pts, 6);
+
+  let iTop = 0, iFar = 0;
+  for (let i = 0; i < pts.length; i++){
+    if (Math.abs(pts[i].ang - 22) < Math.abs(pts[iTop].ang - 22)) iTop = i;
+    if (Math.abs(pts[i].ang - 180) < Math.abs(pts[iFar].ang - 180)) iFar = i;
+  }
+  const seeds = [{ i: iTop, label: 0 }, { i: iFar, label: 1 }];
+
+  let D, owner, done, settled, timer = null, dmax = 1;
+
+  function reset(){
+    const n = pts.length;
+    D = new Float64Array(n).fill(Infinity);
+    owner = new Int32Array(n).fill(-1);
+    done = new Uint8Array(n);
+    for (const s of seeds){ D[s.i] = 0; owner[s.i] = s.label; }
+    settled = 0;
+    dmax = dijkstra(pts, adj, seeds).D.reduce((a, b) => Math.max(a, isFinite(b) ? b : 0), 1);
+    draw();
+  }
+
+  function step(){
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < pts.length; i++) if (!done[i] && D[i] < bd){ bd = D[i]; best = i; }
+    if (best < 0) return false;
+    done[best] = 1; settled++;
+    for (const e of adj[best]){
+      const nd = D[best] + e.w;
+      if (!done[e.j] && nd < D[e.j]){ D[e.j] = nd; owner[e.j] = owner[best]; }
+    }
+    return true;
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#9fb0cc'; g.font = '13px system-ui';
+    g.fillText(cbD.checked
+      ? 'the distance map — bright = close to its scribble, dark = a long walk away'
+      : 'the two floods spreading along the bridges; each dot keeps the colour that reached it first', 40, 34);
+
+    // faint graph
+    for (let i = 0; i < pts.length; i++)
+      for (const e of adj[i]){
+        if (e.j < i) continue;
+        g.strokeStyle = 'rgba(65,216,201,.09)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(CX + pts[i].x, CY + pts[i].y);
+        g.lineTo(CX + pts[e.j].x, CY + pts[e.j].y); g.stroke();
+      }
+
+    for (let i = 0; i < pts.length; i++){
+      const x = CX + pts[i].x, y = CY + pts[i].y;
+      if (done[i]){
+        if (cbD.checked){
+          const v = 1 - Math.min(1, D[i] / dmax);
+          const c = Math.round(40 + 200 * v);
+          g.fillStyle = 'rgb(' + c + ',' + c + ',' + c + ')';
+        } else g.fillStyle = COL_SOFT[owner[i]];
+        g.beginPath(); g.arc(x, y, 3.6, 0, 7); g.fill();
+      } else if (isFinite(D[i])){                       // the frontier
+        g.strokeStyle = owner[i] >= 0 ? COL[owner[i]] : '#6b7a99';
+        g.lineWidth = 1.6;
+        g.beginPath(); g.arc(x, y, 5, 0, 7); g.stroke();
+      } else {
+        g.fillStyle = 'rgba(107,122,153,.5)';
+        g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill();
+      }
+    }
+    for (const s of seeds){
+      const x = CX + pts[s.i].x, y = CY + pts[s.i].y;
+      g.fillStyle = COL[s.label];
+      g.beginPath(); g.moveTo(x, y - 9); g.lineTo(x + 9, y); g.lineTo(x, y + 9); g.lineTo(x - 9, y); g.closePath(); g.fill();
+      g.strokeStyle = '#0e1320'; g.lineWidth = 1.5; g.stroke();
+    }
+
+    let front = 0;
+    for (let i = 0; i < pts.length; i++) if (!done[i] && isFinite(D[i])) front++;
+    const nRed = owner.reduce((a, o, i) => a + (done[i] && o === 0 ? 1 : 0), 0);
+    const nBlue = owner.reduce((a, o, i) => a + (done[i] && o === 1 ? 1 : 0), 0);
+    ro.innerHTML = 'settled <b>' + settled + ' / ' + pts.length + '</b> &nbsp;·&nbsp; frontier <b>' + front +
+      '</b> &nbsp;·&nbsp; <span style="color:#ff6b81">red ' + nRed + '</span> / ' +
+      '<span style="color:#6ea8ff">blue ' + nBlue + '</span>' +
+      (settled >= pts.length ? ' &nbsp;·&nbsp; <b style="color:#7ee787">done — every dot has a label</b>' : '');
+  }
+
+  document.getElementById('Cstep').onclick = () => { for (let i = 0; i < 5; i++) step(); draw(); };
+  document.getElementById('Cfin').onclick = () => { while (step()); draw(); };
+  const btnAuto = document.getElementById('Cauto');
+  function stop(){ if (timer){ clearInterval(timer); timer = null; btnAuto.textContent = 'Auto-run'; } }
+  btnAuto.onclick = () => {
+    if (timer) stop();
+    else { btnAuto.textContent = '❚❚ Stop';
+      timer = setInterval(() => { for (let i = 0; i < 3; i++) if (!step()){ stop(); break; } draw(); }, 60); }
+  };
+  document.getElementById('Creset').onclick = () => { stop(); reset(); };
+  cbD.onchange = draw;
+  reset();
+})();
+</script>
+
+</body>
+</html>

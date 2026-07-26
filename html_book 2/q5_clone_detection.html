@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q5 · Clone detection — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed A · Q5</b> · Clone detection</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">‹ Chapter 11</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="q6_geodesic_gamma.html">Q6 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 11 · Moed A, question 5</div>
+    <h1>Catching a copy-paste</h1>
+    <p class="lede">Someone erased a bin from a photo by pasting grass over it. Find the paste — with nothing but
+    the doctored photo. Story, a demo that actually runs the detector, then the math.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 5 · 13 points · CLONE DETECTION</span>
+    <p style="margin:0">Consider Figure 3. The user took the original image and used inpainting to remove the
+    garbage can, resulting in the "Doctored" image in the middle. Suggest a clone detection algorithm that takes
+    an image as input (i.e., the <em>middle</em> image of the panel) and automatically detects cloned regions
+    (i.e., the mask on the right that shows that the two dark regions are clones). The original image is shown on
+    the left for reference only. The algorithm has <strong>no access</strong> to it.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">Two students, one homework</span>
+    <p>A teacher gets 30 essays and wants to find the cheaters. She doesn't have the internet, she doesn't have
+    last year's essays — she has <strong>only the 30 papers in front of her</strong>.</p>
+    <p>How does she catch them? She looks for <strong>two paragraphs that are word-for-word identical</strong>.
+    Not similar. Identical. Real writing is never identical by accident.</p>
+    <p>And she checks one more thing before accusing anyone: the copied part must be a <em>whole run</em> — a full
+    paragraph copied in order, not one shared sentence here and an unrelated one there. A long, ordered,
+    exact-match run is the fingerprint of copying.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">Same for the photo</span>
+    <p style="margin:6px 0 0">Inpainting removed the bin by <strong>copying grass from somewhere else in the same
+    photo</strong> and pasting it over the bin. So the doctored image contains <strong>two regions that are
+    near-identical copies of each other.</strong> Nothing came from outside.</p>
+    <p>So: <strong>match the image against itself</strong>, and look for a big region where every patch has an
+    almost-perfect twin somewhere else — and where all those twins sit at the <em>same offset</em>.</p>
+  </div>
+
+  <p>You already own the tool that matches an image against another image, fast:
+  <strong>PatchMatch</strong> (Ch.11). Here you feed it the same image twice.</p>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The two clues, and why you need both</h2>
+
+  <table class="kv">
+    <tr><th>Clue</th><th>What it means</th><th>Why it alone is not enough</th></tr>
+    <tr><td>near-zero patch distance</td><td>this patch has an almost identical twin elsewhere</td>
+      <td>flat regions (sky, uniform grass, a blank wall) match <em>everything</em> with distance ≈ 0. You'd flag the whole sky.</td></tr>
+    <tr><td>one shared offset</td><td>a whole neighbourhood was moved by the <em>same</em> vector</td>
+      <td>a single patch with a coherent offset proves nothing; noise produces some by chance. You need a large connected region agreeing on it.</td></tr>
+  </table>
+
+  <div class="callout warn"><span class="lbl">And one more thing you must exclude</span>
+    Every patch's best match is <strong>itself</strong>, at distance exactly 0 and offset $(0,0)$. So you must
+    <strong>forbid the trivial match</strong>: reject any candidate whose offset is smaller than a few patch
+    widths. Forget this and your algorithm reports that the entire image is a clone of itself. Graders check for
+    exactly this line.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the detector, running</h4><span class="tag">step through the stages</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A small synthetic photo. An object was "removed" by pasting a patch of
+      background copied from elsewhere. Walk the stages and watch the two clues combine into the final mask.</p>
+      <div class="stagebar">
+        <div class="st" id="st0">0 · the doctored image</div>
+        <div class="st" id="st1">1 · self-match distance</div>
+        <div class="st" id="st2">2 · offset field</div>
+        <div class="st" id="st3">3 · offset histogram</div>
+        <div class="st" id="st4">4 · the mask</div>
+      </div>
+      <canvas id="cvA" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>distance threshold τ <span class="val" id="vAt">0.06</span></label><input type="range" id="At" min="1" max="40" step="1" value="6"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Anext">Next stage ▸</button>
+        <button class="act" id="Anew">New forgery</button>
+        <label class="chk"><input type="checkbox" id="Atriv"> allow the trivial match (watch it break)</label>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Tick the "allow the trivial match" box</span>
+    Every patch instantly matches itself at offset $(0,0)$, the distance map goes black everywhere, and the mask
+    swallows the whole image. That's the failure mode the exclusion rule exists to prevent.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Why the offsets come in a $\pm v$ pair</h2>
+
+  <div class="explain">
+    <span class="explain-label">A small thing that reads as real understanding</span>
+    <p>Say region $B$ (the paste, over the bin) was copied from region $A$ (the donor grass), and $A$ sits at
+    offset $-v$ from $B$. Then:</p>
+    <ul>
+      <li>every patch in $B$ finds its twin in $A$, so it reports offset $\;-v$;</li>
+      <li>every patch in $A$ finds its twin in $B$, so it reports offset $\;+v$.</li>
+    </ul>
+    <p>So a genuine copy-move shows up as <strong>two blobs of equal size and shape</strong>, one voting $+v$ and
+    the other voting $-v$. That is exactly the two dark regions in the exam figure's right panel — the algorithm
+    cannot tell you <em>which</em> of the pair is the forgery and which is the donor, and it doesn't need to.</p>
+    <p>Practical consequence: in the offset histogram, look for a peak at $v$ <em>and</em> its mirror at $-v$.
+    A mirrored pair of peaks is much stronger evidence than a single peak.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Only now, the math</h2>
+
+  <div class="explain">
+    <span class="explain-label">It is Chapter 11's nearest-neighbour field, with source = target</span>
+    <p>PatchMatch computes a matching field. For every pixel $x$ it stores the <em>offset</em> to its best
+    matching patch:</p>
+  </div>
+
+  <div class="eq">$$ f(x) \;=\; \arg\min_{y} \;\big\| P_x - Q_{x+y} \big\|_2^2 , \qquad d(x) \;=\; \big\|P_x - Q_{x+f(x)}\big\|_2^2 $$</div>
+
+  <div class="explain">
+    <p>with $P_x$ the patch centred at $x$. Chapter 11 ran this between two different images $S$ and $T$. Here we
+    set $S = T = I$, the single doctored image, and add the constraint that kills the trivial answer:</p>
+  </div>
+
+  <div class="eq">$$ f(x) \;=\; \arg\min_{\|y\| \,>\, \rho} \; \big\| P_x - P_{x+y} \big\|_2^2 $$</div>
+
+  <div class="explain">
+    <p>where $\rho$ is a few patch widths. Then the clone mask is the set of pixels satisfying <em>both</em> clues:</p>
+  </div>
+
+  <div class="eq">$$ \mathcal{M} \;=\; \Big\{\, x \;:\; d(x) < \tau \;\;\wedge\;\; \big\| f(x) - v^\ast \big\| < \delta \,\Big\}, \qquad v^\ast = \arg\max_v \#\{x : f(x) \approx v\} $$</div>
+
+  <div class="explain">
+    <p>$v^\ast$ is the dominant offset, found as the peak of a 2-D histogram of the offset field. Finally keep only
+    <strong>large connected components</strong> of $\mathcal{M}$ — a genuine paste is a contiguous blob, and this
+    step throws away scattered accidental matches.</p>
+
+    <h4 class="mini">Why PatchMatch and not brute force</h4>
+    <p>Brute force is $O(N^2)$ patch comparisons — every patch against every other. PatchMatch gets an
+    approximate nearest-neighbour field in roughly $O(N \log N)$ by exploiting <strong>spatial coherence</strong>:
+    if patch $x$ matched at offset $f(x)$, its neighbour $x+1$ almost certainly matches at the same offset, so it
+    just borrows it (propagation) and then tries a few shrinking random perturbations (random search). And note
+    the happy accident: <em>a copy-moved region is the most coherent offset field imaginable</em>, so PatchMatch
+    converges on it especially fast.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The algorithm, written properly</h2>
+
+  <ol class="steps">
+    <li><b>Self-PatchMatch.</b> Run PatchMatch with source = target = the input image, obtaining the offset field
+    $f(x)$ and the patch distance $d(x)$ for every pixel.</li>
+    <li><b>Forbid the trivial match.</b> Reject any candidate with $\|f(x)\| \le \rho$ (a few patch widths), so a
+    patch cannot match itself or its immediate neighbourhood.</li>
+    <li><b>Clone candidates.</b> Keep pixels with $d(x) < \tau$ — patches that have an almost-exact twin
+    elsewhere.</li>
+    <li><b>Find the dominant offset.</b> Histogram the offsets $f(x)$ of the candidates; take the peak $v^\ast$.
+    A true copy-move yields a mirrored pair of peaks at $\pm v^\ast$.</li>
+    <li><b>Keep coherent regions.</b> Retain candidates whose offset is within $\delta$ of $\pm v^\ast$, then keep
+    only large connected components. Optionally clean up with a morphological open/close.</li>
+    <li><b>Output</b> those components as the clone mask — the matched pair $A$ (donor) and $B$ (paste).</li>
+  </ol>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The traps and the extras</h2>
+
+  <div class="callout warn"><span class="lbl">1 · Excluding the trivial match is not optional</span>
+    Without $\|f(x)\| > \rho$, every pixel matches itself perfectly and the whole image is flagged. Demo 1's
+    checkbox shows it. One sentence in the exam.
+  </div>
+
+  <div class="callout warn"><span class="lbl">2 · Flat regions match everything</span>
+    Uniform sky or smooth grass has near-zero distance to countless other patches, so clue 1 alone floods with
+    false positives. The offset-coherence requirement is what saves you: random flat matches scatter across all
+    offsets and never form a peak. If you want a belt-and-braces answer, also discard patches whose variance is
+    below a threshold (no texture, no evidence).
+  </div>
+
+  <div class="callout note"><span class="lbl">3 · What if the paste was rotated, scaled or blended?</span>
+    Plain PatchMatch searches translations only, so a rotated or rescaled copy breaks the single-offset
+    assumption. Say the fix in one line: <strong>Generalized PatchMatch</strong> searches over rotation and scale
+    as well, so the "constant offset" test becomes "a consistent similarity transform" — estimated with RANSAC
+    (Ch.3) over the match correspondences. Feathered/blended edges are handled by loosening $\tau$ and relying on
+    the region's interior.
+  </div>
+
+  <div class="callout note"><span class="lbl">4 · Why this is a fair question</span>
+    It is Chapter 11 used backwards. Retargeting <em>uses</em> the nearest-neighbour field to synthesize; here you
+    <em>read</em> the field as evidence. Same PatchMatch, same offset field — different question asked of it.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, in order</span>
+    <p><strong>Observation.</strong> Cloning/inpainting fills a region by copying content <em>from the same
+    image</em>. So the doctored image contains two regions that are near-identical copies of one another, related
+    by a single translation. Detecting the forgery therefore means matching the image against itself.</p>
+    <p><strong>1 · Self-PatchMatch.</strong> Run PatchMatch with source = target = the input image, giving the
+    offset field $f(x)$ and the patch distance $d(x) = \|P_x - P_{x+f(x)}\|_2^2$. Forbid the trivial match by
+    restricting the search to $\|f(x)\| > \rho$ (a few patch widths); otherwise every patch matches itself at
+    distance 0.</p>
+    <p><strong>2 · Candidates.</strong> Mark pixels with $d(x) < \tau$: these have an almost exact twin
+    elsewhere.</p>
+    <p><strong>3 · Coherence.</strong> Near-zero distance alone is not enough — flat regions match everything. So
+    histogram the candidates' offsets and find the dominant offset $v^\ast$; keep only candidates whose offset is
+    within $\delta$ of it. A genuine copy-move appears as a <em>matched pair</em>: region $A$ voting $+v^\ast$ and
+    region $B$ voting $-v^\ast$.</p>
+    <p><strong>4 · Regions.</strong> Keep only large connected components of the surviving set (optionally with a
+    morphological clean-up) and output them as the clone mask.</p>
+    <p><strong>Notes.</strong> PatchMatch gives the field in ~$O(N\log N)$ instead of the $O(N^2)$ of brute force,
+    and copy-moved regions are exactly the highly coherent offset fields it converges on fastest. If the paste may
+    have been rotated or scaled, use Generalized PatchMatch and fit a similarity transform with RANSAC instead of
+    a single constant offset.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. What is the one observation the whole algorithm rests on?</summary>
+    <p>Inpainting/cloning fills a hole with content taken from <em>the same image</em>. So the evidence of
+    tampering is already inside the single image you were given: two near-identical regions related by a
+    translation. Nothing external is needed, which is why the algorithm can work with no access to the original.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why must you exclude the trivial match, and how?</summary>
+    <p>Every patch is a perfect match for itself: distance 0 at offset $(0,0)$. Without exclusion, every pixel is
+    a "clone" and the mask covers the image. Fix: restrict the search to offsets with $\|f(x)\| > \rho$, where
+    $\rho$ is a few patch widths, so neither a patch nor its overlapping neighbours can be the answer.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is a small patch distance not sufficient evidence?</summary>
+    <p>Because textureless regions — sky, smooth grass, a plain wall — are near-identical to very many other
+    patches. They would all pass a distance threshold. The distinguishing property of a real copy-move is that a
+    whole contiguous region shares <em>one</em> offset; random flat matches scatter over all offsets and form no
+    histogram peak.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why do the detected regions come in pairs with opposite offsets?</summary>
+    <p>If $B$ was copied from $A$ with $A$ at offset $-v$ from $B$, then patches in $B$ point to $A$ with offset
+    $-v$, and patches in $A$ point back to $B$ with offset $+v$. So the mask contains two blobs of equal shape
+    voting $\pm v$. The algorithm cannot say which is the donor and which is the paste — and does not need to.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why use PatchMatch rather than brute-force search?</summary>
+    <p>Brute force compares every patch with every other: $O(N^2)$. PatchMatch exploits spatial coherence —
+    propagate a good offset to neighbours, then refine with shrinking random search — reaching a good approximate
+    nearest-neighbour field in about $O(N\log N)$. Conveniently, a cloned region has the most coherent offset
+    field possible, which is precisely the case PatchMatch handles best.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What breaks if the forger rotated or resized the pasted region?</summary>
+    <p>The "single constant offset" assumption. Plain PatchMatch searches translations only, so patches in the
+    pasted region would fail to find good matches, or would find them at inconsistent offsets. Use Generalized
+    PatchMatch (searching rotation and scale too) and replace the offset-histogram step with fitting a similarity
+    transform to the correspondences, robustly, with RANSAC.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How does this relate to what Chapter 11 normally does with the offset field?</summary>
+    <p>Retargeting, reshuffling and inpainting <em>use</em> the nearest-neighbour field to synthesize new content.
+    Here you use the identical field as forensic <em>evidence</em> — you read it rather than act on it. Same
+    algorithm, opposite direction.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Step</th><th>Plain version</th></tr>
+      <tr><td>self-PatchMatch</td><td>match the photo against itself</td></tr>
+      <tr><td>$\|f(x)\| > \rho$</td><td>"you may not match yourself"</td></tr>
+      <tr><td>$d(x) < \tau$</td><td>found a near-identical twin somewhere</td></tr>
+      <tr><td>offset histogram</td><td>did a whole region move together, by the same amount?</td></tr>
+      <tr><td>$\pm v^\ast$ pair</td><td>the donor and the paste, same shape, opposite votes</td></tr>
+      <tr><td>connected components</td><td>keep the blobs, drop the confetti</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole answer, eight words:</strong> match the image to itself, excluding the trivial match.</p>
+  </div>
+
+  <div class="pager">
+    <a href="q2_loaded_die.html"><span class="dir">Previous</span><span class="ttl">Q2 · The loaded die</span></a>
+    <a class="next" href="q6_geodesic_gamma.html"><span class="dir">Next question</span><span class="ttl">Q6 · The γ parameter ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO — a working (brute-force) clone detector on a toy image
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const ro = document.getElementById('Aro');
+  const elT = document.getElementById('At'), vT = document.getElementById('vAt');
+  const cbTriv = document.getElementById('Atriv');
+  const stEls = [0,1,2,3,4].map(i => document.getElementById('st' + i));
+
+  const Wg = 64, Hg = 44, PS = 2;          // grid size, patch half-width
+  const CELL = 4.4;                        // display scale
+  let img, f, d, mask, stage = 0, vStar = null, hist = null, srcRect, dstRect;
+
+  /* ---------- build a toy photo, then forge it ---------- */
+  function build(){
+    img = new Float64Array(Wg * Hg);
+    // textured background: a few random low-frequency waves = "grass"
+    const ph = [];
+    for (let k = 0; k < 5; k++) ph.push([Math.random() * 0.9 + 0.15, Math.random() * 0.9 + 0.15, Math.random() * 6.28]);
+    for (let y = 0; y < Hg; y++)
+      for (let x = 0; x < Wg; x++){
+        let v = 0.5;
+        for (const [a, b, c] of ph) v += 0.075 * Math.sin(a * x + b * y + c);
+        v += (Math.random() - 0.5) * 0.14;                 // fine grain / sensor noise —
+                                                           // this is what makes two DIFFERENT
+                                                           // areas fail to match by accident
+
+        img[y * Wg + x] = v;
+      }
+    // a dark "object" (the garbage can) near the right
+    for (let y = 22; y < 38; y++) for (let x = 42; x < 54; x++) img[y * Wg + x] = 0.14 + (Math.random() - 0.5) * 0.03;
+
+    // the forgery: copy a clean background rect over the object
+    dstRect = { x: 40, y: 20, w: 16, h: 20 };
+    srcRect = { x: 8,  y: 18, w: 16, h: 20 };
+    for (let j = 0; j < dstRect.h; j++)
+      for (let i = 0; i < dstRect.w; i++)
+        img[(dstRect.y + j) * Wg + dstRect.x + i] = img[(srcRect.y + j) * Wg + srcRect.x + i];
+
+    stage = 0; f = null; d = null; mask = null; vStar = null; hist = null;
+    draw();
+  }
+
+  /* ---------- self nearest-neighbour field (brute force, it's tiny) ---------- */
+  function selfMatch(){
+    const n = Wg * Hg;
+    f = new Int32Array(n * 2); d = new Float64Array(n).fill(Infinity);
+    // RHO < 0 disables the rule entirely, so a patch is allowed to "match" itself
+    const RHO2 = cbTriv.checked ? -1 : 36;                  // squared exclusion radius
+    const px = [];
+    for (let y = PS; y < Hg - PS; y++) for (let x = PS; x < Wg - PS; x++) px.push([x, y]);
+
+    for (const [x, y] of px){
+      let bd = Infinity, bx = 0, by = 0;
+      for (const [u, v] of px){
+        const dx = u - x, dy = v - y;
+        if (dx * dx + dy * dy <= RHO2) continue;            // ← the exclusion rule
+        let s = 0;
+        for (let j = -PS; j <= PS; j++)
+          for (let i = -PS; i <= PS; i++){
+            const a = img[(y + j) * Wg + x + i] - img[(v + j) * Wg + u + i];
+            s += a * a;
+          }
+        if (s < bd){ bd = s; bx = dx; by = dy; }
+      }
+      const id = y * Wg + x;
+      d[id] = Math.sqrt(bd / ((2 * PS + 1) * (2 * PS + 1)));
+      f[id * 2] = bx; f[id * 2 + 1] = by;
+    }
+  }
+
+  function buildHistogram(){
+    const tau = (+elT.value) / 100;
+    const m = new Map();
+    for (let y = PS; y < Hg - PS; y++)
+      for (let x = PS; x < Wg - PS; x++){
+        const id = y * Wg + x;
+        if (d[id] >= tau) continue;
+        const key = f[id * 2] + ',' + f[id * 2 + 1];
+        m.set(key, (m.get(key) || 0) + 1);
+      }
+    hist = [...m.entries()].map(([k, c]) => { const [a, b] = k.split(',').map(Number); return { vx: a, vy: b, c: c }; })
+                           .sort((p, q) => q.c - p.c);
+    vStar = hist.length ? hist[0] : null;
+  }
+
+  let nComp = 0;
+  function buildMask(){
+    const tau = (+elT.value) / 100, DELTA = 2, MIN_COMP = 25;
+    mask = new Uint8Array(Wg * Hg); nComp = 0;
+    if (!vStar) return;
+    for (let y = PS; y < Hg - PS; y++)
+      for (let x = PS; x < Wg - PS; x++){
+        const id = y * Wg + x;
+        if (d[id] >= tau) continue;
+        const ox = f[id * 2], oy = f[id * 2 + 1];
+        const near  = Math.abs(ox - vStar.vx) <= DELTA && Math.abs(oy - vStar.vy) <= DELTA;
+        const mirror = Math.abs(ox + vStar.vx) <= DELTA && Math.abs(oy + vStar.vy) <= DELTA;
+        if (near || mirror) mask[id] = 1;
+      }
+
+    // step 5 — keep only large connected components, drop the scattered confetti
+    const seen = new Uint8Array(Wg * Hg);
+    for (let y = 0; y < Hg; y++)
+      for (let x = 0; x < Wg; x++){
+        const id0 = y * Wg + x;
+        if (!mask[id0] || seen[id0]) continue;
+        const stack = [id0], comp = []; seen[id0] = 1;
+        while (stack.length){
+          const id = stack.pop(); comp.push(id);
+          const cx = id % Wg, cy = (id / Wg) | 0;
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= Wg || ny >= Hg) continue;
+            const nid = ny * Wg + nx;
+            if (mask[nid] && !seen[nid]){ seen[nid] = 1; stack.push(nid); }
+          }
+        }
+        if (comp.length < MIN_COMP) for (const id of comp) mask[id] = 0;
+        else nComp++;
+      }
+  }
+
+  /* ---------- drawing ---------- */
+  const OX = 60, OY = 70;
+  function grey(v){ const c = Math.round(255 * Math.max(0, Math.min(1, v))); return 'rgb(' + c + ',' + c + ',' + c + ')'; }
+  function cell(x, y, col){ g.fillStyle = col; g.fillRect(OX + x * CELL, OY + y * CELL, CELL + .5, CELL + .5); }
+
+  function drawImage(){
+    for (let y = 0; y < Hg; y++) for (let x = 0; x < Wg; x++) cell(x, y, grey(img[y * Wg + x]));
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    stEls.forEach((e, i) => e.classList.toggle('on', i === stage));
+    g.font = '12px system-ui';
+    const tau = (+elT.value) / 100;
+
+    if (stage === 0){
+      drawImage();
+      g.fillStyle = '#9fb0cc'; g.fillText('the doctored image — this is ALL the algorithm gets', OX, 46);
+      ro.innerHTML = 'A region of background was copied over the dark object. Can you see the seam? Neither can the ' +
+        'algorithm — but the pixels are exactly equal, and that is what it looks for. Press <b>Next stage</b>.';
+    }
+
+    else if (stage === 1){
+      for (let y = 0; y < Hg; y++) for (let x = 0; x < Wg; x++){
+        const id = y * Wg + x, v = d[id];
+        cell(x, y, isFinite(v) ? (v < tau ? '#41d8c9' : grey(0.10 + Math.min(1, v * 6) * 0.5)) : '#0a0f1c');
+      }
+      g.fillStyle = '#9fb0cc';
+      g.fillText('patch distance d(x) to its best NON-trivial twin — teal = below τ (near-perfect twin found)', OX, 46);
+      let cand = 0; for (let i = 0; i < d.length; i++) if (d[i] < tau) cand++;
+      ro.innerHTML = 'clue 1 &nbsp;·&nbsp; <b>' + cand + '</b> pixels have an almost-exact twin somewhere else' +
+        (cbTriv.checked
+          ? ' &nbsp;·&nbsp; <span style="color:#ff6b81">trivial match allowed — everything matches itself, the clue is worthless</span>'
+          : ' &nbsp;·&nbsp; but flat areas also pass this test, so it is not enough on its own');
+    }
+
+    else if (stage === 2){
+      for (let y = 0; y < Hg; y++) for (let x = 0; x < Wg; x++){
+        const id = y * Wg + x;
+        if (!isFinite(d[id])){ cell(x, y, '#0a0f1c'); continue; }
+        const ox = f[id * 2], oy = f[id * 2 + 1];
+        const ang = (Math.atan2(oy, ox) + Math.PI) / (2 * Math.PI);
+        const mag = Math.min(1, Math.hypot(ox, oy) / 40);
+        cell(x, y, 'hsl(' + Math.round(ang * 360) + ',' + Math.round(30 + 55 * mag) + '%,' + (d[id] < tau ? 58 : 22) + '%)');
+      }
+      g.fillStyle = '#9fb0cc';
+      g.fillText('the offset field f(x) — hue = direction of the match. Look for two solid, uniform patches', OX, 46);
+      ro.innerHTML = 'clue 2 &nbsp;·&nbsp; a real copy shows up as a <b>flat block of one colour</b>: every pixel in it ' +
+        'points the same way. Random matches in flat areas produce noise, not blocks.';
+    }
+
+    else if (stage === 3){
+      drawImage();
+      g.fillStyle = 'rgba(10,15,28,.82)'; g.fillRect(OX, OY, Wg * CELL, Hg * CELL);
+      g.fillStyle = '#9fb0cc';
+      g.fillText('offset histogram — how many pixels voted for each offset', OX, 46);
+      const top = hist.slice(0, 12), mx = top.length ? top[0].c : 1;
+      top.forEach((h, i) => {
+        const y = OY + 12 + i * 15, w = 300 * (h.c / mx);
+        const isPeak = i === 0;
+        const isMirror = vStar && h.vx === -vStar.vx && h.vy === -vStar.vy;
+        g.fillStyle = isPeak ? '#41d8c9' : (isMirror ? '#ffb454' : 'rgba(110,168,255,.5)');
+        g.fillRect(OX + 130, y - 9, w, 11);
+        g.fillStyle = '#9fb0cc'; g.font = '11px monospace';
+        g.fillText('(' + h.vx + ', ' + h.vy + ')', OX + 40, y);
+        g.fillStyle = '#6b7a99'; g.fillText(String(h.c), OX + 136 + w, y);
+      });
+      g.fillStyle = '#41d8c9'; g.font = '11px system-ui';
+      g.fillText('teal = dominant offset v*', OX + 470, OY + 20);
+      g.fillStyle = '#ffb454';
+      g.fillText('amber = its mirror −v*  ← the signature of a copy-move', OX + 470, OY + 38);
+      const mir = vStar ? hist.find(h => h.vx === -vStar.vx && h.vy === -vStar.vy) : null;
+      ro.innerHTML = 'dominant offset <b>v* = (' + (vStar ? vStar.vx + ', ' + vStar.vy : '—') + ')</b> with <b>' +
+        (vStar ? vStar.c : 0) + '</b> votes' +
+        (mir ? ' &nbsp;·&nbsp; and its mirror <b>(' + mir.vx + ', ' + mir.vy + ')</b> with <b>' + mir.c +
+               '</b> votes — <span style="color:#7ee787">a matched pair, exactly what a copy-move looks like</span>'
+             : '');
+    }
+
+    else {
+      for (let y = 0; y < Hg; y++) for (let x = 0; x < Wg; x++){
+        const id = y * Wg + x;
+        cell(x, y, mask[id] ? '#41d8c9' : grey(img[id] * 0.35));
+      }
+      // ground truth outlines, for honesty
+      g.strokeStyle = 'rgba(126,231,135,.9)'; g.lineWidth = 2;
+      for (const r of [srcRect, dstRect])
+        g.strokeRect(OX + r.x * CELL, OY + r.y * CELL, r.w * CELL, r.h * CELL);
+      g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+      g.fillText('the clone mask — green outlines are the true donor and paste regions', OX, 46);
+      let m = 0; for (let i = 0; i < mask.length; i++) m += mask[i];
+      ro.innerHTML = 'final mask: <b>' + m + '</b> pixels in <b>' + nComp + '</b> connected component(s). ' +
+        'All three tests had to agree: distance &lt; τ, offset ≈ ±v*, and a large enough component. ' +
+        (cbTriv.checked
+          ? '<span style="color:#ff6b81">Trivial match allowed — the mask has swallowed the entire image.</span>'
+          : 'The green boxes show the truth — the detector never saw them.');
+    }
+  }
+
+  function next(){
+    stage = (stage + 1) % 5;
+    if (stage === 1){ selfMatch(); }
+    if (stage === 3){ buildHistogram(); }
+    if (stage === 4){ buildHistogram(); buildMask(); }
+    draw();
+  }
+
+  document.getElementById('Anext').onclick = next;
+  document.getElementById('Anew').onclick = build;
+  elT.oninput = () => { vT.textContent = ((+elT.value) / 100).toFixed(2); if (stage >= 1) { buildHistogram(); buildMask(); } draw(); };
+  cbTriv.onchange = () => { if (stage >= 1){ selfMatch(); buildHistogram(); buildMask(); } draw(); };
+  build();
+})();
+</script>
+
+</body>
+</html>

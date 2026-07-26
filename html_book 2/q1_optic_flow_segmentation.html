@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q1 · Horn–Schunck with semantic segmentation — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed A · Q1</b> · Optic Flow + Segmentation</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">‹ Chapter 2</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="q2_loaded_die.html">Q2 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 2 · Moed A, question 1</div>
+    <h1>Flow that knows where the objects are</h1>
+    <p class="lede">Horn–Schunck blurs motion across object boundaries. You've just been handed a map of where the
+    objects are. Use it. Story first, then a demo where you can watch the blur appear and disappear, then the math.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed A · 19/6/2022 · Question 1 · 13 points · OPTIC FLOW</span>
+    <p style="margin:0">Assume you have access to a semantic segmentation neural network that given an input image
+    $I$ computes its corresponding semantic segmentation map $S$. Each pixel in $S$ holds a value in
+    $\{0,\dots,c-1\}$ where $c$ is the number of classes (car, road, pedestrian, …). Observe that
+    <strong>all instances of the same class receive the same label</strong>. Modify the Horn–Schunck algorithm to
+    take as input two grayscale images $I_1$ and $I_2$ and their corresponding semantic segmentation maps $S_1$
+    and $S_2$, and produce the optic flow between them.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The crowd that holds hands</span>
+    <p>Imagine every pixel in the image is a person, and each person must guess which way they moved.</p>
+    <p>Most people are standing in a plain-coloured area — a blank wall, the sky, a patch of road. They look
+    around, see nothing but sameness, and honestly cannot tell whether they moved left or right. They have
+    <strong>no information</strong>.</p>
+    <p>So Horn–Schunck tells everybody: <strong>hold hands with your neighbours and try to agree.</strong> The
+    people standing on a corner or an edge <em>do</em> know where they went, and by holding hands they drag the
+    clueless ones along with them. That's how a blank wall gets a sensible motion: it's borrowed from the edges
+    around it.</p>
+    <p>Beautiful. Except for one thing.</p>
+    <p><strong>Somebody standing on the car is holding hands with somebody standing on the road.</strong> The car
+    moves one way, the road moves another, and because they're holding hands they compromise — both end up with a
+    smeared, wrong, in-between answer. The sharp edge of the car's motion turns into a blur.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">So what does the segmentation map give you?</span>
+    A map of <strong>who should let go of whose hand.</strong> If two neighbouring pixels have different labels,
+    there's a real object boundary between them, and their motions have every right to disagree. Cut that hand-hold.
+    Everything else stays exactly as Horn–Schunck had it.
+  </div>
+
+  <p>That's the whole answer. The rest of this page is making sure you can say <em>why</em> precisely, and defend
+  it against the obvious follow-up questions.</p>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Watch the blur appear and disappear</h2>
+
+  <div class="explain">
+    <span class="explain-label">How to read the demo</span>
+    <p>A 1-D strip of pixels — think of one horizontal scanline across the traffic photo. The
+    <span style="color:#6ea8ff">left half is a car</span> moving right; the
+    <span style="color:#ffb454">right half is road</span> moving left. The true flow is a clean step.</p>
+    <p>Notice the two <strong>flat, textureless patches</strong> marked below the signal: there, the data term
+    knows nothing at all, and whatever flow appears is purely the smoothness term filling in from the sides.
+    That's the thing you must <em>not</em> switch off.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — plain Horn–Schunck vs label-gated Horn–Schunck</h4><span class="tag">slide α · toggle labels</span></div>
+    <div class="demo-body">
+      <canvas id="cvA" width="900" height="430"></canvas>
+      <div class="legend">
+        <span><i style="background:#7ee787"></i> true flow</span>
+        <span><i style="background:#ff6b81"></i> plain HS (smooth everywhere)</span>
+        <span><i style="background:#41d8c9"></i> label-gated HS</span>
+        <span><i style="background:#6b7a99"></i> textureless zones (data term is silent)</span>
+      </div>
+      <div class="controls">
+        <div class="control"><label>α  (smoothness strength) <span class="val" id="vAa">60</span></label><input type="range" id="Aa" min="0" max="400" step="5" value="60"></div>
+        <div class="control"><label>ε  (leak across the label boundary) <span class="val" id="vAe">0.02</span></label><input type="range" id="Ae" min="0" max="100" step="1" value="2"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="Arun">Run 300 iterations</button>
+        <button class="act" id="Areset">Reset</button>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">Two experiments to actually run</span>
+    <p style="margin:6px 0 0"><strong>1. Set α to 0.</strong> Both curves go to garbage, and the textureless
+    zones become meaningless. This is the proof that the smoothness term is not optional — without it the data
+    term alone is one equation with two unknowns per pixel (in 2-D), i.e. the aperture problem everywhere.</p>
+    <p><strong>2. Set ε up to 1.</strong> The gated version becomes the plain version — because $w=1$ everywhere
+    is exactly ordinary Horn–Schunck. Your modification is a strict generalisation: plain HS is the special case
+    $w \equiv 1$. Saying that sentence in the exam is worth a point on its own.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The mistake almost everyone makes</h2>
+
+  <div class="callout warn"><span class="lbl">"If p and q are in the same segment, the flow is the same there, so the smoothness term is zero anyway"</span>
+    <p style="margin:6px 0 0"><strong>No.</strong> $|\nabla u|^2$ is not a fact about the world — it is a
+    <em>price you charge</em>. $u$ is the unknown you are solving for; nothing says it is constant inside a
+    segment. The term exists to <em>push</em> neighbours together, and the data term pushes back. The solution
+    sits where those two forces balance.</p>
+    <p>And the flow genuinely is not constant inside a segment:</p>
+    <ul>
+      <li><strong>All cars share one label</strong> — two different cars are one segment with two different motions.</li>
+      <li><strong>The road</strong> is one segment; under forward camera motion its flow diverges radially, varying smoothly across it.</li>
+      <li><strong>A pedestrian</strong> is one segment; arms and legs move differently from the torso.</li>
+      <li>Even a single rigid object rotating or moving in depth has spatially varying flow.</li>
+    </ul>
+    <p>And if the term really were zero everywhere, the energy would collapse to the data term alone, giving
+    $I_xu+I_yv+I_t=0$ — one equation, two unknowns, at every pixel. Unsolvable. The smoothness term is what makes
+    the system invertible in the first place.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Only now, the math</h2>
+
+  <div class="explain">
+    <span class="explain-label">Start from the Chapter 2 energy</span>
+    <p>Standard Horn–Schunck:</p>
+  </div>
+
+  <div class="eq">$$ \min_{u,v} \iint \underbrace{(I_xu + I_yv + I_t)^2}_{\text{data term}} \;+\; \alpha\underbrace{\big(|\nabla u|^2 + |\nabla v|^2\big)}_{\text{smoothness prior}}\; dx\,dy $$</div>
+
+  <div class="explain">
+    <p>The modification is one symbol. Introduce a <strong>per-edge weight</strong> driven by the label map, and
+    put it in front of the smoothness term only:</p>
+  </div>
+
+  <div class="eq">$$ w(p,q) = \begin{cases} 1 & S_1(p) = S_1(q) \\[2pt] \varepsilon \approx 0 & S_1(p) \neq S_1(q)\end{cases} $$</div>
+  <div class="eq">$$ \min_{u,v} \iint (I_xu + I_yv + I_t)^2 \;+\; \alpha\, w(\mathbf{x})\big(|\nabla u|^2 + |\nabla v|^2\big)\, dx\,dy $$</div>
+
+  <div class="explain">
+    <h4 class="mini">What that does to the Euler–Lagrange equations</h4>
+    <p>Chapter 2 derived, for the unweighted case,</p>
+  </div>
+
+  <div class="eq">$$ (I_xu + I_yv + I_t)I_x - \alpha(u_{xx} + u_{yy}) = 0 $$</div>
+
+  <div class="explain">
+    <p>where $u_{xx}+u_{yy}$ is the Laplacian, implemented as the kernel with $4$ in the centre and $-1$ at each
+    of the four neighbours. With the weights in place, that plain Laplacian becomes a
+    <strong>weighted graph Laplacian</strong>: each neighbour contributes $-w(p,q)$ instead of $-1$, and the
+    centre becomes $\sum_q w(p,q)$ instead of $4$:</p>
+  </div>
+
+  <div class="eq">$$ (L_w u)(p) \;=\; \sum_{q \in N(p)} w(p,q)\,\big(u(p) - u(q)\big) $$</div>
+
+  <div class="explain">
+    <p>An edge crossing a label boundary now has weight $\approx 0$, so it contributes nothing — flow no longer
+    leaks across it, and a sharp motion discontinuity is free to appear exactly at the object silhouette.
+    Everything else about Chapter 2 survives untouched: still a sparse linear system, still solved by the same
+    iterative scheme, still $\alpha$ as the data-vs-prior dial.</p>
+
+    <h4 class="mini">The iterative update, if you want to write it</h4>
+    <p>The standard Jacobi/Gauss–Seidel form of HS replaces the plain neighbourhood average $\bar u$ with the
+    <em>weighted</em> average:</p>
+  </div>
+
+  <div class="eq">$$ \bar u_w(p) = \frac{\sum_q w(p,q)\,u(q)}{\sum_q w(p,q)}, \qquad
+     u \leftarrow \bar u_w - \frac{I_x(I_x\bar u_w + I_y\bar v_w + I_t)}{\alpha + I_x^2 + I_y^2} $$</div>
+
+  <div class="explain">
+    <p>That is literally the only line of code that changes, and it is exactly what the demo above runs.</p>
+
+    <h4 class="mini">And what is $S_2$ for?</h4>
+    <p>$S_1$ did all the work above. $S_2$ gives you an optional extra <strong>data</strong> term: after moving by
+    $(u,v)$, a pixel should land on a pixel of the same class.</p>
+  </div>
+
+  <div class="eq">$$ \lambda \cdot \big[\, S_2(x+u,\, y+v) \neq S_1(x,y) \,\big] $$</div>
+
+  <div class="explain">
+    <p>Penalise sending a "car" pixel onto "road". Two honest caveats to state: it must be a <em>soft</em> penalty
+    (all instances of a class share a label, so it cannot separate two adjacent cars), and the indicator is
+    non-differentiable, so in practice you'd use a smooth surrogate — e.g. the distance transform of each class
+    mask, or a soft class-probability map from the network instead of the hard $\arg\max$ label.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The algorithm, written properly</h2>
+
+  <ol class="steps">
+    <li><b>Derivatives.</b> Compute $I_x, I_y$ from $I_1$ and $I_t = I_2 - I_1$, exactly as in plain HS.</li>
+    <li><b>Edge weights from the labels.</b> For every neighbouring pair $(p,q)$ set $w(p,q)=1$ if
+    $S_1(p)=S_1(q)$, else $w(p,q)=\varepsilon\approx 0$. (One pass over the label map.)</li>
+    <li><b>Minimise the gated energy</b>
+    $\iint (I_xu+I_yv+I_t)^2 + \alpha\,w\,(|\nabla u|^2+|\nabla v|^2)$, i.e. run the ordinary HS iterations with
+    the plain neighbourhood average replaced by the $w$-weighted average.</li>
+    <li><b>Optional label-consistency data term</b> using $S_2$: add
+    $\lambda[S_2(x+u,y+v) \neq S_1(x,y)]$, softened as described above.</li>
+    <li><b>Optional but recommended:</b> run it coarse-to-fine on an image pyramid, since traffic scenes have
+    large displacements and the Taylor linearisation only holds for small motion.</li>
+  </ol>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The traps</h2>
+
+  <div class="callout warn"><span class="lbl">1 · All instances of a class share a label</span>
+    The question says this explicitly, which means it is being graded. Two cars side by side are
+    <strong>one segment</strong>. Your $w$ will not cut between them, so their motion boundary still blurs. Say
+    this limitation out loud, and note the fix: an <em>instance</em> segmentation map would separate them, or
+    combine $w$ with the image gradient so strong intensity edges also lower the weight.
+  </div>
+
+  <div class="callout warn"><span class="lbl">2 · Use $\varepsilon$, not exactly zero</span>
+    With $w\equiv 0$ across every boundary, the linear system <strong>decouples into independent blocks</strong>,
+    one per connected segment. A small or textureless segment then has no neighbour to borrow flow from and can
+    come out underdetermined. A tiny residual coupling keeps the global system connected and well-posed while
+    still letting real motion boundaries stay sharp.
+  </div>
+
+  <div class="callout warn"><span class="lbl">3 · Do not gate the data term</span>
+    The weight belongs on the smoothness term only. The data term is a per-pixel statement about brightness
+    constancy; it has nothing to do with neighbours, so there is no hand to let go of.
+  </div>
+
+  <div class="callout note"><span class="lbl">4 · Nice extras, one line each</span>
+    <p style="margin:6px 0 0">• <strong>Segmentation is not perfect.</strong> A mislabelled pixel cuts a hand-hold
+    that should have stayed. Softening $w$ with the network's class <em>confidence</em> makes it degrade
+    gracefully.</p>
+    <p>• <strong>Relation to known methods.</strong> This is exactly the idea behind edge-preserving /
+    anisotropic-diffusion flow and robust smoothness terms (total variation); you're just getting the edge map
+    from a network instead of from the image gradient.</p>
+    <p>• <strong>Sanity check.</strong> Setting $w\equiv 1$ recovers plain Horn–Schunck, so the method is a strict
+    generalisation.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, in order</span>
+    <p><strong>Diagnosis.</strong> Plain Horn–Schunck minimises
+    $\iint (I_xu+I_yv+I_t)^2 + \alpha(|\nabla u|^2+|\nabla v|^2)$. Its smoothness prior is isotropic: it diffuses
+    flow across <em>every</em> neighbouring pair, including pairs that straddle an object boundary, so motion
+    discontinuities get blurred. The segmentation map tells us exactly where those boundaries are.</p>
+    <p><strong>Modification.</strong> Define a per-edge weight from $S_1$: $w(p,q)=1$ if $S_1(p)=S_1(q)$, else
+    $w(p,q)=\varepsilon\approx 0$, and minimise the segmentation-aware energy
+    $\iint (I_xu+I_yv+I_t)^2 + \alpha\,w(\mathbf{x})(|\nabla u|^2+|\nabla v|^2)$.</p>
+    <p><strong>Effect on the solution.</strong> The Euler–Lagrange equations are unchanged except that the plain
+    Laplacian becomes a weighted graph Laplacian, $(L_wu)(p)=\sum_q w(p,q)(u(p)-u(q))$: each neighbour contributes
+    $-w(p,q)$ instead of $-1$. In the iterative scheme, the neighbourhood average $\bar u$ is replaced by the
+    $w$-weighted average. Edges crossing a label change contribute nothing, so flow no longer leaks across
+    silhouettes and sharp motion discontinuities appear there, while inside a segment the prior still fills in
+    flow at textureless pixels exactly as before.</p>
+    <p><strong>Using $S_2$.</strong> Optionally add a soft label-consistency data term
+    $\lambda[S_2(x+u,y+v)\neq S_1(x,y)]$, penalising flow that sends a pixel onto a different class. It must be
+    soft (and smoothed, e.g. via a distance transform or soft class probabilities) because all instances of a
+    class share a label.</p>
+    <p><strong>Limitations.</strong> Two adjacent cars share a label, so their mutual boundary is not cut; use
+    $\varepsilon$ rather than $0$ so segments stay weakly coupled and the system stays well-posed;
+    $w\equiv 1$ recovers standard HS.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. In one sentence, what is wrong with plain Horn–Schunck here?</summary>
+    <p>Its smoothness prior is isotropic — it penalises flow differences equally between every pair of
+    neighbours, including pairs on opposite sides of an object boundary, so real motion discontinuities get
+    smoothed away.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why not just drop the smoothness term near boundaries — or everywhere?</summary>
+    <p>Because without it the data term alone gives $I_xu+I_yv+I_t=0$: one equation, two unknowns per pixel. That
+    is the aperture problem, and it is unsolvable pointwise. The prior is what makes the system invertible and
+    what fills in flow at textureless pixels. You only want to remove the coupling <em>across</em> boundaries, not
+    within regions.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where exactly does $w$ enter the equations?</summary>
+    <p>Only on the smoothness term. In the Euler–Lagrange equations the plain Laplacian $u_{xx}+u_{yy}$ becomes
+    the weighted graph Laplacian $\sum_q w(p,q)(u(p)-u(q))$; equivalently, in the iterative update the plain
+    neighbourhood average is replaced by the $w$-weighted average. The data term is untouched.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why $\varepsilon$ instead of exactly $0$?</summary>
+    <p>Hard zeros decouple the linear system into one independent block per segment. A small or textureless
+    segment then has nothing to borrow flow from and may be underdetermined. A tiny residual weight keeps the
+    system globally connected and well-posed while still being weak enough that boundaries stay sharp.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Two cars are driving side by side and touching in the image. Does your method separate them?</summary>
+    <p>No — the question states that all instances of a class share a label, so both cars are one segment and
+    $w=1$ between them. Their mutual motion boundary still blurs. Fixes: use instance segmentation if available,
+    or multiply $w$ by an image-gradient-based term so strong intensity edges also reduce the weight.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What is $S_2$ good for, and why must its term be soft?</summary>
+    <p>It supports a label-consistency data term: a pixel's flow should land it on a pixel of the same class,
+    penalised by $\lambda[S_2(x+u,y+v)\neq S_1(x,y)]$. It must be soft because the label is shared across
+    instances (landing on a <em>different</em> car is fine) and because a hard indicator is non-differentiable —
+    in practice use a distance transform of the class masks or the network's soft class probabilities.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does this change the computational structure of the solver?</summary>
+    <p>No. It is still a sparse linear system with the same sparsity pattern — only the coefficient values change
+    (each off-diagonal entry is scaled by $w$, and the diagonal becomes $\sum_q w$). Same iterative solver, same
+    complexity, same $\alpha$ dial.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Idea</th><th>Plain version</th></tr>
+      <tr><td>data term</td><td>each pixel's own brightness evidence — often silent (flat areas)</td></tr>
+      <tr><td>smoothness term</td><td>neighbours hold hands so the silent ones get dragged along</td></tr>
+      <tr><td>the bug</td><td>car and road are holding hands, so their motions get averaged</td></tr>
+      <tr><td>the fix</td><td>$w=1$ inside a label, $\varepsilon\approx 0$ across labels</td></tr>
+      <tr><td>effect</td><td>plain Laplacian → weighted graph Laplacian</td></tr>
+      <tr><td>$S_2$</td><td>optional soft label-consistency data term</td></tr>
+      <tr><td>sanity check</td><td>$w\equiv 1$ gives back ordinary Horn–Schunck</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole answer, seven words:</strong> keep the prior, cut it at boundaries.</p>
+  </div>
+
+  <div class="pager">
+    <a href="ch02_optical_flow.html"><span class="dir">Back to</span><span class="ttl">Ch 2 · Optical Flow</span></a>
+    <a class="next" href="q2_loaded_die.html"><span class="dir">Next question</span><span class="ttl">Q2 · The loaded die ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO — 1-D Horn–Schunck, plain vs label-gated
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvA'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ro = document.getElementById('Aro');
+  const elA = document.getElementById('Aa'), vA = document.getElementById('vAa');
+  const elE = document.getElementById('Ae'), vE = document.getElementById('vAe');
+  const N = 160, LEFT = 55, SPAN = 800, CW = SPAN / N;
+  const BORDER = 80;                       // the label boundary sits here
+  const FLOW_L = 1.2, FLOW_R = -0.8;       // true flow of the two objects (small: Taylor must hold)
+
+  // ---- a textured 1-D "scanline", with two deliberately flat patches ----
+  const I1 = new Float64Array(N), I2 = new Float64Array(N);
+  const FLAT = [[24, 44], [104, 126]];     // textureless zones
+  function isFlat(i){ return FLAT.some(f => i >= f[0] && i < f[1]); }
+
+  // low frequencies on purpose — the brightness-constancy linearisation is only
+  // valid when the motion is small compared with the texture's wavelength
+  function texture(x){
+    return 40 * Math.sin(x * 0.25) + 18 * Math.sin(x * 0.52 + 1.1)
+         + 10 * Math.sin(x * 0.11 + 0.4);
+  }
+  (function buildSignals(){
+    for (let i = 0; i < N; i++){
+      const flat = isFlat(i);
+      const trueU = (i < BORDER) ? FLOW_L : FLOW_R;
+      I1[i] = flat ? 0 : texture(i);
+      I2[i] = flat ? 0 : texture(i - trueU);   // frame 2 = frame 1 shifted by the true flow
+    }
+  })();
+
+  const Ix = new Float64Array(N), It = new Float64Array(N);
+  for (let i = 0; i < N; i++){
+    const a = I1[Math.max(0, i - 1)], b = I1[Math.min(N - 1, i + 1)];
+    Ix[i] = (b - a) / 2;
+    It[i] = I2[i] - I1[i];
+  }
+
+  let uPlain = new Float64Array(N), uGated = new Float64Array(N), iters = 0;
+
+  function wOf(i, j, gated){
+    if (!gated) return 1;
+    const sameLabel = ((i < BORDER) === (j < BORDER));
+    return sameLabel ? 1 : (+elE.value) / 100;
+  }
+
+  function sweep(u, gated, alpha){
+    const out = new Float64Array(N);
+    for (let i = 0; i < N; i++){
+      let num = 0, den = 0;
+      if (i > 0){     const w = wOf(i, i - 1, gated); num += w * u[i - 1]; den += w; }
+      if (i < N - 1){ const w = wOf(i, i + 1, gated); num += w * u[i + 1]; den += w; }
+      const ubar = den > 0 ? num / den : u[i];
+      // 1-D Horn–Schunck update
+      out[i] = ubar - Ix[i] * (Ix[i] * ubar + It[i]) / (alpha + Ix[i] * Ix[i]);
+    }
+    return out;
+  }
+
+  function run(n){
+    const alpha = Math.max(0.0001, +elA.value);
+    for (let k = 0; k < n; k++){
+      uPlain = sweep(uPlain, false, alpha);
+      uGated = sweep(uGated, true, alpha);
+    }
+    iters += n;
+    draw();
+  }
+
+  function reset(){ uPlain = new Float64Array(N); uGated = new Float64Array(N); iters = 0; draw(); }
+
+  function draw(){
+    g.clearRect(0, 0, W, H);
+    g.font = '12px system-ui';
+
+    /* ---- the two label regions, as background bands ---- */
+    g.fillStyle = 'rgba(110,168,255,.09)'; g.fillRect(LEFT, 30, BORDER * CW, 120);
+    g.fillStyle = 'rgba(255,180,84,.09)';  g.fillRect(LEFT + BORDER * CW, 30, (N - BORDER) * CW, 120);
+    g.fillStyle = '#6ea8ff'; g.fillText('label: CAR', LEFT + 10, 46);
+    g.fillStyle = '#ffb454'; g.fillText('label: ROAD', LEFT + BORDER * CW + 10, 46);
+
+    /* ---- the image signal ---- */
+    g.strokeStyle = 'rgba(230,236,247,.75)'; g.lineWidth = 1.6; g.beginPath();
+    for (let i = 0; i < N; i++){
+      const x = LEFT + i * CW, y = 95 - I1[i] * 0.62;
+      (i === 0) ? g.moveTo(x, y) : g.lineTo(x, y);
+    }
+    g.stroke();
+    g.fillStyle = '#9fb0cc'; g.fillText('the image  I₁  (one scanline)', LEFT, 24);
+
+    /* ---- textureless zones ---- */
+    for (const f of FLAT){
+      g.fillStyle = 'rgba(107,122,153,.30)';
+      g.fillRect(LEFT + f[0] * CW, 152, (f[1] - f[0]) * CW, 12);
+    }
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('textureless — the data term says nothing here; all flow is borrowed', LEFT, 176);
+
+    /* ---- the label boundary ---- */
+    const bx = LEFT + BORDER * CW;
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.setLineDash([5, 4]); g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(bx, 30); g.lineTo(bx, 400); g.stroke(); g.setLineDash([]);
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '11px system-ui';
+    g.fillText('label boundary', bx + 6, 200);
+
+    /* ---- the flow plot ---- */
+    const Y0 = 310, SC = 55;                       // flow = 0 line, pixels per unit flow
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(LEFT, Y0); g.lineTo(LEFT + SPAN, Y0); g.stroke();
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('estimated flow  u', LEFT, 216);
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('u = 0', LEFT - 40, Y0 + 4);
+
+    function plot(arr, col, wdt){
+      g.strokeStyle = col; g.lineWidth = wdt; g.beginPath();
+      for (let i = 0; i < N; i++){
+        const x = LEFT + i * CW, y = Y0 - arr[i] * SC;
+        (i === 0) ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    // ground truth as a step
+    g.strokeStyle = '#7ee787'; g.lineWidth = 2; g.setLineDash([6, 4]); g.beginPath();
+    g.moveTo(LEFT, Y0 - FLOW_L * SC); g.lineTo(bx, Y0 - FLOW_L * SC);
+    g.moveTo(bx, Y0 - FLOW_R * SC); g.lineTo(LEFT + SPAN, Y0 - FLOW_R * SC);
+    g.stroke(); g.setLineDash([]);
+
+    plot(uPlain, '#ff6b81', 2);
+    plot(uGated, '#41d8c9', 2.4);
+
+    /* ---- errors ---- */
+    let eP = 0, eG = 0;
+    for (let i = 0; i < N; i++){
+      const t = (i < BORDER) ? FLOW_L : FLOW_R;
+      eP += Math.abs(uPlain[i] - t); eG += Math.abs(uGated[i] - t);
+    }
+    eP /= N; eG /= N;
+
+    // how badly is the step blurred? measure the flow gap right at the boundary
+    const jumpP = Math.abs(uPlain[BORDER - 1] - uPlain[BORDER]);
+    const jumpG = Math.abs(uGated[BORDER - 1] - uGated[BORDER]);
+    const jumpT = Math.abs(FLOW_L - FLOW_R);
+
+    ro.innerHTML = (iters === 0)
+      ? 'Press <b>Run 300 iterations</b>. Both start at zero flow.'
+      : '<b>' + iters + '</b> iterations &nbsp;·&nbsp; mean error — plain HS <b style="color:#ff6b81">' +
+        eP.toFixed(3) + '</b>, gated <b style="color:#41d8c9">' + eG.toFixed(3) + '</b>' +
+        '<br>jump recovered at the boundary (true = ' + jumpT.toFixed(1) + ') — plain ' +
+        '<b style="color:#ff6b81">' + jumpP.toFixed(2) + '</b>, gated <b style="color:#41d8c9">' +
+        jumpG.toFixed(2) + '</b>';
+  }
+
+  document.getElementById('Arun').onclick = () => run(300);
+  document.getElementById('Areset').onclick = reset;
+  elA.oninput = () => { vA.textContent = elA.value; reset(); };
+  elE.oninput = () => { vE.textContent = ((+elE.value) / 100).toFixed(2); reset(); };
+  reset();
+})();
+</script>
+
+</body>
+</html>
