@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weiss ICCV 2001 — Intrinsic Images from Sequences, from zero</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+           border:1px solid var(--line); border-left:4px solid #c792ea; }
+  .story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+           color:#c792ea; font-weight:700; margin-bottom:6px; }
+  .qbox { margin:18px 0; padding:16px 20px; border-radius:12px; background:#101a2b;
+          border:1px solid var(--line); border-left:4px solid var(--accent-3); }
+  .qbox .q-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+          color:var(--accent-3); font-weight:700; margin-bottom:6px; }
+  .steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+  .steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+           background:var(--card); border:1px solid var(--line); border-radius:11px; }
+  .steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+           border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+           display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .steps li b { color:var(--accent-2); }
+  details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+           padding:12px 16px; margin:10px 0; }
+  details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  details.qa summary::marker { color:var(--accent-3); }
+  details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+  .kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; }
+  .kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+  .yes { color:var(--good); font-weight:700; }
+  .no  { color:var(--danger); font-weight:700; }
+  .answerbox { margin:18px 0; padding:18px 22px; border-radius:12px; background:#0f2420;
+         border:1px solid #1d4a42; border-left:4px solid var(--good); }
+  .answerbox .a-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+         color:var(--good); font-weight:700; margin-bottom:8px; }
+  .answerbox p { margin:8px 0; }
+  .chip { display:inline-block; font-size:12px; padding:2px 9px; border-radius:20px;
+         border:1px solid var(--line); background:#101828; color:var(--ink-dim); margin-right:6px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Paper</b> · Weiss ICCV 2001</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch12_intrinsic_images.html">‹ Chapter 12</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="intrinsic_images_for_kids.html">Q3 companion ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Paper deep-dive · Yair Weiss, ICCV 2001</div>
+    <h1>Deriving Intrinsic Images from Image&nbsp;Sequences</h1>
+    <p class="lede">Every photo is two invisible pictures multiplied together: <em>what things are painted</em> and
+    <em>how the light fell</em>. Pulling them apart from one photo is impossible. Weiss showed that from a
+    <em>stack</em> of photos it is still impossible — and then found the one extra belief about the world that
+    makes it work anyway. The answer turns out to be four words long: <strong>take the median of the
+    edges</strong>.</p>
+    <p class="muted" style="margin-top:10px">
+      <span class="chip">story first</span><span class="chip">5 live demos</span>
+      <span class="chip">full ML derivation</span><span class="chip">ends on exam Q3</span></p>
+  </header>
+
+  <div class="callout note"><span class="lbl">How to read this page</span>
+    Sections 1–4 have no math at all — they are the story. Section 5 introduces the one idea the whole paper
+    rests on. Sections 6–8 are the real derivation (Claims 1 and 2, equations 2–7 of the paper). Section 9 is
+    the whole algorithm running live. Section 12 uses all of it to answer <strong>Q3 of the exam</strong>.
+    Every demo is a real implementation, not an animation — the pipeline in Demo 3 actually solves the Poisson
+    equation in your browser.</div>
+
+  <h2>1 · The story: the photograph is lying to you</h2>
+
+  <div class="story">
+    <span class="story-label">The painted wall</span>
+    <p>Imagine a long wall in a schoolyard. Somebody painted it: a red stripe, a blue square, a big white patch.
+    That painting <strong>never changes</strong>. It is what the wall <em>is</em>.</p>
+    <p>Now it is a windy day with clouds. All morning, cloud shadows slide across the wall. Sometimes the red
+    stripe is in bright sun and looks pink. Sometimes it is in shade and looks almost brown. The paint did not
+    change — <strong>the light changed</strong>.</p>
+    <p>You take a photo every ten minutes. Every photo is a mix of two things:</p>
+    <ul>
+      <li><strong>the paint</strong> — the same in all photos</li>
+      <li><strong>the light</strong> — different in every photo</li>
+    </ul>
+    <p><strong>The question of the whole paper:</strong> from your stack of photos, can you draw a picture of the
+    paint alone, with all the cloud shadows erased?</p>
+  </div>
+
+  <h3>The two invisible pictures have names</h3>
+
+  <table class="kv">
+    <tr><th style="width:24%">Name</th><th>Kid version</th><th>Symbol</th></tr>
+    <tr><td>Reflectance</td><td>the paint. What fraction of light a surface bounces back. A white shirt bounces
+      ~0.9, black asphalt ~0.05. It belongs to the <em>object</em>.</td><td>$R(x,y)$ — one picture, never changes</td></tr>
+    <tr><td>Illumination</td><td>the light. How much light is landing at that spot right now — sun, shade,
+      cloud shadow, a lamp. It belongs to the <em>situation</em>.</td><td>$L(x,y,t)$ — one picture per frame</td></tr>
+    <tr><td>The photo</td><td>light arriving × fraction bounced. So the camera records the <strong>product</strong>.</td>
+      <td>$I(x,y,t) = R(x,y)\,L(x,y,t)$</td></tr>
+  </table>
+
+  <p>These two are what Barrow and Tenenbaum (1978) called <span class="term">intrinsic images</span>. The paper
+  calls the split a <em>midlevel</em> description: it is not a full 3-D model of the scene (it never says
+  <em>why</em> a spot is dark — cast shadow? object turned away? — and it depends on where you stood), but it is
+  already enormously more useful than raw pixels.</p>
+
+  <h3>Why anybody cares</h3>
+  <ul>
+    <li><strong>Segmentation stops being fooled.</strong> The paper's Figure 1: a cylinder, evenly painted, gets
+    chopped into pieces by any segmentation algorithm because shading makes one side dark. On the reflectance
+    image "even primitive segmentation algorithms" get it as one object.</li>
+    <li><strong>Recognition stops being brittle.</strong> Template matching and shape-from-shading break when the
+    lighting changes. Run them on reflectance and the lighting is already gone.</li>
+    <li><strong>Editing becomes physically believable.</strong> The paper's last figure: paste a logo onto a plaza
+    photo with ordinary $\alpha$-blending and it looks stuck-on and fake. Paste it onto the <em>reflectance</em>
+    image, then re-multiply by the recovered illumination, and the logo picks up the plaza's own shadows and
+    lighting. It looks painted on the ground.</li>
+  </ul>
+
+  <h2>2 · Why this is impossible (and stays impossible)</h2>
+
+  <div class="story">
+    <span class="story-label">The 12 = ? × ? game</span>
+    <p>I tell you two numbers multiply to <strong>12</strong>. What are they?</p>
+    <p>$3 \times 4$. Or $2 \times 6$. Or $1 \times 12$. Or $12 \times 1$. Or $0.5 \times 24$.</p>
+    <p>You cannot know. <strong>One equation, two unknowns.</strong> Not hard — <em>impossible</em>. Every photo
+    hands you exactly this puzzle at every single pixel.</p>
+  </div>
+
+  <p>Formally: one image gives one number per pixel and asks for two, so the unknowns are twice the equations.
+  And there is always a cheating answer sitting right there:</p>
+
+  <div class="eq">$$ R = I, \qquad L = 1 \qquad\Longrightarrow\qquad R\,L = I \;\;\checkmark $$</div>
+
+  <p>"Everything is paint, the light was perfectly even everywhere." Absurd, but it fits the data perfectly.
+  This is what <span class="term">ill-posed</span> means: not "difficult", but "the data does not contain the
+  answer."</p>
+
+  <h3>Surely a whole stack of photos fixes it?</h3>
+
+  <p>It does not. Count again, at one pixel, with $T$ frames:</p>
+
+  <table class="kv">
+    <tr><td>Equations</td><td>$I_1 = R\,L_1,\; I_2 = R\,L_2,\; \dots,\; I_T = R\,L_T$ &nbsp;→&nbsp; <strong>$T$</strong></td></tr>
+    <tr><td>Unknowns</td><td>$R$, plus $L_1,\dots,L_T$ &nbsp;→&nbsp; <strong>$T+1$</strong></td></tr>
+    <tr><td>Verdict</td><td class="no">always exactly one short, forever</td></tr>
+  </table>
+
+  <p>And the cheat still works: set $R = 1$ and $L_t = I_t$. Adding frames does not close the gap — it opens a
+  new unknown every time you add an equation. This is the paper's own opening move, and it is the reason a
+  <em>prior</em> is unavoidable.</p>
+
+  <div class="callout warn"><span class="lbl">The freedom, stated exactly</span>
+    Pick <em>any</em> non-zero picture $\alpha(x,y)$ you like. Then
+    $R' = R\cdot\alpha$ and $L'_t = L_t/\alpha$ reproduce every frame perfectly, because
+    $R'L'_t = R\alpha L_t/\alpha = R L_t = I_t$. There is an infinite family of perfect answers, and the data
+    cannot rank them. Play with it below.</div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — infinitely many perfect answers</h4><span class="tag">drag the slider</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The leftmost panel is the only thing a camera ever gives you. The
+      middle two are <em>your</em> proposed split. The right panel multiplies your split back together. Move the
+      slider anywhere, press any preset — the right panel never changes, and the error stays at zero. Every
+      setting is a mathematically perfect explanation of the photo. That is the whole problem.</p>
+      <canvas id="cvAmb" width="900" height="290"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="ambTruth">The real answer</button>
+        <button class="act" id="ambAllR">"It's all paint"</button>
+        <button class="act" id="ambAllL">"It's all light"</button>
+        <label class="muted" style="display:flex;align-items:center;gap:8px">blend&nbsp;s
+          <input type="range" id="ambS" min="-100" max="100" value="0" style="width:150px">
+          <span id="ambSVal">0.00</span></label>
+      </div>
+      <div class="readout" id="roAmb"></div>
+    </div>
+  </div>
+
+  <h2>3 · The ideas that came before, and exactly how each one breaks</h2>
+
+  <p>The paper's introduction is a graveyard. Worth knowing, because <strong>every wrong answer here is a
+  tempting exam answer.</strong></p>
+
+  <table class="kv">
+    <tr><th style="width:20%">Attempt</th><th>The assumption it makes</th><th>Where it dies</th></tr>
+    <tr><td>Retinex<br><span class="muted">Land &amp; McCann '71</span></td>
+      <td>Reflectance is <em>piecewise constant</em> (a "Mondrian" of flat patches), and illumination is
+      <em>low contrast</em> — soft and gradual. So: sharp edge = paint, soft gradient = light.</td>
+      <td>Weiss checked it on outdoor scenes and says it plainly: <strong>illumination edges are often just as
+      sharp and high-contrast as reflectance edges.</strong> The crisp black boundary of a cast shadow on a
+      sunny day destroys the whole premise.</td></tr>
+    <tr><td>Freeman &amp; Viola '98</td><td>A wavelet prior used to <em>classify</em> an image as all-reflectance
+      or all-illumination.</td><td>Answers a yes/no question, does not produce the decomposition.</td></tr>
+    <tr><td>Photometric stereo<br><span class="muted">Yuille et al., Hayakawa</span></td>
+      <td>The scene is a single <em>convex Lambertian</em> surface, so $L_t = \max(\mathbf n\cdot \mathbf s_t, 0)$
+      — only attached shadows, no cast shadows. Solvable by SVD.</td>
+      <td>Real scenes are not one convex blob. Also leaves a Generalized-Bas-Relief ambiguity.</td></tr>
+    <tr><td>Farid &amp; Adelson '99</td><td>All illumination images are the <em>same picture times a number</em>:
+      $L_t = c_t L$. Solved with ICA.</td><td>A moving cloud shadow is not a global brightness knob. Fails the
+      moment the <em>shape</em> of the lighting changes.</td></tr>
+    <tr><td>Temporal <strong>min</strong> filter<br><span class="muted">Szeliski, Avidan, Anandan '00</span></td>
+      <td>Every pixel is fully lit at <em>some</em> frame, so the brightest… (in their additive setting, the
+      darkest) value over time is the clean one.</td>
+      <td class="no">A pixel that is <em>always</em> in shadow never gets its clean moment. Under a tree, in a
+      permanently shaded corner — the min filter reports it as dark paint forever.</td></tr>
+    <tr><td>Temporal <strong>mean</strong></td><td>Illumination averages out to a constant.</td>
+      <td class="no">Same disease. Always-shadowed pixel → always-too-dark reflectance.</td></tr>
+    <tr><td>Temporal <strong>median of the images</strong></td>
+      <td>Most of the time, most pixels are unshadowed — i.e. $l$ itself is sparse (mostly zero).</td>
+      <td class="no">This is the trap. Weiss dismantles it in §7 below — it is the single most important
+      paragraph in the paper.</td></tr>
+  </table>
+
+  <div class="callout key"><span class="lbl">The common thread of every failure</span>
+    Min, mean, and median-of-images all ask <em>"what is this pixel's honest brightness?"</em> — and they all
+    need the pixel to be honestly lit at some point. Weiss's move is to <strong>stop asking about brightness at
+    all</strong>.</div>
+
+  <h2>4 · Trick one: take a logarithm and multiplication becomes addition</h2>
+
+  <p>Products are awkward. Logarithms turn them into sums, so the paper works in the log domain throughout.
+  Write lowercase for logs:</p>
+
+  <div class="eq">$$ i = \log I, \quad r = \log R, \quad l = \log L \qquad\Longrightarrow\qquad
+  \underbrace{I = R\cdot L}_{\text{product}} \;\;\longrightarrow\;\; \underbrace{i = r + l}_{\text{sum}} $$</div>
+
+  <p>So at every pixel, over time:</p>
+
+  <div class="eq">$$ i(x,y,t) \;=\; \underbrace{r(x,y)}_{\text{same in every frame}} \;+\; \underbrace{l(x,y,t)}_{\text{changes every frame}} $$</div>
+
+  <p><strong>This is now a signal-plus-noise problem</strong>, which is a shape we know how to attack: a constant
+  we want, buried under something that varies. "Get rid of the light" has become "get rid of the time-varying
+  part". <em>(Logs also match how cameras and eyes behave, and the paper notes the sparse statistics it relies on
+  survive the log — the histograms in its Figure 3 are computed on log images.)</em></p>
+
+  <h2>5 · Trick two: the one belief about the world that saves everything</h2>
+
+  <p>We are one equation short, so we must <em>add a belief</em>. Weiss's first instinct was Retinex's belief
+  ("illumination is low contrast") and he rejected it — see the table above. He needed something weaker and more
+  generic. He took it from the statistics of natural images.</p>
+
+  <div class="story">
+    <span class="story-label">The kid version of "sparse derivative outputs"</span>
+    <p>Walk along one row of any real photograph and ask at every step: <em>"did the brightness change from the
+    pixel before?"</em></p>
+    <p>The answer is almost always <strong>"no, basically not at all."</strong> Sky next to sky. Wall next to
+    wall. Cheek next to cheek. Then very occasionally — <em>bang</em> — you cross an edge and the answer is
+    "enormously".</p>
+    <p>So a picture of "changes" is <strong>mostly zeros with rare big spikes</strong>. That is what
+    <span class="term">sparse</span> means. It is one of the most reliably true facts about real images, and it
+    is not a fact about paint or about light — it is a fact about <em>pictures</em>.</p>
+  </div>
+
+  <p>The paper's Figure 3 is exactly this: a face and an outdoor scene, wildly different pictures, produce almost
+  the <em>same</em> histogram of horizontal-derivative outputs — a huge spike at zero with tails that fall off
+  far faster than a Gaussian. That shape is well fit by a <span class="term">Laplacian</span> density:</p>
+
+  <div class="eq">$$ P(x) = \tfrac{1}{Z} e^{-\alpha |x|} $$</div>
+
+  <p>Compare with a Gaussian $\propto e^{-x^2/2\sigma^2}$: the Gaussian's $x^2$ punishes big values so brutally
+  that it essentially forbids them, which forces everything to be middling. The Laplacian's $|x|$ is gentle
+  about outliers, so it is happy with "almost all exactly zero, a few enormous". <strong>Laplacian = the maths
+  of sparse.</strong></p>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the histogram that the whole paper stands on</h4><span class="tag">switch pictures</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: a picture. Right: the histogram of its horizontal derivative
+      (in the log domain), with a Gaussian of the same variance drawn on top for comparison. Switch between a
+      paint-like picture, a light-like picture, and pure Gaussian noise. Notice that the two <em>real</em>
+      pictures give the same spike-plus-tails shape even though they look nothing alike, while noise gives a
+      broad hump. Turn on <em>log&nbsp;y</em> to see how much heavier the real tails are.</p>
+      <canvas id="cvStat" width="900" height="300"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="stR">Paint-like picture</button>
+        <button class="act" id="stL">Light-like picture</button>
+        <button class="act" id="stG">Gaussian noise</button>
+        <button class="act" id="stLog">log y: off</button>
+      </div>
+      <div class="readout" id="roStat"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Now read the assumption in the paper's exact words</span>
+    <p style="margin:6px 0 0">Take $N$ filters $\{f_n\}$ (Weiss uses exactly two: horizontal and vertical
+    derivative). Define the filtered input and filtered reflectance:</p>
+    <div class="eq">$$ o_n(x,y,t) = i \star f_n, \qquad r_n(x,y) = r \star f_n $$</div>
+    <p style="margin:6px 0 0">The assumption is: <strong>the filter outputs applied to $l$ are Laplacian and
+    independent over space and time.</strong> Not $l$ itself — the <em>filtered</em> $l$. Hold on to that
+    distinction; §7 is entirely about it.</p></div>
+
+  <h2>6 · Claim 1 — and now the median falls out of the algebra</h2>
+
+  <p>Filtering is linear, so applying $f_n$ to $i = r + l$ just splits:</p>
+
+  <div class="eq">$$ o_n(x,y,t) \;=\; \underbrace{r_n(x,y)}_{\text{constant in }t} \;+\; \underbrace{(f_n \star l)(x,y,t)}_{\text{sparse, changes with }t} $$</div>
+
+  <p>Read that as a measurement model: <strong>at each pixel, over time, you get $T$ noisy readings of the one
+  number $r_n(x,y)$, and the noise is Laplacian.</strong> The whole problem has collapsed into: <em>estimate a
+  constant from noisy samples.</em></p>
+
+  <h3>The likelihood (paper eq. 3–4)</h3>
+
+  <p>Laplacian noise, independent over space and time, so the probability of everything you saw is a product of
+  per-sample Laplacians:</p>
+
+  <div class="eq">$$ P(o_n \mid r_n) \;=\; \frac{1}{Z}\prod_{x,y,t} e^{-\beta\,|o_n(x,y,t) - r_n(x,y)|}
+  \;=\; \frac{1}{Z}\, e^{-\beta \sum_{x,y,t} |o_n(x,y,t) - r_n(x,y)|} $$</div>
+
+  <p>Maximising that is minimising the exponent. The $Z$ and $\beta$ are constants, so:</p>
+
+  <div class="eq">$$ \hat r_n(x,y) \;=\; \arg\min_{c} \sum_{t=1}^{T} \bigl| o_n(x,y,t) - c \bigr| $$</div>
+
+  <p>A <strong>sum of absolute deviations</strong> — an $\ell_1$ problem. And the minimiser of a sum of absolute
+  deviations is the <strong>median</strong>. That is <span class="term">Claim 1</span>, paper equation 2:</p>
+
+  <div class="eq">$$ \boxed{\;\hat r_n(x,y) \;=\; \operatorname{median}_t \; o_n(x,y,t)\;} $$</div>
+
+  <details class="qa">
+    <summary>Why does $\ell_1$ give the median (and $\ell_2$ the mean)? — one-line proof</summary>
+    <p>Differentiate $g(c) = \sum_t |o_t - c|$. Each term contributes $-\operatorname{sign}(o_t - c)$, so</p>
+    <div class="eq">$$ g'(c) = \#\{t : o_t < c\} - \#\{t : o_t > c\} $$</div>
+    <p>This is zero exactly when the same number of samples lie below $c$ as above it — the definition of the
+    median. Note the derivative only counts <em>how many</em> samples are on each side, never <em>how far</em>
+    they are. That is precisely why the median ignores outliers: a sample that is wrong by a mile counts the
+    same as one that is wrong by a hair.</p>
+    <p>Contrast $\ell_2$: $\frac{d}{dc}\sum (o_t - c)^2 = -2\sum(o_t - c) = 0 \Rightarrow c = \bar o$, the mean —
+    where distance <em>does</em> count, so one wild sample drags the answer with it. Gaussian prior → mean →
+    fragile. Laplacian prior → median → robust. <strong>The choice of prior <em>is</em> the choice of
+    estimator.</strong></p>
+  </details>
+
+  <div class="callout note"><span class="lbl">Why the median is the perfect tool here</span>
+    A cloud shadow's edge passes over a given pixel during only a <em>few</em> of the frames. In those frames the
+    filtered value is wildly off; in most frames it is clean. The median simply does not care about a minority of
+    wild values — it asks "what did most frames agree on?" The moving shadow is outvoted.</div>
+
+  <h2>7 · The one paragraph that separates this paper from a temporal median filter</h2>
+
+  <p>Taking a temporal median of an image sequence is an old trick for building clean mosaics. So what is new?
+  This is the crux, and it is the most likely thing to be asked about.</p>
+
+  <div class="story">
+    <span class="story-label">Two bricks, P and Q</span>
+    <p>Two bricks in the wall are painted <strong>exactly the same colour</strong>. But brick <strong>P</strong>
+    sits in the open and is sunlit in every single photo. Brick <strong>Q</strong> is under the eaves and is
+    shaded in every single photo.</p>
+    <p><strong>Median of brightness:</strong> P's readings are all bright, so its median is bright. Q's readings
+    are all dark, so its median is dark. Two different answers. <span class="no">Wrong — they are the same
+    paint.</span> And no amount of extra frames fixes it, because <em>every</em> frame is biased the same way.</p>
+    <p><strong>Median of changes:</strong> now ask about <em>edges</em> instead. Between Q and the brick next to
+    it there is no paint edge, so the reading is ≈ 0 in every frame. Between P and its neighbour, also ≈ 0.
+    <span class="yes">Same answer — correct.</span> Being permanently dark is invisible to an edge detector,
+    because a constant offset has zero derivative.</p>
+  </div>
+
+  <p>The paper states it precisely: pixels $P$ and $Q$ "are estimated as having the same reflectance even though
+  one was always lighter than the other. This is because the ML estimate performs a temporal median on the
+  <strong>filtered</strong> images, not the original images."</p>
+
+  <p>And then it names the assumption each choice secretly makes — this is the sentence to memorise:</p>
+
+  <table class="kv">
+    <tr><th style="width:34%">Estimator</th><th>Is the ML estimate <em>if</em> you assume…</th><th>True for real images?</th></tr>
+    <tr><td>temporal median of <strong>images</strong></td>
+      <td>$l(x,y,t)$ itself is sparse — i.e. most pixels are unshadowed, $l \approx 0$</td>
+      <td class="no">Rarely. Whole regions sit in permanent shade; global light level drifts all day.</td></tr>
+    <tr><td>temporal median of <strong>filtered</strong> images</td>
+      <td>$f_n \star l$ is sparse — i.e. the illumination is mostly <em>smooth</em>, with rare sharp edges</td>
+      <td class="yes">Very often. This is the natural-image statistic of Figure 3.</td></tr>
+  </table>
+
+  <p>Same operator, one filter apart, and a completely different assumption about the world. <strong>The
+  contribution of the paper is which signal you median, not the median.</strong></p>
+
+  <h2>8 · Trick three: putting the picture back together from its edges</h2>
+
+  <p>Claim 1 gives us $\hat r_n$ — the estimated <em>filtered</em> reflectance. Two of them: an estimated
+  horizontal-derivative image and an estimated vertical-derivative image. But we wanted $r$ itself. We have the
+  edges of the answer and need the answer.</p>
+
+  <div class="story">
+    <span class="story-label">The staircase</span>
+    <p>Someone tells you the height of every <em>step</em> of a staircase: +3, +3, −1, +5… Can you draw the
+    staircase? Yes — start somewhere and add them up.</p>
+    <p>What you <em>cannot</em> know is how high the whole staircase sits above sea level. Steps tell you shape,
+    never absolute height. Remember this — it comes back in a moment as the one ambiguity that survives.</p>
+  </div>
+
+  <p>In 2-D "adding up" is not so simple, because the horizontal and vertical estimates are computed
+  independently and will not agree perfectly — there may be <em>no</em> image whose derivatives are exactly
+  $\hat r_x$ and $\hat r_y$. So the paper sets it up as an <strong>over-constrained</strong> linear system
+  (eq. 5) and takes the least-squares solution:</p>
+
+  <div class="eq">$$ f_n \star \hat r \;=\; \hat r_n \qquad \text{for all } n \qquad\qquad (5) $$</div>
+
+  <p>The pseudo-inverse solution is (eq. 6):</p>
+
+  <div class="eq">$$ \hat r \;=\; g \star \Bigl( \sum_n f^{\,r}_n \star \hat r_n \Bigr) \qquad\qquad (6) $$</div>
+
+  <p>where $f^{\,r}_n(x,y) = f_n(-x,-y)$ is the flipped filter, and $g$ solves (eq. 7):</p>
+
+  <div class="eq">$$ g \star \Bigl( \sum_n f^{\,r}_n \star f_n \Bigr) \;=\; \delta \qquad\qquad (7) $$</div>
+
+  <div class="callout key"><span class="lbl">The line the paper puts right after eq. 7 — and why it matters</span>
+    "Note that $g$ is independent of the image sequence being considered and can be computed in advance."
+    $g$ depends only on <em>which filters you chose</em>. Compute it once, ever, and reuse it on every video for
+    the rest of time. <strong>This is what makes an online/real-time version possible at all</strong> — hold that
+    thought for §12.</div>
+
+  <details class="qa">
+    <summary>What is $g$, concretely? (It's the Poisson solver — this is what Demo 3 actually runs)</summary>
+    <p>With $f_1 = $ horizontal derivative and $f_2 = $ vertical derivative, the operator
+    $\sum_n f^{\,r}_n \star f_n$ is precisely the <strong>negative discrete Laplacian</strong> (the 5-point
+    stencil). So eq. 7 says $g$ is the inverse Laplacian — the Green's function — and eq. 6 is exactly the
+    statement</p>
+    <div class="eq">$$ \nabla^2 \hat r \;=\; \operatorname{div}\bigl(\hat r_x, \hat r_y\bigr) $$</div>
+    <p>i.e. <strong>solve a Poisson equation whose right-hand side is the divergence of the median gradient
+    field.</strong> Exactly the same machinery as Poisson image editing / gradient-domain blending. Demo 3 solves
+    it with Gauss–Seidel iterations in your browser.</p>
+    <p><strong>The surviving ambiguity.</strong> The Laplacian has a null space: adding any constant to $\hat r$
+    changes nothing. So $r$ is recovered only up to an additive constant, which after $R = e^{r}$ means
+    <strong>reflectance is recovered up to one global multiplicative constant</strong> — one unknown number for
+    the whole image, instead of one unknown number per pixel. That is the staircase's sea level, and it is all
+    that remains of the infinite ambiguity of Demo 1. In practice you fix it by a convention (e.g. force the
+    brightest reflectance to 1).</p>
+  </details>
+
+  <h3>And once you have $R$, illumination is free</h3>
+  <div class="eq">$$ \hat l(x,y,t) = i(x,y,t) - \hat r(x,y) \qquad\Longleftrightarrow\qquad \hat L_t = I_t / \hat R $$</div>
+  <p>One division per frame. You get a reflectance image <em>and</em> a full stack of illumination images — the
+  complete decomposition, which is what makes the relighting/compositing application possible.</p>
+
+  <h2>9 · The whole algorithm, running</h2>
+
+  <div class="callout note"><span class="lbl">The recipe in five lines (this is the entire paper)</span>
+    <ol style="margin:6px 0 0">
+      <li>Take logs: $i_t = \log I_t$.</li>
+      <li>Filter every frame with horizontal and vertical derivatives: $o_n(\cdot,t) = i_t \star f_n$.</li>
+      <li>At every pixel, take the <strong>median over time</strong> of each filter output → $\hat r_x, \hat r_y$.</li>
+      <li>Reconstruct $\hat r$ from those two gradient images (eq. 6 — a Poisson solve with a precomputed $g$).</li>
+      <li>$\hat R = e^{\hat r}$, and $\hat L_t = I_t/\hat R$.</li>
+    </ol></div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — the real pipeline, end to end</h4><span class="tag">the main event</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A recreation of the paper's Figures 4 and 5. The scene has a
+      <strong>disk that is in shadow in every single frame</strong> (the case that kills min/mean/median-of-images),
+      an ellipse that is shadowed only sometimes, and a big square cast shadow sliding diagonally, plus a smooth
+      drifting brightness. Top row: scrub through the input frames and their two filter outputs. Middle: the
+      per-pixel temporal medians of those filter outputs. Bottom: the reconstruction compared against the truth
+      and against the three classical estimators.</p>
+      <p class="muted"><strong>The two markers matter.</strong> <b style="color:#ffb454">P</b> is background that
+      is never shadowed; <b style="color:#6ea8ff">Q</b> is background that is always shadowed. They have
+      <em>identical</em> true reflectance. Watch what each method reports for them in the readout.</p>
+      <canvas id="cvPipe" width="900" height="424"></canvas>
+      <div class="controls">
+        <div class="control"><label>frames used <span class="val" id="vFr">9</span></label>
+          <input type="range" id="pFrames" min="3" max="21" step="2" value="9"></div>
+        <div class="control"><label>shadow darkness <span class="val" id="vSh">0.30</span></label>
+          <input type="range" id="pShade" min="10" max="80" value="30"></div>
+        <div class="control"><label>sensor noise <span class="val" id="vNz">0.00</span></label>
+          <input type="range" id="pNoise" min="0" max="40" value="0"></div>
+        <div class="control"><label>view frame <span class="val" id="vVw">1</span></label>
+          <input type="range" id="pView" min="1" max="21" value="1"></div>
+      </div>
+      <div class="readout" id="roPipe"></div>
+      <div class="legend">
+        <span><i style="background:#41d8c9"></i> ML (Weiss)</span>
+        <span><i style="background:#ff6b81"></i> min / mean / median of images</span>
+        <span><i style="background:#ffb454"></i> P — never in shadow</span>
+        <span><i style="background:#6ea8ff"></i> Q — always in shadow</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">What to actually look at in Demo 3</span>
+    <ul style="margin:6px 0 0">
+      <li>The <strong>disk is uniformly grey</strong> in the ML result even though no frame ever showed it lit.
+      In the min/mean/median panels it is far too dark. That is the paper's Figure 5 headline.</li>
+      <li>In the readout, ML gives <strong>P and Q the same value</strong>; the classical estimators do not.</li>
+      <li>Drop <em>frames used</em> to 3 — it still mostly works (that is Claim 2, next section). Push it up and
+      the error keeps falling.</li>
+      <li>The median filter images in the middle row are visibly <strong>free of the shadow's edges</strong>
+      while keeping the disk's and ellipse's outlines. The shadow edge was outvoted; the paint edge was not.</li>
+    </ul></div>
+
+  <h2>10 · Claim 2 — you do not actually need the Laplacian to be true</h2>
+
+  <p>A fair objection: what if $f_n \star l$ is not really Laplacian? Real shadows are not drawn from a textbook
+  distribution. <span class="term">Claim 2</span> answers this, and it is the reason the method works in
+  practice rather than only on paper.</p>
+
+  <p>Let $p_\epsilon = P\bigl(|f_i \star l(x,y,t)| < \epsilon\bigr)$ — plain English: <em>"the chance that, at a
+  random pixel in a random frame, the illumination's edge-response is tiny."</em> That is a direct measure of
+  sparseness, with no distribution assumed at all. Then the estimate is within $\epsilon$ of the truth with
+  probability at least</p>
+
+  <div class="eq">$$ \sum_{k} \binom{T}{k} \, p_\epsilon^{\,k}\,(1-p_\epsilon)^{\,T-k} \qquad\text{summed over } k > T/2 $$</div>
+
+  <p><strong>The proof is one sentence</strong>, and it is pure logic about medians: if more than 50% of the
+  samples are within $\epsilon$ of some value, then by the definition of the median, the median must be within
+  $\epsilon$ of that value too. The rest is just the binomial formula for $T$ independent coin flips.</p>
+
+  <div class="callout warn"><span class="lbl">Reading note on the printed formula</span>
+    In the paper the summation is typeset as $\sum_{k=1}^{T/2}\binom{T}{k}(1-p_\epsilon)^{T-k}p_\epsilon^{k}$ —
+    the limits are transposed relative to the argument in the proof, which is about <em>more than half</em> the
+    samples being close. Summing the upper tail ($k$ from just above $T/2$ to $T$) is what reproduces the
+    paper's own quoted numbers: with $p_\epsilon = 0.85$ you get $\approx 0.94$ at $T=3$ and $\approx 0.973$ at
+    $T=5$, matching its "at least 0.93 … at least 0.97". Use the upper tail.</div>
+
+  <p>The paper's worked example: the illumination image of its Figure 1c is <em>not</em> Laplacian, but it is very
+  sparse — 85% of its filter outputs have magnitude below 1% of the maximum. Plugging $p_\epsilon = 0.85$ in:
+  <strong>93% confidence from three frames, 97% from five.</strong></p>
+
+  <div class="callout key"><span class="lbl">Why Claim 2 is the practical punchline</span>
+    It replaces a fragile assumption ("the noise is Laplacian") with a robust one ("the noise is mostly small"),
+    and it converts sparseness directly into <em>how many frames you need</em>. The sparser the illumination
+    changes, the faster the median converges. This is why a webcam sequence of 35 frames — or in the synthetic
+    case, three — is enough.</div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 4 — how many frames do you need?</h4><span class="tag">Claim 2 calculator</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The curve is the Claim-2 lower bound on being within $\epsilon$,
+      plotted against the number of frames. Slide $p_\epsilon$ (how sparse the illumination's edges are) and
+      watch how fast you reach confidence. The marked dots are the paper's own example, $p_\epsilon=0.85$ at
+      $T=3$ and $T=5$. Push $p_\epsilon$ below 0.5 and notice the bound <em>collapses</em> — if the illumination
+      is more often large than small, the median locks onto the illumination instead of the reflectance.</p>
+      <canvas id="cvC2" width="900" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>sparseness $p_\epsilon$ <span class="val" id="vP">0.85</span></label>
+          <input type="range" id="c2P" min="20" max="99" value="85"></div>
+        <div class="control"><label>frames T <span class="val" id="vT">5</span></label>
+          <input type="range" id="c2T" min="1" max="41" step="2" value="5"></div>
+      </div>
+      <div class="readout" id="roC2"></div>
+    </div>
+  </div>
+
+  <h2>11 · What the paper actually demonstrated</h2>
+
+  <p>All results use just two filters — horizontal and vertical derivatives. Nothing fancier was needed.</p>
+
+  <table class="kv">
+    <tr><th style="width:26%">Experiment</th><th>Setup</th><th>Result</th></tr>
+    <tr><td>Fig. 5 — synthetic cast shadow</td>
+      <td>A square shadow translates diagonally over a circle and an ellipse. <strong>The circle is always in
+      shadow; the ellipse is always half in shadow.</strong></td>
+      <td>ML removes both shadows correctly. The min and mean filters give reflectance that is wrongly dark
+      wherever a pixel was permanently shaded.</td></tr>
+    <tr><td>Fig. 6 — additive transparency</td>
+      <td>A constant Reagan image plus an Einstein image translating diagonally at 4 px/frame — like a reflection
+      in a window.</td>
+      <td>Recovered Reagan and Einstein are "indistinguishable from the original". The min filter is "quite bad",
+      because its assumption (every pixel sees black at some time) simply is not true here.</td></tr>
+    <tr><td>Fig. 7 — Yale Face Database B</td>
+      <td>64 photos of one face, a strobe light at 64 different positions. Camera with <em>linear</em> response.</td>
+      <td>Recovered reflectance is nearly free of specular highlights (a few remain on the nose tip) and free of
+      cast shadows. Observers describe the illumination images as "looking like marble statues" — which is
+      exactly what an illumination image of a face <em>should</em> look like.</td></tr>
+    <tr><td>Fig. 8 — Berkeley webcam</td>
+      <td>35 images of Sproul Plaza taken at different times of day. A real, uncontrolled camera.</td>
+      <td>Cast shadows of trees and buildings mostly gone. <strong>Passing pedestrians vanish too, with no
+      special handling</strong> — because the prior on the "lighting" image is generic, anything sparse and
+      transient gets absorbed into it. Weaker than the Yale result, and the paper blames the webcam's automatic
+      gain control making the response far from linear.</td></tr>
+    <tr><td>Fig. 9 — the application</td>
+      <td>Insert a logo into the plaza photo. (b) ordinary $\alpha$-blending; (c) blend into the
+      <em>reflectance</em> image, then re-render with the recovered illumination.</td>
+      <td>(b) is "noticeably fake". (c) "appears to be part of the scene" — the logo inherits the plaza's real
+      shadows.</td></tr>
+  </table>
+
+  <h3>What the paper itself lists as unfinished</h3>
+  <ul>
+    <li><strong>Linear camera assumed.</strong> $I = R\cdot L$ only holds for a linear response. The webcam's
+    auto-gain is named as the reason those results are weaker. The ML estimator can be re-derived for a known
+    non-linear response.</li>
+    <li><strong>Independence assumed</strong> across space and time, which is plainly false — shadow edges are
+    long and connected, and consecutive frames are similar. Modelling the dependency is left open.</li>
+    <li><strong>Still needs a sequence.</strong> Barrow and Tenenbaum's original question — one image, one
+    decomposition — remains open. (And note the built-in blind spot: illumination that <em>never</em> changes
+    across the whole sequence is mathematically indistinguishable from paint. A shadow that never moves stays
+    baked into the reflectance.)</li>
+  </ul>
+
+  <h2>12 · Using all of this: exam Q3</h2>
+
+  <div class="qbox">
+    <span class="q-label">Question 3 · Intrinsic Images · 13 points</span>
+    <p>Suggest an <strong>online</strong> algorithm for computing the intrinsic reflectance image $R_t$ from a
+    sequence of images $I_1, \ldots, I_t$. The algorithm can store as many as <strong>256 input images</strong>
+    (or their equivalent in terms of memory footprint).</p>
+    <p><em>Hint: the intensity values of a pixel in images $I_1,\ldots,I_t$ are in the range $[0,255]$.</em></p>
+  </div>
+
+  <h3>Step 1 — recognise the question</h3>
+  <p>"Intrinsic reflectance image from a sequence" is Weiss, verbatim. So the offline answer is already known and
+  is §9 above. The exam is not asking you to invent anything: it is asking you to make Weiss's algorithm
+  <strong>streaming</strong>.</p>
+
+  <h3>Step 2 — find the one part that is not online</h3>
+  <p>Walk the five steps and audit each one for whether it needs the whole sequence:</p>
+
+  <table class="kv">
+    <tr><th style="width:36%">Step</th><th>Online?</th><th>Why</th></tr>
+    <tr><td>$i_t = \log I_t$</td><td class="yes">yes</td><td>per-frame, pointwise</td></tr>
+    <tr><td>filter: $o_n = i_t \star f_n$</td><td class="yes">yes</td><td>per-frame, local</td></tr>
+    <tr><td>$\operatorname{median}_t o_n$</td><td class="no">NO</td><td>textbook median needs every sample kept
+      and sorted — memory grows with $t$, forever</td></tr>
+    <tr><td>reconstruct with $g$ (eq. 6)</td><td class="yes">yes</td><td>the paper's own note: $g$ is independent
+      of the sequence and precomputed once</td></tr>
+    <tr><td>$\hat R = e^{\hat r}$</td><td class="yes">yes</td><td>pointwise</td></tr>
+  </table>
+
+  <p><strong>Exactly one blocker.</strong> The entire question reduces to: <em>compute a running median in
+  constant memory.</em></p>
+
+  <h3>Step 3 — read the hint, because it is the answer</h3>
+  <p>"Values are in $[0,255]$" + "you may store 256 images" is not a coincidence and not a red herring. It is
+  telling you: <strong>256 slots per pixel.</strong> The only classic structure with 256 slots over a
+  256-value alphabet is a <span class="term">histogram</span>. And a histogram gives you a median without
+  keeping any samples: sort order comes free from the bin index.</p>
+
+  <div class="story">
+    <span class="story-label">Why a histogram beats a list</span>
+    <p>To find the middle of a class's heights you could write down all 30 heights and sort them. Or you could
+    keep 256 tally counters — one per centimetre — and shout "hands up if you are 152 cm". Then walk up the
+    counters adding as you go, and stop when you have counted half the class. <strong>That is the median, and you
+    never stored a single height.</strong> Works for 30 kids or 30 million, with the same 256 counters.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 5 — the running median, one pixel, streaming</h4><span class="tag">feed frames</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">One pixel's filter response arrives frame by frame — mostly a
+      constant (its true $r_n$) with occasional wild values when a shadow edge sweeps over it. Bars are the
+      256-bin histogram; the teal line is the running cumulative count; the marker is where it crosses $t/2$ —
+      that is the running median, readable at any moment. Watch the two memory counters: the naive one grows
+      forever, the histogram one never moves.</p>
+      <canvas id="cvHist" width="900" height="300"></canvas>
+      <div class="btnrow">
+        <button class="act" id="hStep">Next frame</button>
+        <button class="act primary" id="hAuto">Auto-stream</button>
+        <button class="act" id="hReset">Reset</button>
+        <button class="act" id="hBurst">Send 50 frames</button>
+      </div>
+      <div class="readout" id="roHist"></div>
+    </div>
+  </div>
+
+  <h3>Step 4 — the algorithm, written properly</h3>
+
+  <p><strong>State kept</strong> (fixed forever, independent of $t$): for every pixel and every filter $n$, a
+  256-bin histogram $H_n[x,y,\cdot]$ of the quantised filter response, plus a frame counter $t$.</p>
+
+  <ol class="steps">
+    <li><b>Receive</b> frame $I_t$. Compute $i_t = \log I_t$ and the responses $o_n = i_t \star f_n$ for the
+    horizontal and vertical derivative filters.</li>
+    <li><b>Quantise and tally.</b> Map $o_n(x,y)$ to a bin and increment
+    $H_n[x,y,\text{bin}] \mathrel{+}= 1$. One increment per pixel per filter — $O(1)$ per pixel.</li>
+    <li><b>Running median.</b> $\hat r_n(x,y) = $ the value of the smallest bin whose cumulative count reaches
+    $t/2$. (Keep a per-pixel cursor and it moves by ~1 bin per frame — amortised $O(1)$; or scan 256 bins, still
+    constant work.)</li>
+    <li><b>Reconstruct on demand.</b> Feed the current $\hat r_x, \hat r_y$ through the precomputed $g$
+    (eq. 6–7) to get $\hat r$, then output $R_t = e^{\hat r}$. Because $g$ never changes, this is a fixed
+    convolution / Poisson solve, available at any frame.</li>
+    <li><b>Optionally</b> emit $L_t = I_t / R_t$ as well, then discard $I_t$ — <em>no frame is ever stored.</em></li>
+  </ol>
+
+  <table class="kv">
+    <tr><th>Cost</th><th>Naive (offline)</th><th>Histogram (online)</th></tr>
+    <tr><td>Memory</td><td>$O(t)$ images — unbounded</td><td class="yes">$256 \times (\#\text{filters})$ counters
+      per pixel — <strong>constant in $t$</strong></td></tr>
+    <tr><td>Work per frame</td><td>re-sort everything</td><td class="yes">$O(1)$ per pixel per filter</td></tr>
+    <tr><td>Output</td><td>only after the last frame</td><td class="yes">$R_t$ available every frame</td></tr>
+  </table>
+
+  <h3>Step 5 — the wrinkles that separate a full mark from a partial one</h3>
+
+  <details class="qa">
+    <summary>1. The hint says <em>images</em> are in $[0,255]$ — but you histogram <em>filter responses</em>. Isn't that a mismatch?</summary>
+    <p>Good catch, and saying so earns credit. The median is taken on $o_n = i \star f_n$, not on $I$. A
+    difference of two log-intensities drawn from a 256-value alphabet takes on ~511 possible values, so a
+    <em>512</em>-bin histogram would be exact and 256 bins costs you a half-step of quantisation — utterly
+    negligible against the sensor noise, and the quantisation error is bounded and known.</p>
+    <p>Two clean ways to answer: (a) use 256 bins over the response range and state the quantisation error is
+    ≤ half a bin; or (b) note that since $I \in \{0,\dots,255\}$ you can equivalently keep the 256-bin histogram
+    of the <em>log-intensity itself</em> per pixel and form differences of medians — but be careful, that is
+    <em>not</em> the same estimator (median of differences ≠ difference of medians), so (a) is the faithful one.
+    Prefer (a).</p>
+  </details>
+
+  <details class="qa">
+    <summary>2. Two filters means two histograms — does that blow the 256-image budget?</summary>
+    <p>Worth one sentence. A bin counter is not a pixel: pixels need 8 bits, counters need $\lceil \log_2 T
+    \rceil$ bits. With 8-bit-equivalent accounting, 256 bins/pixel/filter = 256 images' worth, so two filters =
+    512 — twice the stated budget. Ways to stay inside it, any one of which is a fine answer: use 128 bins per
+    filter (half a bin of extra quantisation); or note that counters saturating at 255 are enough if you
+    down-weight old counts; or simply observe that the budget is stated as "or equivalent memory footprint" and
+    show the arithmetic. <strong>Showing you counted the bytes is the point.</strong></p>
+  </details>
+
+  <details class="qa">
+    <summary>3. Why not just keep the last 256 frames in a ring buffer and median those?</summary>
+    <p>It is a legal reading of the budget and worth mentioning — it gives a <em>sliding-window</em> median,
+    which actually <em>adapts</em> to slow scene changes, a genuine advantage. But it is strictly worse on the
+    exam's own terms: it costs 256 full frames instead of 256 counters per pixel, it re-sorts a 256-long list
+    per pixel per frame instead of $O(1)$, and it caps your evidence at 256 frames instead of all of history.
+    Mention it as a variant, choose the histogram.</p>
+  </details>
+
+  <details class="qa">
+    <summary>4. Why does an <em>online</em> version even make sense here — doesn't the median need to see the shadows move?</summary>
+    <p>Yes, and that is Claim 2 doing the work: the bound says confidence grows with $T$ and grows faster the
+    sparser the illumination is, reaching ~93% at just three frames in the paper's example. So the streaming
+    estimate is poor for the first couple of frames and good very quickly after. Saying this explicitly connects
+    the algorithm to the theory and is exactly the kind of remark that reads as understanding rather than
+    recall.</p>
+  </details>
+
+  <details class="qa">
+    <summary>5. Anything else worth one line?</summary>
+    <p>Three cheap ones: <em>(i)</em> $g$ is precomputed once and depends only on the filters — say it, it is the
+    reason step 4 is online. <em>(ii)</em> $\hat r$ is recovered only up to an additive constant, so fix the gauge
+    by a convention (e.g. $\max \hat R = 1$) and say so. <em>(iii)</em> Guard $\log 0$ — clamp $I$ to
+    $[1,255]$ before the log.</p>
+  </details>
+
+  <div class="answerbox">
+    <span class="a-label">The answer, as you would write it in the box</span>
+    <p>By Weiss (Ch. 12), with $I = R\cdot L$ and $i = r + l$, the ML filtered reflectance under a sparse prior on
+    the filtered illumination is the <strong>per-pixel temporal median of the filtered log-frames</strong>,
+    $\hat r_n(x,y) = \operatorname{median}_t (f_n \star i)(x,y,t)$, and $r$ is then recovered by the
+    <strong>fixed</strong> pseudo-inverse deconvolution $\hat r = g \star \sum_n f^{\,r}_n \star \hat r_n$ with
+    $g \star (\sum_n f^{\,r}_n \star f_n) = \delta$ precomputed once. Every step is per-frame except the median,
+    so <strong>the median is the only obstacle to an online algorithm.</strong></p>
+    <p>Since responses live in a 256-value range and we may store 256 images' worth, keep <strong>a 256-bin
+    histogram per pixel per filter</strong> (Weiss uses two filters: horizontal and vertical derivatives). For
+    each incoming frame: take the log, filter, increment one bin per pixel per filter ($O(1)$), and read the
+    <strong>running median</strong> as the smallest bin whose cumulative count reaches $t/2$. Then apply the
+    precomputed $g$ to the current medians and output $R_t = e^{\hat r}$; optionally $L_t = I_t/R_t$. Discard the
+    frame.</p>
+    <p><strong>Memory</strong> $256 \times \#\text{filters}$ counters per pixel, constant in $t$;
+    <strong>work</strong> $O(1)$ per pixel per frame; $R_t$ emitted every frame. Fix the global scale by
+    convention, and clamp before the log.</p>
+  </div>
+
+  <h2>13 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. In one sentence, what is the contribution of this paper?</summary>
+    <p>That taking the temporal median of <em>derivative-filtered</em> log-frames — rather than of the frames
+    themselves — is the maximum-likelihood reflectance estimate under a sparse (Laplacian) prior on the filtered
+    illumination, which is a prior that actually holds for natural images.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. Why is the median, rather than the mean, the right average here?</summary>
+    <p>The prior is Laplacian ($e^{-\alpha|x|}$), so maximising the likelihood minimises a sum of
+    <em>absolute</em> deviations, and the $\ell_1$ minimiser is the median. Physically: a shadow edge crosses a
+    given pixel in only a minority of frames, so it is an outlier — and the median ignores outliers because its
+    optimality condition counts samples on each side rather than measuring their distance. A Gaussian prior would
+    give the mean, which the shadow would drag along with it.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. A pixel is in shadow in <em>every</em> frame. What do min, mean, median-of-images, and Weiss report?</summary>
+    <p>The first three all report reflectance that is too dark, because every sample they average is biased the
+    same way and no amount of extra frames helps. Weiss gets it right: a permanent constant offset in $l$ has
+    <strong>zero derivative</strong>, so it is invisible to the filters and never enters the median at all. Verify
+    it yourself on markers P and Q in Demo 3.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. What is the difference between assuming "$l$ is sparse" and "$f_n \star l$ is sparse"?</summary>
+    <p>"$l$ is sparse" means most pixels are unshadowed, $l \approx 0$ — rarely true, and it is precisely the
+    assumption under which a plain temporal median of the images is the ML estimate. "$f_n \star l$ is sparse"
+    means the illumination is mostly <em>smooth</em>, with rare sharp edges — usually true, and it makes the
+    median of the <em>filtered</em> images the ML estimate. One filter apart; totally different claim about the
+    world.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. Why do we need the reconstruction step at all, and what does $g$ depend on?</summary>
+    <p>The median gives us the reflectance's <em>derivatives</em>, not the reflectance. Recovering an image from
+    its gradients is an over-constrained least-squares problem (the horizontal and vertical estimates need not be
+    consistent), whose pseudo-inverse solution is eq. 6. $g$ depends only on the chosen filters — not on the
+    data — so it is computed once in advance; with derivative filters $\sum_n f^{\,r}_n\star f_n$ is the negative
+    Laplacian and the step is a Poisson solve.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. How much of the original ambiguity survives, and where does it live?</summary>
+    <p>Almost none. We started with a free multiplier $\alpha(x,y)$ at <em>every pixel</em> (Demo 1). We end with
+    a single global constant, because the Laplacian's null space is the constants: $\hat r$ is determined up to
+    an additive constant, so $\hat R$ is determined up to one multiplicative constant for the whole image. Fixed
+    by convention, not by data.</p>
+  </details>
+  <details class="qa">
+    <summary>Q. Name a scene where this method must fail.</summary>
+    <p>Any scene where the illumination <em>never changes</em> — a static shadow across the whole sequence is
+    mathematically identical to dark paint, and it will be baked into the reflectance. Equally: a camera with a
+    strongly non-linear response, which breaks $I = R\cdot L$ (the paper blames exactly this for its weaker
+    webcam results), or a scene where the shadows are so dense that $p_\epsilon < 0.5$, in which case the median
+    locks onto the illumination instead.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">The whole paper on one line each</span>
+    <table>
+      <tr><th>Idea</th><th>What it buys</th></tr>
+      <tr><td>$I = R\cdot L$</td><td>the model — and immediately the problem, since it is 1 equation and 2 unknowns</td></tr>
+      <tr><td>$T$ frames give $T$ equations, $T+1$ unknowns</td><td>proof that more data alone never fixes it: a prior is mandatory</td></tr>
+      <tr><td>$i = r + l$ (logs)</td><td>turns the product into constant-plus-varying — a signal-in-noise problem</td></tr>
+      <tr><td>derivative outputs of natural images are sparse ⇒ Laplacian</td><td>the prior, borrowed from image statistics, and far weaker than Retinex's</td></tr>
+      <tr><td>Laplacian ⇒ $\ell_1$ ⇒ median (Claim 1)</td><td>$\hat r_n = \operatorname{median}_t (i\star f_n)$ — the algorithm, in one line</td></tr>
+      <tr><td>median the <em>filtered</em> images, not the images</td><td>permanently-shadowed pixels come out right; the entire novelty</td></tr>
+      <tr><td>eq. 6–7, $g$ precomputed</td><td>gradients back to an image via a fixed Poisson solve — and the door to an online version</td></tr>
+      <tr><td>Claim 2 (binomial)</td><td>the Laplacian need not be literally true; sparseness alone buys you confidence, fast</td></tr>
+      <tr><td>256-bin per-pixel histogram</td><td>running median in constant memory ⇒ exam Q3</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The shape of the argument, which is the shape of half this course:</strong>
+    an ill-posed problem, plus a prior taken from real statistics, plus maximum likelihood, equals a
+    surprisingly simple algorithm. Here the whole thing collapses to <em>“median of the edges.”</em></p>
+  </div>
+
+  <div class="pager">
+    <a href="ch12_intrinsic_images.html"><span class="dir">‹ Prev</span><span class="ttl">12 · Intrinsic Images from Sequences</span></a>
+    <a class="next" href="intrinsic_images_for_kids.html"><span class="dir">Next ›</span><span class="ttl">★ Intrinsic Images, online (Q3 companion)</span></a>
+  </div>
+</div>
+
+<script>
+/* ============================ shared helpers ============================ */
+function grayImage(ctx, arr, N, x0, y0, w, h, lo, hi){
+  const tmp = document.createElement('canvas'); tmp.width=N; tmp.height=N;
+  const tc = tmp.getContext('2d'); const im = tc.createImageData(N,N);
+  const span = (hi-lo)||1;
+  for(let k=0;k<N*N;k++){
+    let v = (arr[k]-lo)/span; v = v<0?0:(v>1?1:v);
+    const g = Math.round(v*255);
+    im.data[k*4]=g; im.data[k*4+1]=g; im.data[k*4+2]=g; im.data[k*4+3]=255;
+  }
+  tc.putImageData(im,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tmp,0,0,N,N,x0,y0,w,h);
+  ctx.imageSmoothingEnabled=true;
+  ctx.strokeStyle='#2c3650'; ctx.strokeRect(x0-.5,y0-.5,w+1,h+1);
+}
+function label(ctx,txt,x,y,col){ ctx.font='12px sans-serif'; ctx.fillStyle=col||'#8ea0c0'; ctx.fillText(txt,x,y); }
+function median(a){ const b=Array.prototype.slice.call(a).sort((p,q)=>p-q); const n=b.length;
+  return n%2 ? b[(n-1)>>1] : 0.5*(b[n/2-1]+b[n/2]); }
+
+/* ============================ DEMO 1 — ambiguity ============================ */
+(function(){
+  const c=document.getElementById('cvAmb'), ctx=c.getContext('2d'), N=110;
+  const R=new Float32Array(N*N), L=new Float32Array(N*N), I=new Float32Array(N*N);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let v=0.82;
+    if(x>12&&x<50&&y>14&&y<46) v=0.30;
+    if(x>58&&x<98&&y>22&&y<58) v=0.55;
+    if(y>72&&y<98&&x>18&&x<92) v=0.43;
+    v *= 1+0.05*Math.sin(x*0.8)*Math.cos(y*1.05);
+    R[y*N+x]=Math.min(1,Math.max(0.04,v));
+  }
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const g=0.45+0.55*(1-y/N)*(0.55+0.45*(1-x/N));
+    const d=Math.hypot(x-74,y-34);
+    const sh=1-0.6/(1+Math.exp((d-28)*0.45));
+    L[y*N+x]=Math.max(0.05,g*sh);
+  }
+  for(let k=0;k<N*N;k++) I[k]=R[k]*L[k];
+  let s=0, mode='A';
+  const Rp=new Float32Array(N*N), Lp=new Float32Array(N*N), Pr=new Float32Array(N*N);
+  function build(){
+    for(let k=0;k<N*N;k++){
+      let a;
+      if(mode==='A') a=Math.pow(L[k],s);       // alpha = L^s : s=0 truth, s=1 "all paint"
+      else           a=1/R[k];                 // alpha = 1/R : "all light"
+      Rp[k]=R[k]*a; Lp[k]=L[k]/a; Pr[k]=Rp[k]*Lp[k];
+    }
+  }
+  function draw(){
+    build();
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const S=200, gap=26, y0=52, x0=28;
+    grayImage(ctx,I ,N,x0            ,y0,S,S,0,1);
+    grayImage(ctx,Rp,N,x0+  (S+gap)  ,y0,S,S,0,Math.max(1,maxOf(Rp)));
+    grayImage(ctx,Lp,N,x0+2*(S+gap)  ,y0,S,S,0,Math.max(1,maxOf(Lp)));
+    grayImage(ctx,Pr,N,x0+3*(S+gap)  ,y0,S,S,0,1);
+    label(ctx,'the photo you were given',x0,y0-24,'#e6ecf7');
+    label(ctx,'I = R · L',x0,y0-8,'#6b7a99');
+    label(ctx,'your reflectance  R′',x0+(S+gap),y0-24,'#41d8c9');
+    label(ctx,'your illumination  L′',x0+2*(S+gap),y0-24,'#ffb454');
+    label(ctx,'R′ · L′  (check)',x0+3*(S+gap),y0-24,'#7ee787');
+    let m=0; for(let k=0;k<N*N;k++) m=Math.max(m,Math.abs(Pr[k]-I[k]));
+    const name = mode==='B' ? 'α = 1/R  →  "it is all light"' :
+                 (Math.abs(s)<1e-6 ? 'α = 1  →  the true split' :
+                 (Math.abs(s-1)<1e-6 ? 'α = L  →  "it is all paint"' : 'α = L^s, s = '+s.toFixed(2)));
+    document.getElementById('roAmb').innerHTML =
+      'split: <b>'+name+'</b>\nmax |R′·L′ − I| = <b>'+m.toExponential(2)+
+      '</b>   → every split reproduces the photo exactly. The data cannot choose between them.';
+  }
+  function maxOf(a){let m=0;for(let k=0;k<a.length;k++)if(a[k]>m)m=a[k];return m;}
+  const sl=document.getElementById('ambS'), sv=document.getElementById('ambSVal');
+  sl.oninput=()=>{ mode='A'; s=sl.value/100; sv.textContent=s.toFixed(2); draw(); };
+  document.getElementById('ambTruth').onclick=()=>{mode='A';s=0;sl.value=0;sv.textContent='0.00';draw();};
+  document.getElementById('ambAllR').onclick=()=>{mode='A';s=1;sl.value=100;sv.textContent='1.00';draw();};
+  document.getElementById('ambAllL').onclick=()=>{mode='B';draw();};
+  draw();
+})();
+
+/* ============================ DEMO 2 — sparse statistics ============================ */
+(function(){
+  const c=document.getElementById('cvStat'), ctx=c.getContext('2d'), N=128;
+  let logY=false, which='R';
+  function makeImg(kind){
+    const A=new Float32Array(N*N);
+    if(kind==='R'){                                  // paint-like: flat patches, sharp edges, fine texture
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        let v=0.68;
+        if(x>10&&x<58&&y>12&&y<52) v=0.22;
+        if(x>66&&x<118&&y>18&&y<64) v=0.48;
+        if(y>78&&y<118&&x>14&&x<106) v=0.85;
+        if(x>30&&x<48&&y>88&&y<108) v=0.15;
+        v*=1+0.03*Math.sin(x*1.7)*Math.sin(y*1.3);
+        A[y*N+x]=Math.max(0.03,v);
+      }
+    } else if(kind==='L'){                            // light-like: smooth + one soft shadow with a sharp-ish edge
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        let v=0.35+0.65*(1-y/N)*(0.5+0.5*(1-x/N));
+        const d=Math.hypot(x-80,y-46);
+        v*=1-0.55/(1+Math.exp((d-30)*0.8));
+        A[y*N+x]=Math.max(0.04,v);
+      }
+    } else {                                          // gaussian noise image
+      for(let k=0;k<N*N;k++){
+        let u=0; for(let j=0;j<6;j++)u+=Math.random(); u=(u-3)/1.2;
+        A[k]=Math.min(1,Math.max(0.03,0.5+0.14*u));
+      }
+    }
+    return A;
+  }
+  function draw(){
+    const A=makeImg(which);
+    // horizontal derivative of the LOG image
+    const D=[];
+    for(let y=0;y<N;y++)for(let x=0;x<N-1;x++) D.push(Math.log(A[y*N+x+1])-Math.log(A[y*N+x]));
+    let mx=0; for(const d of D) mx=Math.max(mx,Math.abs(d));
+    const B=101, bins=new Float64Array(B), half=(B-1)/2;
+    for(const d of D){ let b=Math.round(half + d/mx*half); if(b<0)b=0; if(b>=B)b=B-1; bins[b]++; }
+    let sum=0,ss=0,s4=0,near=0;
+    for(const d of D){ sum+=d; }
+    const mean=sum/D.length;
+    for(const d of D){ const e=d-mean; ss+=e*e; s4+=e*e*e*e; if(Math.abs(d)<0.01*mx) near++; }
+    const sd=Math.sqrt(ss/D.length), kurt=(s4/D.length)/(sd*sd*sd*sd);
+
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const S=220;
+    grayImage(ctx,A,N,26,52,S,S,0,1);
+    label(ctx,which==='R'?'paint-like picture':which==='L'?'light-like picture':'Gaussian noise',26,44,'#e6ecf7');
+
+    // histogram plot
+    const px=300, py=52, pw=560, ph=S;
+    ctx.strokeStyle='#2c3650'; ctx.strokeRect(px-.5,py-.5,pw+1,ph+1);
+    let hmax=0; for(let b=0;b<B;b++) hmax=Math.max(hmax,bins[b]);
+    const val=v => logY ? (v<=0?0:Math.log(1+v)/Math.log(1+hmax)) : v/hmax;
+    ctx.fillStyle='#41d8c9';
+    for(let b=0;b<B;b++){
+      const h=val(bins[b])*(ph-14);
+      ctx.fillRect(px+b/B*pw, py+ph-h, pw/B-1, h);
+    }
+    // Gaussian of the same variance, for comparison
+    ctx.strokeStyle='#ff6b81'; ctx.lineWidth=1.6; ctx.beginPath();
+    const binw = 2*mx/B;
+    for(let b=0;b<B;b++){
+      const xv=(b-half)/half*mx;
+      const g=D.length*binw*Math.exp(-xv*xv/(2*sd*sd))/(sd*Math.sqrt(2*Math.PI));
+      const h=val(g)*(ph-14);
+      const X=px+(b+0.5)/B*pw, Y=py+ph-Math.min(h,ph-14);
+      b?ctx.lineTo(X,Y):ctx.moveTo(X,Y);
+    }
+    ctx.stroke(); ctx.lineWidth=1;
+    label(ctx,'histogram of horizontal derivative (log domain)',px,44,'#e6ecf7');
+    label(ctx,'— Gaussian, same variance',px+pw-170,py+16,'#ff6b81');
+    label(ctx,'0',px+pw/2-4,py+ph+15,'#6b7a99');
+    label(ctx,(-mx).toFixed(2),px,py+ph+15,'#6b7a99');
+    label(ctx,(mx).toFixed(2),px+pw-26,py+ph+15,'#6b7a99');
+
+    document.getElementById('roStat').innerHTML =
+      'fraction of |derivative| below 1% of max = <b>'+(100*near/D.length).toFixed(1)+'%</b>'+
+      '   kurtosis = <b>'+kurt.toFixed(1)+'</b> (Gaussian = 3.0; higher = heavier tails = sparser)'+
+      '\n'+(which==='G'
+        ? 'Noise is NOT sparse: the hump is broad and the kurtosis sits at ~3. This is what the prior rules out.'
+        : 'Peaked at zero with tails far heavier than the Gaussian — the Laplacian shape the paper relies on.');
+  }
+  document.getElementById('stR').onclick=()=>{which='R';draw();};
+  document.getElementById('stL').onclick=()=>{which='L';draw();};
+  document.getElementById('stG').onclick=()=>{which='G';draw();};
+  document.getElementById('stLog').onclick=function(){logY=!logY;this.textContent='log y: '+(logY?'on':'off');draw();};
+  draw();
+})();
+
+/* ============================ DEMO 3 — the full pipeline ============================ */
+(function(){
+  const c=document.getElementById('cvPipe'), ctx=c.getContext('2d');
+  const N=80;                       // grid
+  // the moving square covers [d,d+40)^2 with d in [0,20] → always shadowed = [20,40)^2,
+  // never shadowed = x>=60 or y>=60.  P and Q are both plain background.
+  const Px=[68,14], Qx=[22,22];     // P never shadowed, Q always shadowed
+  const Rtrue=new Float32Array(N*N);
+  // reflectance: background + a disk (always shadowed) + an ellipse (sometimes shadowed)
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let v=0.86;
+    const dd=Math.hypot(x-30,y-30);            if(dd<9) v=0.40;       // disk
+    const ex=(x-64)/12, ey=(y-40)/9;           if(ex*ex+ey*ey<1) v=0.62; // ellipse
+    Rtrue[y*N+x]=v;
+  }
+  const els={fr:document.getElementById('pFrames'),sh:document.getElementById('pShade'),
+             nz:document.getElementById('pNoise'),vw:document.getElementById('pView')};
+  function makeFrames(T,shade,noise){
+    const F=[];
+    for(let t=0;t<T;t++){
+      const d=Math.round(20*t/(T-1));               // square shadow slides diagonally, covers [d,d+40)
+      // the smooth "drifting daylight" sweeps a FULL phase cycle across the sequence, so the temporal
+      // median of its derivative is ~0 — i.e. smooth illumination is exactly what the prior expects
+      const ph=t/T*Math.PI*2, ph2=ph+1.7;
+      const L=new Float32Array(N*N), I=new Float32Array(N*N);
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        let l = 1.0;
+        if(x>=d && x<d+40 && y>=d && y<d+40) l=shade;         // the moving cast shadow
+        l *= 0.80+0.10*Math.sin(ph + x*0.05)+0.10*Math.sin(ph2 + y*0.045); // smooth drifting light
+        let v=Rtrue[y*N+x]*l;
+        if(noise>0){ let u=0; for(let j=0;j<4;j++)u+=Math.random(); v*=1+noise*((u-2)/1.0); }
+        I[y*N+x]=Math.min(1,Math.max(1/255,v));
+        L[y*N+x]=l;
+      }
+      F.push({I:I,L:L,d:d});
+    }
+    return F;
+  }
+  function derivs(I){                            // forward differences of the log image
+    const ox=new Float32Array(N*N), oy=new Float32Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const li=Math.log(I[y*N+x]);
+      ox[y*N+x]= x<N-1 ? Math.log(I[y*N+x+1])-li : 0;
+      oy[y*N+x]= y<N-1 ? Math.log(I[(y+1)*N+x])-li : 0;
+    }
+    return {ox:ox,oy:oy};
+  }
+  function poisson(gx,gy,iters){                 // solve  lap(r) = div(gx,gy)  (Neumann), Gauss-Seidel
+    const b=new Float32Array(N*N), r=new Float32Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const a = gx[y*N+x] - (x>0?gx[y*N+x-1]:0);
+      const e = gy[y*N+x] - (y>0?gy[(y-1)*N+x]:0);
+      b[y*N+x]=a+e;
+    }
+    for(let it=0;it<iters;it++){
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        const k=y*N+x;
+        const l = x>0   ? r[k-1] : r[k+1];
+        const rt= x<N-1 ? r[k+1] : r[k-1];
+        const u = y>0   ? r[k-N] : r[k+N];
+        const dn= y<N-1 ? r[k+N] : r[k-N];
+        r[k]=(l+rt+u+dn-b[k])*0.25;
+      }
+    }
+    return r;
+  }
+  function norm(a){                              // scale so the mean matches Rtrue's mean (fixes the gauge)
+    let s=0,st=0; for(let k=0;k<N*N;k++){s+=a[k];st+=Rtrue[k];}
+    const f=st/(s||1); const o=new Float32Array(N*N);
+    for(let k=0;k<N*N;k++)o[k]=a[k]*f; return o;
+  }
+  function rmse(a){ let s=0; for(let k=0;k<N*N;k++){const e=a[k]-Rtrue[k]; s+=e*e;} return Math.sqrt(s/(N*N)); }
+
+  let cache=null;
+  function compute(){
+    const T=+els.fr.value, shade=els.sh.value/100, noise=els.nz.value/100;
+    els.vw.max=T; if(+els.vw.value>T) els.vw.value=T;
+    const F=makeFrames(T,shade,noise);
+    const D=F.map(f=>derivs(f.I));
+    const mx=new Float32Array(N*N), my=new Float32Array(N*N);
+    const bx=new Float64Array(T), by=new Float64Array(T);
+    for(let k=0;k<N*N;k++){
+      for(let t=0;t<T;t++){ bx[t]=D[t].ox[k]; by[t]=D[t].oy[k]; }
+      mx[k]=median(bx); my[k]=median(by);
+    }
+    const r=poisson(mx,my,700);
+    const Rml=new Float32Array(N*N); for(let k=0;k<N*N;k++) Rml[k]=Math.exp(r[k]);
+    // classical estimators, on the raw images
+    const Rmin=new Float32Array(N*N), Rmean=new Float32Array(N*N), Rmed=new Float32Array(N*N);
+    const buf=new Float64Array(T);
+    for(let k=0;k<N*N;k++){
+      let mn=Infinity,sm=0;
+      for(let t=0;t<T;t++){ const v=F[t].I[k]; buf[t]=v; if(v<mn)mn=v; sm+=v; }
+      Rmin[k]=mn; Rmean[k]=sm/T; Rmed[k]=median(buf);
+    }
+    cache={T:T,F:F,D:D,mx:mx,my:my,
+           Rml:norm(Rml), Rmin:norm(Rmin), Rmean:norm(Rmean), Rmed:norm(Rmed)};
+    draw();
+  }
+  function draw(){
+    const {T,F,D,mx,my,Rml,Rmin,Rmean,Rmed}=cache;
+    const v=Math.min(+els.vw.value,T)-1;
+    document.getElementById('vFr').textContent=T;
+    document.getElementById('vSh').textContent=(els.sh.value/100).toFixed(2);
+    document.getElementById('vNz').textContent=(els.nz.value/100).toFixed(2);
+    document.getElementById('vVw').textContent=v+1;
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const S=118, g=16;
+    // ---- row 1: the frame and its two filter outputs
+    let x=26, y=46;
+    grayImage(ctx,F[v].I,N,x,y,S,S,0,1);                     label(ctx,'input frame '+(v+1),x,y-8,'#e6ecf7');
+    grayImage(ctx,D[v].ox,N,x+(S+g),y,S,S,-.5,.5);           label(ctx,'horiz filter',x+(S+g),y-8,'#9fb0cc');
+    grayImage(ctx,D[v].oy,N,x+2*(S+g),y,S,S,-.5,.5);         label(ctx,'vert filter',x+2*(S+g),y-8,'#9fb0cc');
+    // ---- row 1 right: the medians
+    const xm=x+3*(S+g)+22;
+    grayImage(ctx,mx,N,xm,y,S,S,-.5,.5);                     label(ctx,'median horiz',xm,y-8,'#41d8c9');
+    grayImage(ctx,my,N,xm+(S+g),y,S,S,-.5,.5);               label(ctx,'median vert',xm+(S+g),y-8,'#41d8c9');
+    label(ctx,'↓ median over all '+T+' frames — the shadow edges get outvoted, the paint edges survive',
+          26,y+S+18,'#41d8c9');
+    // ---- row 2: results
+    y=228;
+    const panels=[['true reflectance',Rtrue,'#e6ecf7'],['ML  (Weiss)',Rml,'#41d8c9'],
+                  ['median of images',Rmed,'#ff6b81'],['min of images',Rmin,'#ff6b81'],
+                  ['mean of images',Rmean,'#ff6b81']];
+    const S2=150;
+    panels.forEach((p,i)=>{
+      const X=26+i*(S2+14);
+      grayImage(ctx,p[1],N,X,y,S2,S2,0,1);
+      label(ctx,p[0],X,y-8,p[2]);
+      if(i>0) label(ctx,'RMSE '+rmse(p[1]).toFixed(4),X,y+S2+16, i===1?'#7ee787':'#ff6b81');
+      // P and Q markers — label flips to the inner side when the point is near a panel edge
+      const mk=(pt,col,txt)=>{
+        const cx=X+(pt[0]+0.5)/N*S2, cy=y+(pt[1]+0.5)/N*S2;
+        ctx.strokeStyle=col; ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.arc(cx,cy,5,0,7); ctx.stroke(); ctx.lineWidth=1;
+        ctx.fillStyle=col; ctx.font='bold 11px sans-serif';
+        const right = (cx-X) > S2-20;
+        ctx.fillText(txt, right ? cx-15 : cx+7, cy+4);
+      };
+      mk(Px,'#ffb454','P'); mk(Qx,'#6ea8ff','Q');
+    });
+    const at=(a,p)=>a[p[1]*N+p[0]];
+    const fmt=a=>at(a,Px).toFixed(3)+' / '+at(a,Qx).toFixed(3)+
+       '  (gap '+Math.abs(at(a,Px)-at(a,Qx)).toFixed(3)+')';
+    document.getElementById('roPipe').innerHTML =
+      'frames = <b>'+T+'</b>   true reflectance at P and Q = <b>'+at(Rtrue,Px).toFixed(3)+' / '+
+      at(Rtrue,Qx).toFixed(3)+'</b>  (identical — same paint)\n'+
+      'ML (Weiss)        P / Q = <b>'+fmt(Rml)+'</b>   RMSE '+rmse(Rml).toFixed(4)+'\n'+
+      'median of images  P / Q = '+fmt(Rmed)+'   RMSE '+rmse(Rmed).toFixed(4)+'\n'+
+      'min of images     P / Q = '+fmt(Rmin)+'   RMSE '+rmse(Rmin).toFixed(4)+'\n'+
+      'mean of images    P / Q = '+fmt(Rmean)+'   RMSE '+rmse(Rmean).toFixed(4)+'\n'+
+      'Only ML closes the P–Q gap: a permanent shadow has zero derivative, so it never enters the median.';
+  }
+  els.fr.oninput=compute; els.sh.oninput=compute; els.nz.oninput=compute;
+  els.vw.oninput=()=>draw();
+  compute();
+})();
+
+/* ============================ DEMO 4 — Claim 2 ============================ */
+(function(){
+  const c=document.getElementById('cvC2'), ctx=c.getContext('2d');
+  function logC(n,k){ let s=0; for(let i=0;i<k;i++) s+=Math.log(n-i)-Math.log(i+1); return s; }
+  function bound(T,p){                        // P(at least ceil(T/2) of T samples are within eps)
+    if(p<=0) return 0; if(p>=1) return 1;
+    const kmin=Math.floor(T/2)+1; let s=0;
+    for(let k=kmin;k<=T;k++) s+=Math.exp(logC(T,k)+k*Math.log(p)+(T-k)*Math.log(1-p));
+    return Math.min(1,Math.max(0,s));
+  }
+  const eP=document.getElementById('c2P'), eT=document.getElementById('c2T');
+  function draw(){
+    const p=eP.value/100, T=+eT.value;
+    document.getElementById('vP').textContent=p.toFixed(2);
+    document.getElementById('vT').textContent=T;
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const x0=60,y0=30,w=790,h=210, Tmax=41;
+    ctx.strokeStyle='#2c3650'; ctx.strokeRect(x0-.5,y0-.5,w+1,h+1);
+    for(let i=0;i<=5;i++){                    // grid + y labels
+      const Y=y0+h-i/5*h;
+      ctx.strokeStyle='#1d2740'; ctx.beginPath(); ctx.moveTo(x0,Y); ctx.lineTo(x0+w,Y); ctx.stroke();
+      label(ctx,(i/5).toFixed(1),x0-30,Y+4);
+    }
+    const X=t=>x0+(t-1)/(Tmax-1)*w, Y=v=>y0+h-v*h;
+    // the 0.5-sparseness cliff
+    ctx.strokeStyle='#ff6b81'; ctx.setLineDash([4,4]); ctx.beginPath();
+    ctx.moveTo(x0,Y(0.5)); ctx.lineTo(x0+w,Y(0.5)); ctx.stroke(); ctx.setLineDash([]);
+    label(ctx,'coin flip (0.5)',x0+w-92,Y(0.5)-6,'#ff6b81');
+    // the curve, odd T only
+    ctx.strokeStyle='#41d8c9'; ctx.lineWidth=2.2; ctx.beginPath();
+    let first=true;
+    for(let t=1;t<=Tmax;t+=2){ const v=bound(t,p); const px=X(t),py=Y(v);
+      first?(ctx.moveTo(px,py),first=false):ctx.lineTo(px,py); }
+    ctx.stroke(); ctx.lineWidth=1;
+    for(let t=1;t<=Tmax;t+=2){ const v=bound(t,p);
+      ctx.fillStyle='#41d8c9'; ctx.beginPath(); ctx.arc(X(t),Y(v),2.6,0,7); ctx.fill(); }
+    // the paper's example points, p = 0.85
+    if(Math.abs(p-0.85)<0.02){
+      [[3,'0.94'],[5,'0.97']].forEach(([t,txt])=>{
+        const v=bound(t,0.85);
+        ctx.strokeStyle='#ffb454'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(X(t),Y(v),6,0,7); ctx.stroke();
+        label(ctx,'paper: T='+t+' → '+txt,X(t)+10,Y(v)-8,'#ffb454'); ctx.lineWidth=1;
+      });
+    }
+    // the selected T
+    const v=bound(T,p);
+    ctx.strokeStyle='#6ea8ff'; ctx.setLineDash([3,3]); ctx.beginPath();
+    ctx.moveTo(X(T),y0); ctx.lineTo(X(T),y0+h); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#6ea8ff'; ctx.beginPath(); ctx.arc(X(T),Y(v),4.5,0,7); ctx.fill();
+    label(ctx,'number of frames T →',x0+w/2-60,y0+h+24,'#8ea0c0');
+    label(ctx,'P(estimate within ε)',x0-52,y0-12,'#8ea0c0');
+    document.getElementById('roC2').innerHTML =
+      'p_ε = <b>'+p.toFixed(2)+'</b>   T = <b>'+T+'</b>   →  bound = <b>'+v.toFixed(4)+'</b>'+
+      '\n'+(p<0.5
+        ? 'p_ε < 0.5: the bound COLLAPSES toward 0 as T grows. If the illumination edge-response is more often large than small, the median converges to the illumination, not the reflectance.'
+        : 'p_ε > 0.5: the bound → 1 as T grows, and the steeper the curve the sparser the illumination. Sparseness literally buys you frames.');
+  }
+  eP.oninput=draw; eT.oninput=draw; draw();
+})();
+
+/* ============================ DEMO 5 — streaming running median ============================ */
+(function(){
+  const c=document.getElementById('cvHist'), ctx=c.getContext('2d');
+  const B=256, TRUE=0.34, LO=-1.2, HI=1.2;          // true r_n, and the quantisation range
+  let H=new Int32Array(B), t=0, timer=null, lastVal=0;
+  const bin=v=>Math.min(B-1,Math.max(0,Math.round((v-LO)/(HI-LO)*(B-1))));
+  const unbin=b=>LO+b*(HI-LO)/(B-1);
+  function sample(){                                 // mostly the truth; 25% of the time a shadow edge sweeps by
+    if(Math.random()<0.25) return TRUE+(Math.random()<0.5?-1:1)*(0.25+Math.random()*0.75);
+    return TRUE+(Math.random()-0.5)*0.05;
+  }
+  function feed(n){
+    for(let i=0;i<n;i++){ lastVal=sample(); H[bin(lastVal)]++; t++; }
+    draw();
+  }
+  function runMedian(){
+    if(!t) return null; let cum=0;
+    for(let b=0;b<B;b++){ cum+=H[b]; if(cum>=t/2) return {b:b,v:unbin(b)}; }
+    return {b:B-1,v:unbin(B-1)};
+  }
+  function draw(){
+    ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height);
+    const x0=50,y0=30,w=800,h=200;
+    ctx.strokeStyle='#2c3650'; ctx.strokeRect(x0-.5,y0-.5,w+1,h+1);
+    let hmax=1; for(let b=0;b<B;b++) hmax=Math.max(hmax,H[b]);
+    ctx.fillStyle='#41d8c9';
+    for(let b=0;b<B;b++) if(H[b]){ const bh=H[b]/hmax*(h-30); ctx.fillRect(x0+b/B*w, y0+h-bh, w/B, bh); }
+    // cumulative count
+    ctx.strokeStyle='#6ea8ff'; ctx.lineWidth=1.6; ctx.beginPath();
+    let cum=0;
+    for(let b=0;b<B;b++){ cum+=H[b]; const X=x0+(b+.5)/B*w, Y=y0+h-(t?cum/t:0)*(h-10);
+      b?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.stroke(); ctx.lineWidth=1;
+    // the t/2 crossing
+    ctx.strokeStyle='#ff6b81'; ctx.setLineDash([4,4]); ctx.beginPath();
+    ctx.moveTo(x0,y0+h-0.5*(h-10)); ctx.lineTo(x0+w,y0+h-0.5*(h-10)); ctx.stroke(); ctx.setLineDash([]);
+    label(ctx,'half the frames',x0+w-96,y0+h-0.5*(h-10)-6,'#ff6b81');
+    // true value & running median markers
+    const mkline=(v,col,txt,dy)=>{
+      const X=x0+bin(v)/B*w;
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(X,y0); ctx.lineTo(X,y0+h); ctx.stroke();
+      ctx.lineWidth=1; label(ctx,txt,X+5,y0+dy,col);
+    };
+    mkline(TRUE,'#7ee787','true r_n = '+TRUE.toFixed(2),16);
+    const m=runMedian();
+    if(m) mkline(m.v,'#ffb454','running median = '+m.v.toFixed(3),34);
+    label(ctx,'256 bins over the filter-response range  →',x0,y0-10,'#8ea0c0');
+    label(ctx,'histogram',x0+300,y0-10,'#41d8c9');
+    label(ctx,'cumulative',x0+390,y0-10,'#6ea8ff');
+    label(ctx,LO.toFixed(1),x0-8,y0+h+16,'#6b7a99');
+    label(ctx,'0',x0+w/2,y0+h+16,'#6b7a99');
+    label(ctx,HI.toFixed(1),x0+w-14,y0+h+16,'#6b7a99');
+    const err=m?Math.abs(m.v-TRUE):NaN;
+    document.getElementById('roHist').innerHTML =
+      'frames seen t = <b>'+t+'</b>   latest response = '+lastVal.toFixed(3)+
+      '   running median = <b>'+(m?m.v.toFixed(3):'—')+'</b>   |error| = '+(m?err.toFixed(3):'—')+'\n'+
+      'memory — naive "keep every frame": <b>'+t+'</b> values per pixel and rising.   '+
+      'histogram: <b>256</b> counters per pixel, forever.';
+  }
+  document.getElementById('hStep').onclick=()=>feed(1);
+  document.getElementById('hBurst').onclick=()=>feed(50);
+  document.getElementById('hReset').onclick=()=>{H=new Int32Array(B);t=0;lastVal=0;draw();};
+  document.getElementById('hAuto').onclick=function(){
+    if(timer){clearInterval(timer);timer=null;this.textContent='Auto-stream';this.classList.add('primary');return;}
+    this.textContent='Stop';this.classList.remove('primary');timer=setInterval(()=>feed(1),160);
+  };
+  draw();
+})();
+</script>
+</body>
+</html>
