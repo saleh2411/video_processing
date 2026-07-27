@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q1 — Horn–Schunck with sparse LiDAR depth</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q1</b> · Optic flow with sparse depth</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">‹ Chapter 2</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b2_tracking_markov.html">Q2 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 2 · Moed B 2022, question 1 · 13 points</div>
+    <h1>Horn–Schunck, but the car also has a laser</h1>
+    <p class="lede">A camera gives you brightness everywhere. A LiDAR gives you distance, but only at a few
+    scattered dots. The question: how do you pour those dots into Horn–Schunck so the flow gets better?
+    Story first, then the two places depth can enter the energy, then the full derivation, then a live
+    solver you can watch bleed and un-bleed across the car's edge.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 1 · 13 points · OPTIC FLOW</span>
+    <p>A vehicle is equipped with a grayscale camera and a LiDAR sensor. The LiDAR sensor provides depth value
+    to a <em>sparse</em> subset of the pixels in the image (i.e., not every pixel has a corresponding depth
+    value). See example in Figure 1.</p>
+    <p style="margin-bottom:0">Modify the Horn–Schunck algorithm to take as input two grayscale images $I_1$
+    and $I_2$ and their corresponding sparse depth maps $D_1$ and $D_2$, and produce the optic flow between
+    them.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">Two kids watching cars from a bridge</span>
+    <p>Imagine you are looking at a photo of a street and someone asks: <em>"which way did everything move
+    between this photo and the next one?"</em></p>
+    <p><strong>The camera kid</strong> answers by looking at brightness. He finds a dark spot in photo 1 and
+    hunts for the same dark spot in photo 2. This works great on a stripey T-shirt or a tree — lots of
+    detail. But on a big flat grey wall he is helpless: every point looks like every other point, so he has
+    no idea how far it slid. That is the <span class="term">aperture problem</span>.</p>
+    <p>Horn–Schunck fixes it by adding a rule: <strong>"neighbours move together."</strong> The kid guesses
+    the wall's motion by copying the motion of the wall's edges. The guess spreads inward like paint. That
+    spreading is the smoothness term.</p>
+    <p><strong>The laser kid</strong> has a different tool. She can't see colours at all, but every so often
+    she can shoot a laser and ask <em>"how far away is this exact spot?"</em> She only gets a few hundred
+    dots, not the whole picture. She knows two useful things:</p>
+    <ul>
+      <li>A dot that was 8 metres away in photo 1 is still about 8 metres away in photo 2 — <strong>it just
+      moved somewhere else on the screen.</strong> So she can chase her dots, and each chased dot is one more
+      hard fact about motion, even on the flat grey wall.</li>
+      <li>Where distance jumps suddenly — 8 metres here, 30 metres one pixel to the right — she is standing
+      at the <strong>edge of an object</strong>. And objects move as one, but two different objects don't.
+      So the camera kid should <em>not</em> spread his paint across that line.</li>
+    </ul>
+    <p>So the laser helps twice: it <strong>adds facts</strong> where the picture has none, and it
+    <strong>tells the paint where to stop</strong>.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The whole answer, in one sentence</span>
+    Keep the Horn–Schunck energy, add a <strong>second data term</strong> that is switched on only at pixels
+    where LiDAR exists (depth-constancy, exactly like brightness-constancy), and make the
+    <strong>smoothness weight anisotropic</strong> so it collapses across depth discontinuities. Then
+    re-derive the Euler–Lagrange equations; the per-pixel update becomes a $2\times2$ linear solve instead
+    of the classic scalar formula.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The material this question is built on</h2>
+
+  <div class="explain">
+    <span class="explain-label">Recap — Horn–Schunck (Chapter 2)</span>
+    <p>Brightness constancy says a moving point keeps its grey value:</p>
+  </div>
+
+  <div class="eq">$$ I(x,y,t) = I(x+u\,\delta t,\; y+v\,\delta t,\; t+\delta t) $$</div>
+
+  <div class="explain">
+    <p>First-order Taylor expansion of the right side and cancelling gives the <span class="term">optic flow
+    constraint equation</span> — one equation, two unknowns per pixel:</p>
+  </div>
+
+  <div class="eq">$$ I_x u + I_y v + I_t = 0 \tag{1} $$</div>
+
+  <div class="explain">
+    <p>Under-determined, so Horn–Schunck adds a global smoothness prior and minimises</p>
+  </div>
+
+  <div class="eq">$$ E_{\rm HS}(u,v) = \iint \underbrace{\big(I_x u + I_y v + I_t\big)^2}_{\text{data}} \;+\; \alpha^2 \underbrace{\big(\|\nabla u\|^2 + \|\nabla v\|^2\big)}_{\text{smoothness}} \; dx\,dy \tag{2} $$</div>
+
+  <div class="explain">
+    <p>whose Euler–Lagrange equations, with $\nabla^2 u \approx \bar u - u$ (the local weighted average minus
+    the centre), give the famous Jacobi iteration</p>
+  </div>
+
+  <div class="eq">$$ u^{k+1} = \bar u^{k} - I_x\frac{I_x\bar u^k + I_y \bar v^k + I_t}{\alpha^2 + I_x^2 + I_y^2}, \qquad v^{k+1} = \bar v^{k} - I_y\frac{I_x\bar u^k + I_y \bar v^k + I_t}{\alpha^2 + I_x^2 + I_y^2} \tag{3} $$</div>
+
+  <div class="callout note"><span class="lbl">Two properties of HS you must exploit here</span>
+    <b>(i)</b> It is a <em>variational fill-in</em> method: pixels with no usable data still get a flow,
+    inherited from their neighbours through the smoothness term. <b>That is exactly why sparse input is not a
+    problem</b> — you can switch a data term on at 2% of the pixels and HS will diffuse it everywhere.<br>
+    <b>(ii)</b> Its smoothness term is <em>isotropic and global</em>, so it happily smears motion across
+    object boundaries. That is HS's classic weakness, and depth discontinuities are precisely a map of where
+    the boundaries are.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Where depth can enter — the two doors</h2>
+
+  <div class="summary">
+    <span class="summary-label">Design choices</span>
+    <table>
+      <tr><th>Door</th><th>Idea</th><th>Costs / assumptions</th></tr>
+      <tr><td>A · extra data term</td>
+        <td>Depth is just another channel that is conserved under motion, so write a second linearised
+        constraint $D_x u + D_y v + D_t = 0$ and switch it on only where LiDAR exists.</td>
+        <td>Assumes depth-constancy: true for motion parallel to the image plane, approximate otherwise
+        (an approaching car changes depth). Requires two neighbouring LiDAR samples to form $D_x, D_y$.</td></tr>
+      <tr><td>B · anisotropic smoothness</td>
+        <td>Down-weight the smoothness between two neighbouring pixels whose depths differ, so flow does not
+        diffuse across a depth step.</td>
+        <td>Assumption-free (uses depth only as a boundary cue, never as a motion measurement). Needs depth
+        interpolated/propagated to the pixels between samples.</td></tr>
+      <tr><td>C · rigid-motion prior <span class="muted">(bonus)</span></td>
+        <td>If the scene is static and only the car moves with known ego-motion $(R,\mathbf{t})$, depth
+        <em>predicts</em> the flow outright; use it as a soft prior $\|(u,v)-(u_0,v_0)\|^2$.</td>
+        <td>Needs ego-motion and a static-world assumption; breaks on other moving vehicles. Mention as an
+        extension, don't make it the core answer.</td></tr>
+    </table>
+    <p style="margin-top:12px">A full-credit answer uses <strong>A + B</strong> and states the caveat of A.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The modified energy</h2>
+
+  <div class="explain">
+    <span class="explain-label">Notation</span>
+    <p>Let $m(\mathbf{x}) \in \{0,1\}$ be the LiDAR validity mask: $m=1$ where a depth sample exists in $D_1$
+    <em>and</em> its neighbours on the scan pattern exist (so that $D_x, D_y$ are computable), $m=0$
+    otherwise. Let $\tilde D$ be depth propagated to every pixel (nearest-sample / bilateral fill) — used
+    <em>only</em> as an edge cue, never as a measurement. Define the pairwise smoothness weight</p>
+  </div>
+
+  <div class="eq">$$ w_{pq} = \exp\!\left(-\frac{\big(\tilde D(p) - \tilde D(q)\big)^2}{2\sigma_D^2}\right) \in (0,1] \tag{4} $$</div>
+
+  <div class="explain">
+    <p>$w_{pq}\!\approx\!1$ inside an object (depths agree), $w_{pq}\!\approx\!0$ across a depth cliff. Now
+    the energy:</p>
+  </div>
+
+  <div class="eq">$$ E(u,v) = \iint \big(I_x u + I_y v + I_t\big)^2 \;+\; \lambda\, m(\mathbf{x})\big(D_x u + D_y v + D_t\big)^2 \;+\; \alpha^2 \, w \big(\|\nabla u\|^2 + \|\nabla v\|^2\big)\; d\mathbf{x} \tag{5} $$</div>
+
+  <div class="explain">
+    <p>with $D_t = D_2 - D_1$ measured at the sample, and $\lambda$ balancing "one metre of depth error"
+    against "one grey level of brightness error" (it also absorbs the units, since $D$ is in metres and $I$
+    in grey levels — in practice normalise both channels or set $\lambda \sim \sigma_I^2/\sigma_D^2$).</p>
+    <h4 class="mini">Why the depth term is not redundant</h4>
+    <p>Term 1 constrains $(u,v)$ only along $\nabla I$ — the aperture problem again. Term 2 constrains
+    $(u,v)$ along $\nabla D$. On a <strong>textureless but slanted or stepped surface</strong> (a plain van
+    door, the flat road) $\nabla I \approx 0$ but $\nabla D \neq 0$, so the depth term supplies exactly the
+    information the brightness term is missing. Where <em>both</em> gradients exist and are
+    <strong>non-parallel</strong>, the two constraint lines intersect and the flow is determined
+    <em>pointwise</em>, with no help from the smoothness prior at all:</p>
+  </div>
+
+  <div class="eq">$$ \begin{pmatrix} I_x & I_y \\ D_x & D_y \end{pmatrix}\begin{pmatrix}u\\v\end{pmatrix} = -\begin{pmatrix} I_t\\ D_t\end{pmatrix} \quad\text{is invertible iff}\quad I_xD_y - I_yD_x \neq 0 $$</div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Deriving the update rule</h2>
+
+  <div class="explain">
+    <p>Write the discrete smoothness term over 4-neighbourhoods,
+    $\alpha^2\sum_{q\in N(p)} w_{pq}\big[(u_p-u_q)^2 + (v_p-v_q)^2\big]$, and set
+    $\partial E/\partial u_p = \partial E/\partial v_p = 0$. With</p>
+  </div>
+
+  <div class="eq">$$ S_p = \sum_{q\in N(p)} w_{pq}, \qquad \bar u_p = \frac{1}{S_p}\sum_{q\in N(p)} w_{pq}\, u_q, \qquad \bar v_p = \frac{1}{S_p}\sum_{q\in N(p)} w_{pq}\, v_q $$</div>
+
+  <div class="explain">
+    <p>(the depth-weighted local average — flow is now averaged only over neighbours at a similar distance),
+    the stationarity conditions are the $2\times2$ system</p>
+  </div>
+
+  <div class="eq">$$ \begin{pmatrix} I_x^2 + \lambda m D_x^2 + \alpha^2 S_p & I_xI_y + \lambda m D_xD_y \\[2pt] I_xI_y + \lambda m D_xD_y & I_y^2 + \lambda m D_y^2 + \alpha^2 S_p \end{pmatrix} \begin{pmatrix} u_p \\ v_p\end{pmatrix} = \begin{pmatrix} \alpha^2 S_p \bar u_p - I_xI_t - \lambda m D_xD_t \\[2pt] \alpha^2 S_p \bar v_p - I_yI_t - \lambda m D_yD_t \end{pmatrix} \tag{6} $$</div>
+
+  <div class="explain">
+    <p>Solve it in closed form by Cramer's rule at every pixel, sweep, repeat. Note the sanity checks:</p>
+    <ul>
+      <li>$\lambda = 0$ and $w \equiv 1$ ⇒ $S_p = 4$, and (6) collapses back to the classic HS update (3).</li>
+      <li>$m = 0$ (no LiDAR here) ⇒ the depth rows vanish and the pixel is updated by pure HS — <strong>the
+      sparsity is handled automatically</strong>, no interpolation of $D$ needed for the data term.</li>
+      <li>The matrix is $M^{\!\top}\!M + \alpha^2S_p\,\mathbb{I}$ with $M$ the two constraint rows, so it is
+      symmetric positive definite for $\alpha>0$ — always invertible, so the iteration is well posed.</li>
+    </ul>
+  </div>
+
+  <ol class="steps">
+    <li><b>Pre-process.</b> Optionally median-filter $D_1,D_2$ to kill LiDAR outliers; build the validity
+    mask $m$; build $\tilde D$ by nearest-sample propagation (or a joint-bilateral / guided filter using
+    $I_1$) for the smoothness weights only.</li>
+    <li><b>Build a Gaussian pyramid</b> of $I_1,I_2$ (and downsample $D$ by taking the <em>nearest valid
+    sample</em>, never averaging across a depth edge). Vehicle motion is large; the linearisation in (1)
+    needs sub-pixel displacements.</li>
+    <li><b>At each level:</b> warp $I_2$ (and $D_2$) toward $I_1$ with the current flow, compute
+    $I_x,I_y,I_t$ and, at LiDAR samples, $D_x,D_y,D_t$; compute $w_{pq}$ from (4).</li>
+    <li><b>Iterate (6)</b> to convergence (Jacobi / Gauss–Seidel / SOR).</li>
+    <li><b>Propagate</b> the flow to the next finer level (upsample $\times2$, multiply by 2) and repeat.
+    Optionally add a robust penalty (Charbonnier $\sqrt{s^2+\varepsilon^2}$) on both data terms so a single
+    bad LiDAR return cannot poison the field.</li>
+  </ol>
+
+  <div class="callout warn"><span class="lbl">The caveat you must state for full marks</span>
+    Depth is <strong>not</strong> conserved the way brightness is. $D_2(\mathbf{x}+\mathbf{w}) = D_1(\mathbf{x})$
+    holds only for motion parallel to the image plane. For a car approaching at $\dot Z$ over $\delta t$, the
+    correct constraint is $D_x u + D_y v + D_t = \dot Z\,\delta t \neq 0$. Two honest fixes: <b>(a)</b> keep
+    $\dot Z$ as a third unknown per surface / per segment (this turns the method into <em>scene flow</em>,
+    $(u,v,\dot Z)$, and needs one more constraint), or <b>(b)</b> give the depth term a robust penalty and a
+    small $\lambda$ so it acts as a soft hint. Door <b>B</b> (the smoothness weight) does not suffer from
+    this at all — it never assumes depth is conserved.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Watch it work</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the same solver, with and without the laser</h4><span class="tag">drag λ · α · σ<sub>D</sub></span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A synthetic street: a textured background sliding right, and a
+      near "car" (dark box) sliding left-and-down. Yellow dots = the sparse LiDAR samples (scan-lines, ~3% of
+      pixels). Flow is drawn with the standard colour wheel — <b>hue = direction, saturation = speed</b>.
+      Panel 3 is plain Horn–Schunck; panel 4 uses the modified energy (5). Watch the plain version smear the
+      car's motion into the background around the box's border, and the modified one keep a crisp edge.</p>
+      <canvas id="c1" width="900" height="420"></canvas>
+      <div class="controls">
+        <div class="control"><label>$\lambda$ — depth data weight <span class="val" id="v1l">30.0</span></label><input type="range" id="s1l" min="0" max="1000" step="5" value="300"></div>
+        <div class="control"><label>$\alpha$ — smoothness <span class="val" id="v1a">0.025</span></label><input type="range" id="s1a" min="4" max="200" step="1" value="25"></div>
+        <div class="control"><label>$\sigma_D$ — depth-edge sharpness (metres) <span class="val" id="v1s">1.5</span></label><input type="range" id="s1s" min="2" max="120" step="1" value="15"></div>
+        <div class="control"><label>LiDAR density — 1 sample every <span class="val" id="v1d">4</span> rows</label><input type="range" id="s1d" min="1" max="10" step="1" value="4"></div>
+      </div>
+      <div class="btnrow">
+        <label class="chk"><input type="checkbox" id="k1a" checked> use depth data term (door A)</label>
+        <label class="chk"><input type="checkbox" id="k1b" checked> use depth-aware smoothness (door B)</label>
+        <label class="chk"><input type="checkbox" id="k1t"> show flow as arrows</label>
+      </div>
+      <div class="readout" id="r1"></div>
+      <div class="legend">
+        <span><i style="background:#41d8c9"></i> background truth: (+1.0, 0)</span>
+        <span><i style="background:#ff6b81"></i> car truth: (−1.2, +0.8)</span>
+        <span><i style="background:#ffb454"></i> LiDAR samples</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Things to try</span>
+    <b>1.</b> Turn <em>both</em> boxes off — you get textbook HS, and the endpoint error jumps, worst right at
+    the car's boundary. <b>2.</b> Turn on only door B — the edge sharpens but the flat interior of the car is
+    still guessed. <b>3.</b> Turn on only door A — interiors get pinned to the truth but the boundary still
+    bleeds. <b>4.</b> Push $\sigma_D$ up: the depth cliff stops counting as a cliff and door B silently turns
+    itself off. <b>5.</b> Drop the LiDAR density to 1-in-10 and see how gracefully it degrades — that is the
+    fill-in property doing its job.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — two constraint lines in flow space</h4><span class="tag">drag the gradients</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The $(u,v)$ plane for a <em>single</em> pixel. Each linearised
+      constraint is a straight line of admissible flows. One line = the aperture problem (any point on it is
+      consistent). Two non-parallel lines = a unique answer with no prior needed. Drag the arrow heads to
+      rotate $\nabla I$ and $\nabla D$ and watch the intersection become ill-conditioned as they align.</p>
+      <canvas id="c2" width="900" height="330"></canvas>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Idea.</strong> Keep the Horn–Schunck variational framework and use the sparse depth twice:
+    as an <em>additional data term</em> active only at LiDAR pixels, and as an <em>edge cue that modulates
+    the smoothness term</em>. HS already fills in flow where data is missing, so sparsity is not an obstacle.</p>
+
+    <p><strong>Energy.</strong> With $m(\mathbf{x})=1$ at valid LiDAR pixels and $0$ elsewhere,
+    $\tilde D$ = depth propagated to all pixels (used only for weights), and
+    $w_{pq}=\exp\!\big(-(\tilde D_p-\tilde D_q)^2/2\sigma_D^2\big)$:</p>
+    <div class="eq">$$ E(u,v)=\iint (I_xu+I_yv+I_t)^2 + \lambda\, m\,(D_xu+D_yv+D_t)^2 + \alpha^2 w\big(\|\nabla u\|^2+\|\nabla v\|^2\big)\,d\mathbf{x} $$</div>
+    <p>The second term is the depth analogue of brightness constancy ($D_2(\mathbf{x}+\mathbf{w})\approx D_1(\mathbf{x})$,
+    Taylor-expanded); $D_x,D_y$ are formed from neighbouring samples on the scan pattern, $D_t=D_2-D_1$ at
+    the sample. The third term stops flow from diffusing across depth discontinuities, i.e. across object
+    boundaries.</p>
+
+    <p><strong>Solution.</strong> Euler–Lagrange with $S_p=\sum_q w_{pq}$ and depth-weighted averages
+    $\bar u_p,\bar v_p$ gives, per pixel, the SPD $2\times2$ system</p>
+    <div class="eq">$$ \begin{pmatrix} I_x^2+\lambda mD_x^2+\alpha^2S_p & I_xI_y+\lambda mD_xD_y\\ I_xI_y+\lambda mD_xD_y & I_y^2+\lambda mD_y^2+\alpha^2S_p\end{pmatrix}\!\begin{pmatrix}u\\v\end{pmatrix} = \begin{pmatrix}\alpha^2S_p\bar u_p - I_xI_t-\lambda mD_xD_t\\ \alpha^2S_p\bar v_p - I_yI_t-\lambda mD_yD_t\end{pmatrix} $$</div>
+    <p>solved by Cramer's rule and iterated (Jacobi/Gauss–Seidel) to convergence, inside a coarse-to-fine
+    pyramid with warping so the Taylor linearisation stays valid for large vehicle motion. Setting
+    $\lambda=0,\,w\equiv1$ recovers standard Horn–Schunck exactly.</p>
+
+    <p><strong>Why it helps.</strong> The brightness term constrains $(u,v)$ only along $\nabla I$; the depth
+    term constrains it along $\nabla D$. On textureless but geometrically structured surfaces
+    ($\nabla I\approx0$, $\nabla D\neq0$) the depth term breaks the aperture problem, and where both
+    gradients exist and are non-parallel the flow is determined pointwise. Meanwhile the modulated smoothness
+    removes HS's characteristic over-smoothing at motion boundaries, which for a driving scene coincide with
+    depth boundaries.</p>
+
+    <p><strong>Limitation.</strong> Depth is not strictly conserved: for motion with a $Z$ component the
+    constraint becomes $D_xu+D_yv+D_t=\dot Z\delta t$. Handle it with a robust (Charbonnier/$L_1$) penalty
+    and moderate $\lambda$, or extend to scene flow $(u,v,\dot Z)$. The smoothness-weight use of depth is
+    free of this assumption. Also median-filter the depth first, since one bad LiDAR return would otherwise
+    act as a hard constraint.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why not just interpolate the sparse depth to a dense map and be done with it?</summary>
+    <p>You can, and you must for the smoothness weights — but not for the data term. Interpolation
+    <em>invents</em> depth values; feeding invented values into a hard measurement term propagates the
+    interpolation error into the flow, and worst of all it invents them exactly where you have no evidence:
+    across the object boundaries, which is the one place they must not be smooth. The mask $m$ costs nothing
+    and keeps measurements and guesses cleanly separated. For the weight $w_{pq}$ a wrong guess only softens
+    or hardens a regulariser, which is benign.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How do you compute $D_x$ and $D_y$ if depth is sparse?</summary>
+    <p>Use the scan geometry. LiDAR returns arrive along scan-lines, so within a line the horizontal spacing
+    $s$ is known and $D_x \approx (D(x+s)-D(x-s))/2s$; vertically use the neighbouring scan-line, spacing
+    $t$: $D_y \approx (D(y+t)-D(y-t))/2t$. Set $m=1$ only where all four neighbours exist <em>and</em> are
+    within a depth threshold of the centre (otherwise you are differencing across an occlusion boundary,
+    where the derivative is meaningless). An alternative is to fit a local plane to the samples in a small
+    window by least squares and read $D_x,D_y$ off the plane — more robust, and it gives you the surface
+    normal for free.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What is the right value of $\lambda$? The units don't match.</summary>
+    <p>They don't: $I$ is in grey levels, $D$ in metres, so $\lambda$ has units of $\text{grey}^2/\text{m}^2$.
+    Normalise both residuals by their noise: $\lambda = \sigma_I^2/\sigma_D^2$, where $\sigma_I$ is the image
+    noise and $\sigma_D$ the LiDAR ranging noise. This is the standard maximum-likelihood weighting — each
+    term becomes a squared $z$-score. In practice you can also just rescale $D$ to $[0,255]$ (or use
+    disparity $1/D$, which is better behaved: disparity noise is roughly uniform, whereas depth noise grows
+    with range) and set $\lambda\approx1$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Would disparity be better than depth?</summary>
+    <p>Usually yes, on two counts. First, disparity $d = fB/Z$ is what actually moves linearly with image
+    coordinates in a rectified setup, and its noise is roughly homogeneous, so the squared penalty is
+    statistically fair across the whole range — with raw depth, a 1 m error at 5 m and at 80 m get the same
+    penalty even though the far one is within the sensor's noise. Second, $1/Z$ is bounded, so the sky /
+    no-return case degrades gracefully to $0$ instead of $\infty$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why does the $2\times2$ matrix always invert? Compare with Lucas–Kanade.</summary>
+    <p>It is $M^{\!\top}M + \alpha^2S_p\mathbb{I}$ with $M = \left[\begin{smallmatrix}I_x&I_y\\ \sqrt{\lambda m}D_x & \sqrt{\lambda m}D_y\end{smallmatrix}\right]$.
+    $M^{\!\top}M$ is positive semi-definite and $\alpha^2 S_p > 0$ shifts every eigenvalue up, so it is
+    strictly positive definite. This is the same trick that makes HS well posed everywhere while Lucas–Kanade
+    needs $\sum\nabla I\nabla I^{\!\top}$ (the Harris/structure matrix) to be full rank — LK simply refuses
+    to answer at a corner-free pixel, HS answers with the prior. Note that the LiDAR term also directly
+    improves LK: adding depth rows to the LK stacked system raises the rank of the structure matrix, so
+    "good features to track" would include flat-but-stepped regions.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Can the depth data term hurt?</summary>
+    <p>Yes, in three situations. <b>(1) Radial motion</b> — depth genuinely changes, so the constraint is
+    biased; that's the $\dot Z$ caveat. <b>(2) Occlusion boundaries</b> — a LiDAR sample near a silhouette
+    can hit the far surface in frame 1 and the near surface in frame 2, producing a huge fake $D_t$; mask
+    those out or use a robust penalty. <b>(3) Calibration/time offset</b> — camera and LiDAR are not
+    co-located and not perfectly synchronised, so a depth "pixel" is really a projected 3-D point; if the
+    extrinsics or the rolling-shutter/scan timing are off by a little, you are constraining the wrong pixel.
+    All three are handled by keeping $\lambda$ moderate and the penalty robust.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does the depth term have its own aperture problem?</summary>
+    <p>Yes, and it is worth saying so — it is the same one-equation-two-unknowns issue. $D_xu+D_yv+D_t=0$
+    constrains only the component of $(u,v)$ along $\nabla D$. On a <em>planar</em> surface $\nabla D$ is
+    constant, so every LiDAR sample on that plane gives the <strong>same</strong> constraint direction and
+    the orthogonal component is still undetermined — depth alone cannot solve a flat slanted wall any more
+    than brightness alone can solve a flat grey one. What rescues you is that the two apertures are
+    <em>different</em>: $\nabla I$ and $\nabla D$ are generally non-parallel, so together they span the plane
+    (that is the determinant condition $I_xD_y-I_yD_x\neq0$). And on a <em>curved</em> surface $\nabla D$
+    itself rotates from pixel to pixel, so a small neighbourhood of depth samples already determines the flow
+    on its own. Demo 1 is built exactly this way — the car body is curved, which is why switching on the
+    depth term alone visibly fixes its interior.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Sketch the ego-motion (door C) variant.</summary>
+    <p>For a static scene and a camera moving with rotation $\boldsymbol\omega$ and translation
+    $\mathbf{t}$, the flow at a pixel with depth $Z$ is the classic motion-field equation
+    $$u = \frac{-t_x f + x t_z}{Z} + \omega_x\frac{xy}{f} - \omega_y\Big(f+\frac{x^2}{f}\Big) + \omega_z y,$$
+    and symmetrically for $v$. So depth gives a full <em>predicted</em> flow $(u_0,v_0)$ at every LiDAR
+    pixel. Add $\mu\, m\,\|(u,v)-(u_0,v_0)\|^2$ to the energy. This is far stronger than the depth-constancy
+    term (two constraints per pixel rather than one), but it is only valid on static parts of the scene, so
+    combine it with a robust penalty — pixels on other moving cars will simply reject the prior, and their
+    residual conveniently doubles as a moving-object detector.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is the coarse-to-fine pyramid non-negotiable here?</summary>
+    <p>Because equation (1) came from a first-order Taylor expansion, which is only valid when the
+    displacement is small relative to the image structure — roughly a pixel. A car at 50 km/h with a 30 Hz
+    camera moves tens of pixels per frame. Downsampling by $2^L$ divides the displacement by $2^L$ until the
+    linearisation holds, then each level warps the second image by the current estimate so the
+    <em>residual</em> motion the next level sees stays small. Careful with the depth channel: downsample $D$
+    by nearest valid sample, never by averaging, or you will manufacture depth values that lie between the
+    car and the building behind it.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>classic HS</td><td>brightness constancy + global smoothness; fills in where data is missing</td></tr>
+      <tr><td>door A</td><td>$\lambda m (D_xu+D_yv+D_t)^2$ — depth as a second brightness-constancy channel</td></tr>
+      <tr><td>door B</td><td>$w_{pq}=e^{-(\Delta \tilde D)^2/2\sigma_D^2}$ — don't smooth across a depth cliff</td></tr>
+      <tr><td>the mask $m$</td><td>turns the depth term off where there is no laser dot — sparsity handled for free</td></tr>
+      <tr><td>result</td><td>per-pixel $2\times2$ SPD solve instead of the scalar HS formula</td></tr>
+      <tr><td>reduces to HS</td><td>set $\lambda=0$, $w\equiv1$ ⇒ $S_p=4$ ⇒ equation (3)</td></tr>
+      <tr><td>the catch</td><td>depth is not conserved under $Z$ motion → robust penalty, or go to scene flow</td></tr>
+      <tr><td>always add</td><td>pyramid + warping, median filter on $D$, $\lambda=\sigma_I^2/\sigma_D^2$</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="index.html"><span class="dir">Back to</span><span class="ttl">All chapters</span></a>
+    <a class="next" href="b2_tracking_markov.html"><span class="dir">Next question</span><span class="ttl">Q2 · The tracking recursion ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   DEMO 1 — Horn-Schunck vs depth-augmented Horn-Schunck
+   ========================================================================= */
+(function(){
+  const cv = document.getElementById('c1'), g = cv.getContext('2d');
+  const ro = document.getElementById('r1');
+  const sl = {l:document.getElementById('s1l'), a:document.getElementById('s1a'),
+              s:document.getElementById('s1s'), d:document.getElementById('s1d')};
+  const vl = {l:document.getElementById('v1l'), a:document.getElementById('v1a'),
+              s:document.getElementById('v1s'), d:document.getElementById('v1d')};
+  const kA = document.getElementById('k1a'), kB = document.getElementById('k1b'),
+        kT = document.getElementById('k1t');
+
+  const W = 84, H = 64, N = W*H;
+  const PAN = 210, PH = 160, PAD = 12, TOP = 26;    // panel geometry
+
+  /* ---- ground truth scene ------------------------------------------------ */
+  const BG = [1.0, 0.0], FG = [-1.2, 0.8];
+  const boxL = 30, boxR = 60, boxT = 22, boxB = 52;
+  function inBox(x,y){ return x>=boxL && x<boxR && y>=boxT && y<boxB; }
+
+  function texture(x,y){                       // background: coarse blobs, mild contrast
+    return 0.55
+      + 0.16*Math.sin(x*0.31) * Math.cos(y*0.22)
+      + 0.10*Math.sin((x+y)*0.13)
+      + 0.07*Math.sin(x*0.07 - y*0.11);
+  }
+  function carTex(x,y){                        // the car: dark, almost no texture (aperture problem!)
+    return 0.20 + 0.008*Math.sin(x*0.9) + 0.007*Math.cos(y*0.55);
+  }
+  function scene(x,y){ return inBox(x,y) ? carTex(x,y) : texture(x,y); }
+  // The car body is CURVED, so its depth gradient points in different directions at
+  // different pixels — that is what lets the depth term alone pin down both flow
+  // components. (A perfectly flat slanted surface would give depth its own aperture
+  // problem: one constraint direction, everywhere.)  The road behind is a slanted plane.
+  function depth(x,y){
+    if(inBox(x,y)) return 7.5 + 0.010*Math.pow(x-45,2) + 0.006*Math.pow(y-37,2);
+    return 22.0 + 0.55*(H-y) + 0.22*x;
+  }
+
+  const I1=new Float64Array(N), I2=new Float64Array(N),
+        D1=new Float64Array(N), D2=new Float64Array(N),
+        P1=new Float64Array(N), P2=new Float64Array(N),   // normalised disparity 1/Z
+        gtu=new Float64Array(N), gtv=new Float64Array(N);
+  let DSPAN=1;
+
+  function bilinear(f,x,y){
+    x=Math.max(0,Math.min(W-1.001,x)); y=Math.max(0,Math.min(H-1.001,y));
+    const x0=Math.floor(x), y0=Math.floor(y), fx=x-x0, fy=y-y0;
+    const a=f(x0,y0), b=f(x0+1,y0), c=f(x0,y0+1), d=f(x0+1,y0+1);
+    return a*(1-fx)*(1-fy)+b*fx*(1-fy)+c*(1-fx)*fy+d*fx*fy;
+  }
+  (function buildFrames(){
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const i=y*W+x, fg=inBox(x,y);
+      const u = fg?FG[0]:BG[0], v = fg?FG[1]:BG[1];
+      gtu[i]=u; gtv[i]=v;
+      I1[i]=scene(x,y); D1[i]=depth(x,y);
+      // I2 sampled by walking BACK along the flow of the destination pixel's owner
+      const fg2 = inBox(x-u, y-v);
+      const u2 = fg2?FG[0]:BG[0], v2 = fg2?FG[1]:BG[1];
+      I2[i]=bilinear(scene, x-u2, y-v2);
+      D2[i]=bilinear(depth, x-u2, y-v2);
+    }
+    // work in normalised disparity: 1/Z has homogeneous noise and bounded range,
+    // and it puts the depth channel on the same numeric footing as the grey levels
+    let lo=Infinity, hi=-Infinity;
+    for(let i=0;i<N;i++){ const p=1/D1[i]; if(p<lo) lo=p; if(p>hi) hi=p; }
+    DSPAN=hi-lo;
+    for(let i=0;i<N;i++){ P1[i]=(1/D1[i]-lo)/DSPAN; P2[i]=(1/D2[i]-lo)/DSPAN; }
+  })();
+
+  /* ---- derivatives (image: dense; depth: from LiDAR neighbours) ---------- */
+  const Ix=new Float64Array(N), Iy=new Float64Array(N), It=new Float64Array(N);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x;
+    const xm=Math.max(0,x-1), xp=Math.min(W-1,x+1);
+    const ym=Math.max(0,y-1), yp=Math.min(H-1,y+1);
+    Ix[i]=(I1[y*W+xp]-I1[y*W+xm])/2;
+    Iy[i]=(I1[yp*W+x]-I1[ym*W+x])/2;
+    It[i]=I2[i]-I1[i];
+  }
+
+  const m=new Uint8Array(N), Dx=new Float64Array(N), Dy=new Float64Array(N),
+        Dt=new Float64Array(N), Dfill=new Float64Array(N), isSample=new Uint8Array(N);
+
+  function buildLidar(rowStep){
+    const colStep = 2;
+    m.fill(0); isSample.fill(0);
+    for(let y=0;y<H;y+=rowStep) for(let x=0;x<W;x+=colStep) isSample[y*W+x]=1;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const i=y*W+x;
+      if(!isSample[i]) continue;
+      const xm=x-colStep, xp=x+colStep, ym=y-rowStep, yp=y+rowStep;
+      if(xm<0||xp>=W||ym<0||yp>=H) continue;
+      // reject samples that straddle an occlusion boundary (metres, on the raw depth)
+      if(Math.abs(D1[y*W+xp]-D1[i])>4 || Math.abs(D1[y*W+xm]-D1[i])>4 ||
+         Math.abs(D1[yp*W+x]-D1[i])>4 || Math.abs(D1[ym*W+x]-D1[i])>4) continue;
+      Dx[i]=(P1[y*W+xp]-P1[y*W+xm])/(2*colStep);
+      Dy[i]=(P1[yp*W+x]-P1[ym*W+x])/(2*rowStep);
+      Dt[i]=P2[i]-P1[i]; m[i]=1;
+    }
+    // nearest-sample fill for the smoothness weights only
+    for(let y=0;y<H;y++){
+      const ys=Math.min(H-1, Math.round(y/rowStep)*rowStep);
+      for(let x=0;x<W;x++){
+        const xs=Math.min(W-1, Math.round(x/colStep)*colStep);
+        Dfill[y*W+x]=D1[ys*W+xs];
+      }
+    }
+  }
+
+  /* ---- the solver -------------------------------------------------------- */
+  const u=new Float64Array(N), v=new Float64Array(N),
+        un=new Float64Array(N), vn=new Float64Array(N);
+
+  function solve(alpha, lam, sigD, useA, useB, iters){
+    u.fill(0); v.fill(0);
+    const a2=alpha*alpha, s2=2*sigD*sigD;
+    const wR=new Float64Array(N), wD=new Float64Array(N);   // weight to right / down neighbour
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const i=y*W+x;
+      if(!useB){ wR[i]=1; wD[i]=1; continue; }
+      wR[i] = x+1<W ? Math.exp(-Math.pow(Dfill[i]-Dfill[i+1],2)/s2) : 0;
+      wD[i] = y+1<H ? Math.exp(-Math.pow(Dfill[i]-Dfill[i+W],2)/s2) : 0;
+    }
+    for(let k=0;k<iters;k++){
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+        const i=y*W+x;
+        let S=0, su=0, sv=0, w;
+        if(x+1<W){ w=wR[i];        S+=w; su+=w*u[i+1]; sv+=w*v[i+1]; }
+        if(x>0  ){ w=wR[i-1];      S+=w; su+=w*u[i-1]; sv+=w*v[i-1]; }
+        if(y+1<H){ w=wD[i];        S+=w; su+=w*u[i+W]; sv+=w*v[i+W]; }
+        if(y>0  ){ w=wD[i-W];      S+=w; su+=w*u[i-W]; sv+=w*v[i-W]; }
+        if(S<1e-9){ un[i]=u[i]; vn[i]=v[i]; continue; }
+        const ub=su/S, vb=sv/S;
+        const lm = (useA && m[i]) ? lam : 0;
+        const a11 = Ix[i]*Ix[i] + lm*Dx[i]*Dx[i] + a2*S;
+        const a12 = Ix[i]*Iy[i] + lm*Dx[i]*Dy[i];
+        const a22 = Iy[i]*Iy[i] + lm*Dy[i]*Dy[i] + a2*S;
+        const b1  = a2*S*ub - Ix[i]*It[i] - lm*Dx[i]*Dt[i];
+        const b2  = a2*S*vb - Iy[i]*It[i] - lm*Dy[i]*Dt[i];
+        const det = a11*a22 - a12*a12;
+        un[i]=( b1*a22 - a12*b2)/det;
+        vn[i]=( a11*b2 - a12*b1)/det;
+      }
+      u.set(un); v.set(vn);
+    }
+    return {u:Float64Array.from(u), v:Float64Array.from(v)};
+  }
+
+  /* ---- drawing ----------------------------------------------------------- */
+  function flowColor(fu,fv,maxm){
+    const mag=Math.min(1, Math.hypot(fu,fv)/maxm);
+    let h=(Math.atan2(fv,fu)*180/Math.PI+360)%360;
+    // hsl -> rgb, s = mag, l = 0.55
+    const s=mag, l=0.30+0.30*mag;
+    const c=(1-Math.abs(2*l-1))*s, hp=h/60, xx=c*(1-Math.abs(hp%2-1));
+    let r=0,gg=0,b=0;
+    if(hp<1){r=c;gg=xx;} else if(hp<2){r=xx;gg=c;} else if(hp<3){gg=c;b=xx;}
+    else if(hp<4){gg=xx;b=c;} else if(hp<5){r=xx;b=c;} else {r=c;b=xx;}
+    const mm=l-c/2;
+    return [(r+mm)*255,(gg+mm)*255,(b+mm)*255];
+  }
+  function drawPanel(px,py,title,kind,data){
+    const img=g.createImageData(W,H), d=img.data;
+    for(let i=0;i<N;i++){
+      let r,gg,b;
+      if(kind==='gray'){ const s=Math.max(0,Math.min(1,data[i]))*255; r=gg=b=s; }
+      else { const c=flowColor(data.u[i],data.v[i],1.7); r=c[0];gg=c[1];b=c[2]; }
+      d[i*4]=r; d[i*4+1]=gg; d[i*4+2]=b; d[i*4+3]=255;
+    }
+    const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=H;
+    tmp.getContext('2d').putImageData(img,0,0);
+    g.imageSmoothingEnabled=false;
+    g.drawImage(tmp,px,py,PAN,PH);
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(px+.5,py+.5,PAN,PH);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif'; g.textAlign='left';
+    g.fillText(title,px,py-7);
+  }
+  function drawArrows(px,py,fl){
+    g.strokeStyle='rgba(255,255,255,.75)'; g.lineWidth=1;
+    const sx=PAN/W, sy=PH/H, st=6;
+    g.beginPath();
+    for(let y=st>>1;y<H;y+=st) for(let x=st>>1;x<W;x+=st){
+      const i=y*W+x, X=px+(x+.5)*sx, Y=py+(y+.5)*sy;
+      const ex=X+fl.u[i]*5, ey=Y+fl.v[i]*5;
+      g.moveTo(X,Y); g.lineTo(ex,ey);
+      const ang=Math.atan2(ey-Y,ex-X);
+      g.moveTo(ex,ey); g.lineTo(ex-3*Math.cos(ang-0.4), ey-3*Math.sin(ang-0.4));
+      g.moveTo(ex,ey); g.lineTo(ex-3*Math.cos(ang+0.4), ey-3*Math.sin(ang+0.4));
+    }
+    g.stroke();
+  }
+  function drawSamples(px,py){
+    const sx=PAN/W, sy=PH/H;
+    g.fillStyle='#ffb454';
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++)
+      if(isSample[y*W+x]) g.fillRect(px+x*sx, py+y*sy, 1.6, 1.6);
+  }
+  function epe(fl){
+    let s=0, sb=0, nb=0;
+    for(let i=0;i<N;i++){
+      const e=Math.hypot(fl.u[i]-gtu[i], fl.v[i]-gtv[i]); s+=e;
+      const x=i%W, y=(i-x)/W;
+      // "boundary band": within 3 px of the box outline
+      const nearB = (Math.abs(x-boxL)<4||Math.abs(x-boxR)<4)&&y>boxT-4&&y<boxB+4 ||
+                    (Math.abs(y-boxT)<4||Math.abs(y-boxB)<4)&&x>boxL-4&&x<boxR+4;
+      if(nearB){ sb+=e; nb++; }
+    }
+    return {all:s/N, bnd:sb/Math.max(1,nb)};
+  }
+
+  function render(){
+    const lam=+sl.l.value/10, alpha=+sl.a.value/1000, sigD=+sl.s.value/10, dens=+sl.d.value;
+    vl.l.textContent=lam.toFixed(1); vl.a.textContent=alpha.toFixed(3);
+    vl.s.textContent=sigD.toFixed(1); vl.d.textContent=dens;
+    buildLidar(dens);
+
+    const plain = solve(alpha, 0,   sigD, false, false, 400);
+    const mod   = solve(alpha, lam, sigD, kA.checked, kB.checked, 400);
+
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    const y0=TOP, y1=TOP+PH+52;
+    drawPanel(PAD,        y0,'$I_1$ + LiDAR samples','gray',I1);  drawSamples(PAD,y0);
+    drawPanel(PAD+PAN+22, y0,'depth $D_1$ (dense, for reference)','gray',
+      Float64Array.from(D1,z=>1-Math.min(1,(z-5)/26)));
+    drawPanel(PAD+2*(PAN+22), y0,'ground-truth flow','flow',{u:gtu,v:gtv});
+    if(kT.checked) drawArrows(PAD+2*(PAN+22),y0,{u:gtu,v:gtv});
+
+    drawPanel(PAD,        y1,'plain Horn–Schunck','flow',plain);
+    if(kT.checked) drawArrows(PAD,y1,plain);
+    drawPanel(PAD+PAN+22, y1,'modified (depth-augmented)','flow',mod);
+    if(kT.checked) drawArrows(PAD+PAN+22,y1,mod);
+
+    // error bars panel
+    const px=PAD+2*(PAN+22);
+    const ep=epe(plain), em=epe(mod);
+    g.fillStyle='#151c2e'; g.fillRect(px,y1,PAN,PH);
+    g.strokeStyle='#2c3650'; g.strokeRect(px+.5,y1+.5,PAN,PH);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('average endpoint error (px)',px,y1-7);
+    const maxE=Math.max(ep.all,ep.bnd,em.all,em.bnd,0.05)*1.15;
+    const bars=[['whole image · HS',ep.all,'#6b7a99'],['whole image · new',em.all,'#41d8c9'],
+                ['at the car edge · HS',ep.bnd,'#ff6b81'],['at the car edge · new',em.bnd,'#7ee787']];
+    bars.forEach((b,k)=>{
+      const yy=y1+16+k*36, wpx=(b[1]/maxE)*(PAN-24);
+      g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif'; g.fillText(b[0],px+10,yy);
+      g.fillStyle=b[2]; g.fillRect(px+10,yy+4,Math.max(1,wpx),11);
+      g.fillStyle='#e6ecf7'; g.font='11px monospace'; g.fillText(b[1].toFixed(3),px+14+Math.max(1,wpx),yy+13);
+    });
+
+    const nS=m.reduce((a,b)=>a+b,0);
+    ro.innerHTML = 'LiDAR pixels with a usable depth gradient: <b>'+nS+'</b> of '+N+
+      ' (<b>'+(100*nS/N).toFixed(1)+'%</b>) &nbsp;·&nbsp; EPE whole image <b>'+ep.all.toFixed(3)+
+      '</b> → <b>'+em.all.toFixed(3)+'</b> &nbsp;·&nbsp; EPE in the boundary band <b>'+ep.bnd.toFixed(3)+
+      '</b> → <b>'+em.bnd.toFixed(3)+'</b>'+
+      (em.all<ep.all ? ' &nbsp;·&nbsp; <span style="color:#7ee787">improved '+((1-em.all/ep.all)*100).toFixed(0)+'%</span>' : '');
+  }
+  Object.values(sl).forEach(s=>s.addEventListener('input',render));
+  [kA,kB,kT].forEach(k=>k.addEventListener('change',render));
+  render();
+})();
+
+/* =========================================================================
+   DEMO 2 — two constraint lines in (u,v) space
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  // state: gradient angles + fixed temporal derivatives
+  let angI=0.5, angD=1.9, It=-0.9, Dt=0.7;
+  let drag=null;
+
+  const CX=cv.width*0.5, CY=cv.height*0.5, SC=48;   // px per flow unit
+  function toScreen(u,v){ return [CX+u*SC, CY+v*SC]; }
+
+  function line(gx,gy,gt,col,lbl){
+    // gx*u + gy*v + gt = 0  ->  draw across the canvas
+    const pts=[];
+    const R=12;
+    if(Math.abs(gy)>Math.abs(gx)){
+      for(const uu of [-R,R]) pts.push([uu, -(gx*uu+gt)/gy]);
+    } else {
+      for(const vv of [-R,R]) pts.push([-(gy*vv+gt)/gx, vv]);
+    }
+    const a=toScreen(pts[0][0],pts[0][1]), b=toScreen(pts[1][0],pts[1][1]);
+    g.strokeStyle=col; g.lineWidth=2.5; g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); g.stroke();
+    g.fillStyle=col; g.font='12px system-ui,sans-serif';
+    g.fillText(lbl, b[0]>cv.width-90?cv.width-140:b[0]+6, Math.max(16,Math.min(cv.height-8,b[1])));
+  }
+
+  function render(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    // grid
+    g.strokeStyle='#1c2438'; g.lineWidth=1;
+    for(let k=-8;k<=8;k++){
+      g.beginPath(); g.moveTo(CX+k*SC,0); g.lineTo(CX+k*SC,cv.height); g.stroke();
+      g.beginPath(); g.moveTo(0,CY+k*SC); g.lineTo(cv.width,CY+k*SC); g.stroke();
+    }
+    g.strokeStyle='#3a4767'; g.beginPath(); g.moveTo(0,CY); g.lineTo(cv.width,CY); g.stroke();
+    g.beginPath(); g.moveTo(CX,0); g.lineTo(CX,cv.height); g.stroke();
+    g.fillStyle='#6b7a99'; g.font='12px system-ui,sans-serif';
+    g.fillText('u →',cv.width-34,CY-8); g.fillText('v ↓',CX+8,16);
+
+    const Ix=Math.cos(angI), Iy=Math.sin(angI), Dx=Math.cos(angD), Dy=Math.sin(angD);
+    line(Ix,Iy,It,'#41d8c9','brightness:  I_x u + I_y v + I_t = 0');
+    line(Dx,Dy,Dt,'#ffb454','depth:  D_x u + D_y v + D_t = 0');
+
+    const det=Ix*Dy-Iy*Dx;
+    if(Math.abs(det)>1e-6){
+      const uu=(-It*Dy + Iy*Dt)/det, vv=(-Ix*Dt + It*Dx)/det;
+      const p=toScreen(uu,vv);
+      g.fillStyle='#7ee787'; g.beginPath(); g.arc(p[0],p[1],6,0,7); g.fill();
+      g.strokeStyle='#7ee787'; g.lineWidth=1; g.beginPath(); g.arc(p[0],p[1],12,0,7); g.stroke();
+      ro.innerHTML='Gradient angles: ∠∇I = <b>'+(angI*180/Math.PI).toFixed(0)+'°</b>, ∠∇D = <b>'+
+        (angD*180/Math.PI).toFixed(0)+'°</b> &nbsp;·&nbsp; determinant $I_xD_y-I_yD_x$ = <b>'+det.toFixed(3)+
+        '</b> &nbsp;·&nbsp; unique flow = <b>('+uu.toFixed(2)+', '+vv.toFixed(2)+
+        ')</b>'+(Math.abs(det)<0.15?' &nbsp;·&nbsp; <span style="color:#ff6b81">nearly parallel — ill-conditioned, the smoothness prior is doing the work</span>':'');
+    } else {
+      ro.innerHTML='<span style="color:#ff6b81">Gradients parallel: the two constraints are the same line (or contradictory). No unique flow — you are back to the aperture problem and only the smoothness term saves you.</span>';
+    }
+    // handles
+    [[angI,'#41d8c9'],[angD,'#ffb454']].forEach(([a,c],k)=>{
+      const R=110+k*26, hx=CX+Math.cos(a)*R, hy=CY+Math.sin(a)*R;
+      g.strokeStyle=c; g.lineWidth=1.5; g.setLineDash([3,3]);
+      g.beginPath(); g.moveTo(CX,CY); g.lineTo(hx,hy); g.stroke(); g.setLineDash([]);
+      g.fillStyle=c; g.beginPath(); g.arc(hx,hy,7,0,7); g.fill();
+      g.fillStyle='#0e1320'; g.font='bold 10px system-ui'; g.textAlign='center';
+      g.fillText(k?'∇D':'∇I',hx,hy+3); g.textAlign='left';
+    });
+  }
+  function pick(e){
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    return [mx,my];
+  }
+  cv.addEventListener('mousedown',e=>{
+    const [mx,my]=pick(e);
+    const d1=Math.hypot(mx-(CX+Math.cos(angI)*110), my-(CY+Math.sin(angI)*110));
+    const d2=Math.hypot(mx-(CX+Math.cos(angD)*136), my-(CY+Math.sin(angD)*136));
+    drag = d1<d2 ? (d1<26?'I':null) : (d2<26?'D':null);
+  });
+  window.addEventListener('mouseup',()=>drag=null);
+  cv.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    const [mx,my]=pick(e);
+    const a=Math.atan2(my-CY,mx-CX);
+    if(drag==='I') angI=a; else angD=a;
+    render();
+  });
+  cv.style.cursor='grab';
+  render();
+})();
+</script>
+</body>
+</html>

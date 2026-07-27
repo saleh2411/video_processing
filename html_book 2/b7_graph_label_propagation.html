@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q7 — Learning a mix of interests on a social graph</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q7</b> · Label propagation on a graph</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="b6_geodesic_intelligent_scissors.html">‹ Q6</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b8_kmeans_termination.html">Q8 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 9 &amp; 6 · Moed B 2022, question 7 · 13 points</div>
+    <h1>It says "social network". It means colorization.</h1>
+    <p class="lede">A handful of labelled nodes, a weighted graph, and a request for a
+    <em>mixture</em> at every other node. That is not a new problem — it is scribble propagation from the
+    colorization chapter with the pixel grid replaced by an arbitrary graph. The answer is the harmonic
+    solution of the graph Laplacian, it has a closed form, a two-line iterative version that scales, and a
+    random-walk interpretation that explains why the numbers are percentages in the first place.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 7 · 13 points · SEGMENTATION</span>
+    <p>Consider a Social network defined as a graph $G=(V,E)$, where nodes $v\in V$ denote users and edges
+    $(u,v)\in E$ denote connections between users. The weight function $w(u,v):E\to\mathbb{R}$ defines the
+    strength of the connection between users $u$ and $v$.</p>
+    <p style="margin-bottom:0">Assume the owner of the graph marks a few of the users (i.e., nodes) with a
+    label (say, user $u_1$ is a financial expert and user $u_2$ is a fashion expert). We wish to learn, for
+    each node in the graph, his/her mix of interests (i.e., user $v$ is 30% interested in finance and 70%
+    interested in fashion). Suggest an algorithm for doing that.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid, the paint, and the string</span>
+    <p>Imagine every person is a little bowl, and the friendships between them are <strong>straws</strong>
+    connecting the bowls. A thick straw means best friends; a thin straw means you met once.</p>
+    <p>Now pour <strong>blue paint</strong> into the bowl of the finance expert and keep pouring — that bowl
+    stays pure blue forever, because he <em>is</em> the finance expert. Pour <strong>pink paint</strong> into
+    the fashion expert's bowl, and keep it pure pink forever.</p>
+    <p>Then just wait. Paint flows through the straws. A bowl connected by three thick straws to blue bowls
+    and one thin straw to a pink bowl ends up mostly blue with a hint of pink. A bowl exactly between the two
+    groups ends up genuinely purple.</p>
+    <p>When everything stops moving, look in each bowl: <em>70% blue and 30% pink</em>. That is the answer
+    the question asks for, and the "70/30" is not a metaphor — it comes out of the maths as an exact
+    proportion, because paint is never created or destroyed as it flows.</p>
+    <p>Two ways to say what "stopped moving" means, and they are the <em>same</em> statement:</p>
+    <ul>
+      <li><strong>Balance.</strong> Every unlabelled bowl holds exactly the (weight-)average of its
+      neighbours. Nothing wants to flow any more.</li>
+      <li><strong>Smoothness.</strong> Friends ended up with similar mixes. Formally, we minimised the total
+      disagreement across all the straws, thick straws counting more.</li>
+    </ul>
+    <p>And a third way to say it, which is the one that explains the percentages: <strong>drop an ant on a
+    node and let it wander along the straws, preferring thick ones. The chance it bumps into the finance
+    expert before it bumps into the fashion expert — that is exactly the blue fraction.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The whole answer, in one sentence</span>
+    Solve for the <strong>harmonic function</strong> on the graph: fix $f = $ one-hot at the labelled nodes,
+    and at every other node set $f(v)$ = the weighted average of its neighbours. Equivalently minimise
+    $\frac12\sum_{(u,v)\in E} w(u,v)\|f(u)-f(v)\|^2$ subject to the label constraints — a quadratic in the
+    graph Laplacian with the closed form
+    $f_U = (D_{UU}-W_{UU})^{-1}W_{UL}f_L$, computed in practice by the two-line iteration
+    $f \leftarrow D^{-1}Wf$ with the labels re-clamped each round.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Setting it up</h2>
+
+  <div class="explain">
+    <span class="explain-label">Notation</span>
+    <ul>
+      <li>$W$ — the $n\times n$ symmetric weight matrix, $W_{uv}=w(u,v)\ge0$ ($0$ if not connected).</li>
+      <li>$D = \mathrm{diag}(d_1,\dots,d_n)$, $d_u = \sum_v W_{uv}$ — the degree matrix.</li>
+      <li>$L = D-W$ — the <span class="term">graph Laplacian</span>.</li>
+      <li>$c$ labels (here $c=2$: finance, fashion). $F \in \mathbb{R}^{n\times c}$, row $f(v)^{\!\top}$ is
+      $v$'s mixture. We will need $f(v)\ge 0$ and $\sum_\ell f_\ell(v)=1$ for it to <em>be</em> a mixture.</li>
+      <li>$L$ (as an index set) = the labelled nodes, $U$ = the unlabelled ones. $F_L$ is fixed to one-hot
+      rows: $f(u_1)=(1,0)$, $f(u_2)=(0,1)$.</li>
+    </ul>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">The objective — say the assumption out loud</span>
+    <p>The <em>only</em> thing we assume is <strong>homophily</strong>: strongly connected users have similar
+    interests. Turn that into an energy that punishes disagreement in proportion to the connection strength:</p>
+  </div>
+
+  <div class="eq">$$ E(F) \;=\; \tfrac12\sum_{(u,v)\in E} w(u,v)\,\big\|f(u)-f(v)\big\|^2 \;=\; \operatorname{tr}\!\big(F^{\!\top} L\,F\big) \quad\text{s.t.}\quad F_L = Y_L \tag{1} $$</div>
+
+  <div class="explain">
+    <p>$L$ is positive semi-definite ($x^{\!\top}Lx = \frac12\sum w_{uv}(x_u-x_v)^2 \ge 0$), so (1) is a
+    <strong>convex</strong> quadratic and has a unique minimiser as long as every connected component
+    contains at least one labelled node. Differentiating with respect to the free rows:</p>
+  </div>
+
+  <div class="eq">$$ \frac{\partial E}{\partial f(v)} = 2\sum_{u} w(u,v)\big(f(v)-f(u)\big) = 0 \;\;\Longleftrightarrow\;\; f(v) = \frac{1}{d_v}\sum_{u} w(u,v)\, f(u) \quad \forall v\in U \tag{2} $$</div>
+
+  <div class="callout key"><span class="lbl">Equation (2) is the whole algorithm</span>
+    <strong>Every unlabelled node equals the weighted average of its neighbours.</strong> A function with
+    that property is called <span class="term">harmonic</span> — the discrete analogue of a soap film
+    stretched over a wire frame, where the wire is the labelled set. Everything below is just different ways
+    of computing it.
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Why the answer is automatically a set of percentages</span>
+    <p>Two facts, both immediate from (2), and both worth stating in the exam:</p>
+    <ul>
+      <li><strong>Non-negativity and boundedness (the maximum principle).</strong> A weighted average of
+      numbers in $[0,1]$ is in $[0,1]$. So no node can be $-15\%$ interested in finance, and none can be
+      $130\%$: the extremes are attained only at the labelled nodes.</li>
+      <li><strong>Sum to one.</strong> Let $s(v) = \sum_\ell f_\ell(v)$. Summing (2) over $\ell$ shows $s$ is
+      itself harmonic, and $s \equiv 1$ on the labelled nodes. A harmonic function with constant boundary
+      values is that constant, so $s\equiv1$ everywhere.</li>
+    </ul>
+    <p>So the output is a genuine probability distribution per node — "30% finance, 70% fashion" — with no
+    normalisation hack required. That is a real advantage over, say, fitting a regressor per label
+    independently.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Three ways to compute it</h2>
+
+  <div class="summary">
+    <span class="summary-label">Same answer, different trade-offs</span>
+    <table>
+      <tr><th>Method</th><th>Formula</th><th>Cost / when</th></tr>
+      <tr><td><b>A · Closed form</b></td>
+        <td>Partition $L=\begin{pmatrix}L_{LL}&L_{LU}\\L_{UL}&L_{UU}\end{pmatrix}$. Then
+        $L_{UU}F_U + L_{UL}F_L = 0$, i.e.
+        $$F_U = -L_{UU}^{-1}L_{UL}F_L = (D_{UU}-W_{UU})^{-1}W_{UL}F_L$$</td>
+        <td>$L_{UU}$ is symmetric, diagonally dominant and non-singular (whenever every component has a
+        label), so it is an <b>M-matrix</b>: sparse Cholesky or preconditioned conjugate gradient solves it
+        fast. Exact. Best for up to $\sim10^6$ nodes.</td></tr>
+      <tr><td><b>B · Iterative (label propagation)</b></td>
+        <td>$F \leftarrow D^{-1}WF$, then re-clamp $F_L \leftarrow Y_L$. Repeat until
+        $\|\Delta F\|_\infty<\varepsilon$.</td>
+        <td>$O(|E|\,c)$ per sweep, no matrix stored, trivially parallel/distributed — the practical choice
+        for a real social graph. This is exactly Jacobi iteration on system A, and it converges
+        geometrically (see below).</td></tr>
+      <tr><td><b>C · Random walk (Monte-Carlo)</b></td>
+        <td>$f_\ell(v) = \Pr[$ a random walk from $v$ with $P=D^{-1}W$ is <b>absorbed</b> at a node labelled
+        $\ell]$.</td>
+        <td>$O(\text{walks}\times\text{length})$ and needs no global pass — the only option if you want a
+        single user's mixture without touching the whole graph. Also the interpretation that <em>explains</em>
+        the percentages.</td></tr>
+    </table>
+    <p style="margin-top:12px">A, B and C compute the <strong>same function</strong>. A is the linear system,
+    B is an iterative solver for it, C is its probabilistic meaning.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Why B converges</span>
+    <p>Write the iteration on the free block only: $F_U^{(t+1)} = P_{UU}F_U^{(t)} + P_{UL}Y_L$ with
+    $P = D^{-1}W$ row-stochastic. Then</p>
+  </div>
+
+  <div class="eq">$$ F_U^{(t)} - F_U^\star = P_{UU}^{\,t}\big(F_U^{(0)} - F_U^\star\big), \qquad \|P_{UU}\|_\infty = \max_{v\in U}\sum_{u\in U}P_{vu} \;\le\; 1 $$</div>
+
+  <div class="explain">
+    <p>and the inequality is <strong>strict</strong> for any unlabelled node adjacent to a labelled one,
+    because that node leaks some of its row mass into $P_{UL}$. Since every unlabelled node can reach a
+    labelled node (our standing assumption), some power $P_{UU}^{\,k}$ has all row sums $<1$, so
+    $\rho(P_{UU})<1$ and the error decays geometrically. The rate is governed by the
+    <span class="term">spectral gap</span> — a graph with a narrow bottleneck between two communities
+    converges slowly, which is precisely the regime where the answer is most interesting.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Play with it</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — paint flowing through the network</h4><span class="tag">click a node to (re)label it</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Two communities joined by a thin bridge. Ring colour shows each
+      user's mixture — <b style="color:#6ea8ff">blue = finance</b>,
+      <b style="color:#ff7ab6">pink = fashion</b> — with the exact percentage printed inside. Edge thickness
+      is $w(u,v)$. <b>Click any node</b> to cycle it through unlabelled → finance expert → fashion expert.
+      Labelled nodes have a white outline and never change.</p>
+      <canvas id="c1" width="900" height="430"></canvas>
+      <div class="controls">
+        <div class="control"><label>bridge strength between the two communities <span class="val" id="v1b">0.35</span></label><input type="range" id="s1b" min="1" max="150" step="1" value="35"></div>
+        <div class="control"><label>iterations run <span class="val" id="v1t">0</span></label><input type="range" id="s1t" min="0" max="120" step="1" value="0"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b1s">▶ step once</button>
+        <button class="act" id="b1r">⏩ run to convergence</button>
+        <button class="act" id="b1z">↺ reset to uniform</button>
+        <label class="chk"><input type="checkbox" id="k1c"> soft clamping ($\alpha=0.9$) — for noisy labels</label>
+      </div>
+      <div class="readout" id="r1"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Things to try</span>
+    <b>1.</b> Step once, twice, three times: information spreads exactly one hop per iteration — that is why
+    the number of iterations you need is roughly the graph's diameter divided by the spectral gap.
+    <b>2.</b> Drag the bridge strength to almost zero: the right community becomes uniformly $0\%$ finance,
+    because the only path to the finance expert has dried up. Raise it and watch a real gradient appear
+    across the bridge. <b>3.</b> Label a third node in the middle as a finance expert and see the whole
+    right community shift — this is why a handful of well-placed labels beats many badly-placed ones.
+    <b>4.</b> Turn on soft clamping: even the labelled nodes now drift slightly, which is what you want if
+    the owner's labels might be wrong.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the same numbers, by random walk</h4><span class="tag">click a node, then run walks</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Pick a starting user and release ants. Each ant hops to a random
+      neighbour with probability $P_{uv}=w(u,v)/d_u$ and <b>stops</b> when it reaches a labelled expert. The
+      bars show the empirical fraction absorbed at each expert against the value the linear solve predicts.
+      They converge to the same numbers — that is the theorem, measured.</p>
+      <canvas id="c2" width="900" height="380"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="b2r">🐜 release 200 ants</button>
+        <button class="act" id="b2m">🐜 release 2000 ants</button>
+        <button class="act" id="b2z">↺ clear tally</button>
+      </div>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Variants, edge cases, and the course connection</h2>
+
+  <div class="summary">
+    <span class="summary-label">What to add for full marks</span>
+    <table>
+      <tr><th>Issue</th><th>Handling</th></tr>
+      <tr><td><b>Noisy or contradictory labels</b></td>
+        <td>Hard clamping trusts the owner absolutely. Use the <em>soft</em> variant (Zhou et al., "local
+        and global consistency"): with $S = D^{-1/2}WD^{-1/2}$,
+        $F^{(t+1)} = \alpha S F^{(t)} + (1-\alpha)Y$, whose fixed point is
+        $F^\star=(1-\alpha)(I-\alpha S)^{-1}Y$. A labelled node can now be overruled by an overwhelming
+        neighbourhood. $\alpha\to1$ recovers hard propagation; $\alpha\to0$ ignores the graph.</td></tr>
+      <tr><td><b>A component with no label</b></td>
+        <td>$L_{UU}$ becomes singular and the mixture is genuinely undefined — there is no information. Detect
+        it (connected components) and either report "unknown" or fall back to a prior. The clean fix is a
+        <em>teleport</em>: add a virtual node connected to everyone with small weight $\epsilon$ carrying the
+        prior distribution. This is exactly damping in <b>personalised PageRank</b>, and it also makes
+        $L_{UU}$ strictly diagonally dominant, hence better conditioned.</td></tr>
+      <tr><td><b>Class imbalance</b></td>
+        <td>If there are 50 finance experts and 1 fashion expert, mass floods in from the finance side and
+        every node looks financial. Fix with <em>class mass normalisation</em>: rescale each column of $F_U$
+        so the total mass per class matches a desired prior, then re-normalise the rows.</td></tr>
+      <tr><td><b>Where do the weights come from?</b></td>
+        <td>The question hands you $w$. If it did not, you would build it — e.g. $w(u,v)=\exp(-\|x_u-x_v\|^2/2\sigma^2)$
+        from user features, or interaction counts. Note the answer is <em>very</em> sensitive to $\sigma$;
+        this is the same "how do I set the affinity scale" question as in normalized cuts.</td></tr>
+      <tr><td><b>Directed / asymmetric graphs</b></td>
+        <td>"$u$ follows $v$" is not symmetric. The energy (1) needs a symmetric $W$; either symmetrise
+        ($\tilde W = (W+W^{\!\top})/2$) or drop the energy formulation and keep the random-walk one, which
+        works verbatim for any row-stochastic $P$ — the absorption probabilities are still the solution of
+        $f = Pf$ with clamped rows.</td></tr>
+      <tr><td><b>Scale</b></td>
+        <td>Method B is $O(|E|c)$ per sweep and needs only neighbour messages, so it maps directly onto
+        Pregel/GraphX-style distributed processing. For a billion-edge graph that is the only viable option.</td></tr>
+    </table>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Why this is a <em>video processing</em> question</span>
+    <p>Replace "user" with "pixel", "connection strength" with "colour similarity between neighbouring
+    pixels", and "expert" with "user scribble", and you have <strong>Chapter 9's colorization</strong>
+    verbatim: the user scribbles a few colours, and the algorithm solves exactly this quadratic to spread
+    them, with weights $w(u,v)=\exp(-(I_u-I_v)^2/2\sigma^2)$ so colour flows within a region and stops at
+    edges. The same solve is <strong>Chapter 10's matting</strong> (labels = foreground/background, output
+    $\alpha \in [0,1]$ is literally the mixture) and it is the supervised sibling of the
+    <strong>normalized-cut</strong> segmentation in the layers material — there you have no labels and
+    must take eigenvectors of $L$; here you have labels and get a plain linear solve. Saying this connection
+    explicitly is the difference between an answer and a good answer.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Model.</strong> Let $W$ be the symmetric weight matrix ($W_{uv}=w(u,v)\ge0$),
+    $D=\mathrm{diag}(d_u)$ with $d_u=\sum_v W_{uv}$, and $L=D-W$ the graph Laplacian. Represent each user's
+    interests as a row $f(v)\in\Delta^{c-1}$ of $F\in\mathbb{R}^{n\times c}$. Clamp the labelled users to
+    one-hot rows: $f(u_1)=(1,0)$, $f(u_2)=(0,1)$.</p>
+
+    <p><strong>Assumption and objective.</strong> Assume homophily — strongly connected users share
+    interests — and minimise the weighted disagreement</p>
+    <div class="eq">$$ \min_F\ E(F)=\tfrac12\!\!\sum_{(u,v)\in E}\!\! w(u,v)\|f(u)-f(v)\|^2 = \operatorname{tr}(F^{\!\top}LF) \quad\text{s.t. } F_L=Y_L. $$</div>
+    <p>$L\succeq0$, so this is convex with a unique solution whenever every connected component contains a
+    label. Setting the gradient to zero gives the <em>harmonic</em> condition: each unlabelled node is the
+    weighted average of its neighbours, $f(v)=\frac{1}{d_v}\sum_u w(u,v)f(u)$.</p>
+
+    <p><strong>Algorithm (iterative — the one to implement).</strong>
+    (1) initialise $F$ arbitrarily (uniform) and set $F_L=Y_L$;
+    (2) $F \leftarrow D^{-1}WF$;
+    (3) re-clamp $F_L\leftarrow Y_L$;
+    (4) repeat (2)–(3) until $\|\Delta F\|_\infty<\varepsilon$.
+    Cost $O(|E|c)$ per sweep, no matrix assembly, distributes across machines. It is Jacobi iteration for the
+    linear system, and it converges geometrically because $\rho(P_{UU})<1$ where $P=D^{-1}W$ — each
+    unlabelled node adjacent to a labelled one leaks row mass, so some power of $P_{UU}$ is a strict
+    contraction.</p>
+
+    <p><strong>Closed form (equivalent).</strong> Partitioning into labelled/unlabelled blocks,
+    $L_{UU}F_U+L_{UL}F_L=0$, hence</p>
+    <div class="eq">$$ F_U = -L_{UU}^{-1}L_{UL}F_L = (D_{UU}-W_{UU})^{-1}W_{UL}F_L, $$</div>
+    <p>a sparse symmetric diagonally-dominant system solved by Cholesky or conjugate gradient.</p>
+
+    <p><strong>Why the output is a valid mixture.</strong> By the maximum principle a weighted average of
+    values in $[0,1]$ stays in $[0,1]$, so all entries are non-negative; and $\sum_\ell f_\ell$ is itself
+    harmonic with boundary value $1$, hence identically $1$. So $f(v)$ is a probability distribution — "30%
+    finance, 70% fashion" — with no post-normalisation. Its meaning: $f_\ell(v)$ is the probability that a
+    random walk started at $v$, moving with $P=D^{-1}W$, reaches a node labelled $\ell$ before any other
+    labelled node.</p>
+
+    <p><strong>Practical notes.</strong> For unreliable labels use soft clamping
+    $F\leftarrow\alpha SF+(1-\alpha)Y$ with $S=D^{-1/2}WD^{-1/2}$ (fixed point
+    $(1-\alpha)(I-\alpha S)^{-1}Y$). For components with no labelled node the answer is undefined — add a
+    small-weight teleport edge to a virtual prior node (personalised PageRank damping), which also improves
+    conditioning. With very unequal numbers of labels per class, apply class-mass normalisation. This is
+    exactly the scribble-propagation solve used for video colorization and matting, with pixels replaced by
+    users and colour similarity replaced by connection strength.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why not just k-means / spectral clustering on the graph?</summary>
+    <p>Because they answer a different question. Clustering is <em>unsupervised</em>: it partitions the graph
+    into groups and then you would still have to decide which group is "finance", and every node would get a
+    hard 0/1 assignment rather than a mixture. This question hands you labels and asks for soft
+    proportions, so the right tool is semi-supervised. The connection is close, though: the normalized-cut
+    relaxation minimises the same Dirichlet energy $x^{\!\top}Lx$ but subject to a norm constraint rather
+    than boundary conditions, so it ends up as an eigenvector problem instead of a linear solve. Labels turn
+    an eigenproblem into a much easier linear system — that is the whole benefit of supervision here.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Prove that the mixture at a node lies between the min and max of its neighbours.</summary>
+    <p>Directly from (2): $f(v)=\sum_u \frac{w(u,v)}{d_v}f(u)$, and the coefficients $\frac{w(u,v)}{d_v}$ are
+    non-negative and sum to $1$ — so $f(v)$ is a <em>convex combination</em> of its neighbours' values and
+    therefore lies in their convex hull, hence between their min and max. Consequently the global extrema of
+    $f$ over the graph must occur at labelled nodes (the discrete maximum principle): if an interior node
+    were a strict maximum it would have to exceed the average of its neighbours, contradicting (2). This is
+    the argument behind both "no negative percentages" and "the rows sum to one".</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How many labels do you need, and where should they go?</summary>
+    <p>At minimum, one per connected component per class — otherwise a class simply cannot reach part of the
+    graph. Beyond that, placement matters far more than count: labels should cover the graph's
+    <em>bottlenecks</em>, because the solution changes fastest there and is nearly constant inside a
+    tightly-knit community. This is the standard active-learning result for graph SSL: query the node whose
+    label reduces the expected error most, which in practice means high-centrality nodes and nodes whose
+    current mixture is closest to $50/50$ (maximum uncertainty). One well-placed label in a community beats
+    ten labels piled inside another one.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What if the graph is huge — a billion edges?</summary>
+    <p>Use method B and never build a matrix. Each sweep is "every node sends $f(v)$ weighted by $w$ along
+    each edge, then divides by its degree", which is one map-reduce / Pregel superstep and is embarrassingly
+    parallel. Convergence typically needs tens of sweeps, not thousands, because information travels one hop
+    per sweep and social graphs have small diameter. Two useful accelerations: run it on a coarsened graph
+    first and use the result to initialise the fine level (algebraic multigrid), and stop early — you rarely
+    need the mixture to more than two decimals. If you only want <em>one</em> user's mixture, use method C
+    (random walks from that node), which touches only a local neighbourhood.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Show that the random-walk interpretation really gives the same $f$.</summary>
+    <p>Let $h_\ell(v)$ be the probability that a walk from $v$ is absorbed at a node labelled $\ell$.
+    Condition on the first step: from an unlabelled $v$ the walk moves to $u$ with probability
+    $P_{vu}=w(u,v)/d_v$, so $h_\ell(v)=\sum_u P_{vu}h_\ell(u)$ — which is exactly the harmonic condition (2).
+    And on labelled nodes $h_\ell$ is $1$ for its own label, $0$ otherwise — exactly the clamping. The
+    harmonic function with those boundary values is unique (by the maximum principle applied to the
+    difference of two solutions), so $h_\ell \equiv f_\ell$. This is the classical connection between the
+    Dirichlet problem and Brownian motion, on a graph.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What breaks if some weights are negative (an "enemy" edge)?</summary>
+    <p>Nearly everything. $L$ is no longer positive semi-definite, so (1) may be unbounded below and the
+    "minimiser" meaningless; the coefficients in (2) stop being a convex combination, so mixtures can go
+    negative or exceed 1; and the random-walk interpretation dies because $P$ is no longer a stochastic
+    matrix. Signed graphs need a different formulation — e.g. the <em>signed</em> Laplacian
+    $\bar L = \bar D - W$ with $\bar D = \mathrm{diag}(\sum_v|w_{uv}|)$, which is PSD again — or a model
+    based on structural balance. Worth one sentence in the exam: it shows you know why the non-negativity of
+    $w$ is load-bearing rather than incidental.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The question says "segmentation". Where is the segmentation?</summary>
+    <p>Take the argmax per node and you have a hard partition of the graph into a finance region and a
+    fashion region — a segmentation, with the boundary sitting where the mixture crosses 50/50, which is
+    exactly at the graph's bottleneck. The soft mixture is strictly more informative: it is the graph
+    analogue of an <em>alpha matte</em> rather than a binary mask, and the pixels/users where it is near
+    $0.5$ are precisely the ones you are unsure about. That is also why the same solve is used for matting
+    in Chapter 10 — there the "mixture" is the opacity $\alpha$.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>assumption</td><td>homophily — strongly connected users are similar</td></tr>
+      <tr><td>energy</td><td>$\frac12\sum w_{uv}\|f_u-f_v\|^2 = \operatorname{tr}(F^{\!\top}LF)$, $L=D-W$</td></tr>
+      <tr><td>optimality</td><td><b>harmonic</b>: $f(v)=\frac1{d_v}\sum_u w(u,v)f(u)$ for unlabelled $v$</td></tr>
+      <tr><td>closed form</td><td>$F_U=(D_{UU}-W_{UU})^{-1}W_{UL}F_L$</td></tr>
+      <tr><td>iteration</td><td>$F\leftarrow D^{-1}WF$, re-clamp labels; $O(|E|c)$/sweep, $\rho(P_{UU})<1$</td></tr>
+      <tr><td>meaning</td><td>$f_\ell(v)$ = P[random walk from $v$ hits an $\ell$-labelled node first]</td></tr>
+      <tr><td>valid mixture</td><td>max principle ⇒ $f\ge0$; $\sum_\ell f_\ell$ harmonic with boundary 1 ⇒ sums to 1</td></tr>
+      <tr><td>noisy labels</td><td>soft clamp $F\leftarrow\alpha SF+(1-\alpha)Y$, $S=D^{-1/2}WD^{-1/2}$</td></tr>
+      <tr><td>unlabelled component</td><td>singular $L_{UU}$ → add a teleport/prior node (personalised PageRank)</td></tr>
+      <tr><td>same thing as</td><td>colorization scribbles (Ch.9) · matting $\alpha$ (Ch.10) · supervised n-cut</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="b6_geodesic_intelligent_scissors.html"><span class="dir">Previous</span><span class="ttl">Q6 · Geodesic path</span></a>
+    <a class="next" href="b8_kmeans_termination.html"><span class="dir">Next question</span><span class="ttl">Q8 · Does k-means terminate? ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   Shared graph
+   ========================================================================= */
+const POS=[[95,130],[180,72],[262,140],[125,242],[222,224],[152,342],[268,312],
+           [392,190],[424,312],
+           [562,118],[652,74],[726,158],[594,240],[706,278],[624,352],[772,352]];
+const BASE_EDGES=[
+  [0,1,.90],[0,3,.80],[0,2,.55],[1,2,.90],[1,4,.70],[2,4,.80],[3,4,.90],[3,5,.80],
+  [4,5,.60],[4,6,.70],[5,6,.90],[2,6,.45],
+  [2,7,'B'],[6,8,'B'],[7,8,.60],
+  [7,9,.50],[8,12,.50],[9,10,.90],[9,11,.70],[9,12,.80],[10,11,.90],[11,13,.80],
+  [12,13,.70],[12,14,.80],[13,14,.60],[13,15,.90],[14,15,.80],[11,15,.50]
+];
+const NN=POS.length, LBL_COL=['#6ea8ff','#ff7ab6'], LBL_NAME=['finance','fashion'];
+
+function buildW(bridge){
+  const W=[];
+  for(let i=0;i<NN;i++) W.push(new Float64Array(NN));
+  for(const [a,b,w] of BASE_EDGES){ const v=(w==='B')?bridge:w; W[a][b]=v; W[b][a]=v; }
+  return W;
+}
+function degrees(W){
+  const d=new Float64Array(NN);
+  for(let i=0;i<NN;i++){ let s=0; for(let j=0;j<NN;j++) s+=W[i][j]; d[i]=s; }
+  return d;
+}
+/* exact solution by running the clamped iteration a long time */
+function solveExact(W,lab){
+  const d=degrees(W);
+  let F=[]; for(let i=0;i<NN;i++) F.push([0.5,0.5]);
+  for(let i=0;i<NN;i++) if(lab[i]>=0) F[i]=lab[i]===0?[1,0]:[0,1];
+  for(let t=0;t<4000;t++){
+    const G=[];
+    for(let i=0;i<NN;i++){
+      if(lab[i]>=0){ G.push(F[i].slice()); continue; }
+      if(d[i]<1e-12){ G.push(F[i].slice()); continue; }
+      let a=0,b=0;
+      for(let j=0;j<NN;j++) if(W[i][j]>0){ a+=W[i][j]*F[j][0]; b+=W[i][j]*F[j][1]; }
+      G.push([a/d[i], b/d[i]]);
+    }
+    F=G;
+  }
+  return F;
+}
+function drawGraph(g,W,F,lab,opts){
+  opts=opts||{};
+  const d=degrees(W);
+  // edges
+  for(const [a,b,w0] of BASE_EDGES){
+    const w=W[a][b];
+    g.strokeStyle='rgba(159,176,204,'+(0.14+0.5*w)+')';
+    g.lineWidth=0.6+4.2*w;
+    g.beginPath(); g.moveTo(POS[a][0],POS[a][1]); g.lineTo(POS[b][0],POS[b][1]); g.stroke();
+  }
+  // nodes
+  for(let i=0;i<NN;i++){
+    const [x,y]=POS[i], p=F[i][0], R=opts.R||20;
+    // pie: finance arc then fashion arc
+    g.beginPath(); g.moveTo(x,y); g.arc(x,y,R,-Math.PI/2,-Math.PI/2+2*Math.PI*p); g.closePath();
+    g.fillStyle=LBL_COL[0]; g.fill();
+    g.beginPath(); g.moveTo(x,y); g.arc(x,y,R,-Math.PI/2+2*Math.PI*p,1.5*Math.PI); g.closePath();
+    g.fillStyle=LBL_COL[1]; g.fill();
+    g.beginPath(); g.arc(x,y,R,0,7);
+    g.strokeStyle= lab[i]>=0 ? '#ffffff' : '#0e1320';
+    g.lineWidth= lab[i]>=0 ? 3 : 2; g.stroke();
+    if(opts.mark===i){ g.strokeStyle='#ffb454'; g.lineWidth=3;
+      g.beginPath(); g.arc(x,y,R+6,0,7); g.stroke(); }
+    g.fillStyle='#0b1020'; g.font='bold 11px system-ui,sans-serif'; g.textAlign='center';
+    g.fillText(Math.round(p*100)+'%', x, y+4);
+    g.fillStyle='#6b7a99'; g.font='10px system-ui,sans-serif';
+    g.fillText('u'+i, x, y+R+13);
+    if(lab[i]>=0){ g.fillStyle='#fff'; g.font='bold 10px system-ui,sans-serif';
+      g.fillText(LBL_NAME[lab[i]].toUpperCase(), x, y-R-8); }
+    g.textAlign='left';
+  }
+}
+
+/* =========================================================================
+   DEMO 1 — label propagation
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d'), ro=document.getElementById('r1');
+  const sB=document.getElementById('s1b'), vB=document.getElementById('v1b'),
+        sT=document.getElementById('s1t'), vT=document.getElementById('v1t');
+  const kC=document.getElementById('k1c');
+  const lab=new Int8Array(NN).fill(-1); lab[0]=0; lab[15]=1;
+  let F=null, iters=0, W=null, EX=null, lastDelta=0;
+
+  function reset(){
+    F=[]; for(let i=0;i<NN;i++) F.push(lab[i]>=0?(lab[i]===0?[1,0]:[0,1]):[0.5,0.5]);
+    iters=0; lastDelta=0; refresh();
+  }
+  function step(){
+    const d=degrees(W), alpha=0.9;
+    const G=[];
+    let delta=0;
+    for(let i=0;i<NN;i++){
+      if(!kC.checked && lab[i]>=0){ G.push(F[i].slice()); continue; }
+      if(d[i]<1e-12){ G.push(F[i].slice()); continue; }
+      let a=0,b=0;
+      for(let j=0;j<NN;j++) if(W[i][j]>0){ a+=W[i][j]*F[j][0]; b+=W[i][j]*F[j][1]; }
+      a/=d[i]; b/=d[i];
+      if(kC.checked && lab[i]>=0){
+        a=alpha*a+(1-alpha)*(lab[i]===0?1:0);
+        b=alpha*b+(1-alpha)*(lab[i]===1?1:0);
+        const s=a+b; a/=s; b/=s;
+      }
+      delta=Math.max(delta, Math.abs(a-F[i][0]));
+      G.push([a,b]);
+    }
+    F=G; iters++; lastDelta=delta;
+  }
+  function refresh(){
+    const bridge=+sB.value/100;
+    vB.textContent=bridge.toFixed(2); vT.textContent=iters;
+    sT.value=Math.min(120,iters);
+    W=buildW(bridge);
+    EX=solveExact(W,lab);
+    draw();
+  }
+  function draw(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    g.fillStyle='#6b7a99'; g.font='12px system-ui,sans-serif';
+    g.fillText('community A', 60, 30); g.fillText('the bridge', 380, 30); g.fillText('community B', 690, 30);
+    drawGraph(g,W,F,lab,{});
+    // convergence bar
+    let err=0; for(let i=0;i<NN;i++) err=Math.max(err,Math.abs(F[i][0]-EX[i][0]));
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('distance from the exact harmonic solution', 24, 400);
+    g.fillStyle='#151c2e'; g.fillRect(24,406,400,12);
+    g.fillStyle= err<0.005?'#7ee787':'#ffb454'; g.fillRect(24,406,Math.min(400,err*800),12);
+    g.fillStyle='#e6ecf7'; g.font='11px monospace'; g.fillText(err.toFixed(5), 432, 416);
+    ro.innerHTML='iterations: <b>'+iters+'</b> &nbsp;·&nbsp; largest change last sweep: <b>'+
+      lastDelta.toFixed(5)+'</b> &nbsp;·&nbsp; max |current − exact|: <b>'+err.toFixed(5)+'</b>'+
+      (err<0.001?' &nbsp;·&nbsp; <span style="color:#7ee787">converged</span>':'')+
+      '<br>labelled: '+[...lab].map((l,i)=>l>=0?('u'+i+'='+LBL_NAME[l]):null).filter(Boolean).join(', ')+
+      ' &nbsp;·&nbsp; sum of each row (should be exactly 1): <b>'+
+      (F.reduce((a,r)=>a+r[0]+r[1],0)/NN).toFixed(6)+'</b>';
+  }
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    for(let i=0;i<NN;i++) if(Math.hypot(mx-POS[i][0],my-POS[i][1])<22){
+      lab[i]= lab[i]===-1?0 : (lab[i]===0?1:-1);
+      if(lab[i]>=0) F[i]=lab[i]===0?[1,0]:[0,1];
+      refresh(); return;
+    }
+  });
+  cv.style.cursor='pointer';
+  document.getElementById('b1s').onclick=()=>{ step(); refresh(); };
+  document.getElementById('b1r').onclick=()=>{ for(let t=0;t<300 && (t<3||lastDelta>1e-6);t++) step(); refresh(); };
+  document.getElementById('b1z').onclick=reset;
+  sB.addEventListener('input',refresh);
+  kC.addEventListener('change',()=>{ reset(); });
+  reset();
+})();
+
+/* =========================================================================
+   DEMO 2 — random walk absorption
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  const lab=new Int8Array(NN).fill(-1); lab[0]=0; lab[15]=1;
+  const W=buildW(0.35), d=degrees(W), EX=solveExact(W,lab);
+  let start=9, tally=[0,0], steps=0, lastPath=[];
+
+  function walk(){
+    let v=start, path=[v], guard=0;
+    while(lab[v]<0 && guard++<20000){
+      const r=Math.random()*d[v]; let acc=0, nx=v;
+      for(let j=0;j<NN;j++){ if(W[v][j]<=0) continue; acc+=W[v][j]; if(r<=acc){ nx=j; break; } }
+      v=nx; path.push(v);
+    }
+    steps+=path.length-1;
+    if(lab[v]>=0) tally[lab[v]]++;
+    return path;
+  }
+  function run(n){ for(let i=0;i<n;i++) lastPath=walk(); draw(); }
+  function draw(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    // dim graph
+    g.globalAlpha=0.55; drawGraph(g,W,EX,lab,{mark:start,R:18}); g.globalAlpha=1;
+    // last path
+    if(lastPath.length>1){
+      g.strokeStyle='#ffb454'; g.lineWidth=2.5; g.setLineDash([5,4]);
+      g.beginPath();
+      lastPath.forEach((v,i)=> i?g.lineTo(POS[v][0],POS[v][1]):g.moveTo(POS[v][0],POS[v][1]));
+      g.stroke(); g.setLineDash([]);
+    }
+    const tot=tally[0]+tally[1];
+    const BX=24, BY=372, BW=380;
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('empirical (ants) vs predicted (linear solve), for u'+start+':', BX, BY-58);
+    for(let l=0;l<2;l++){
+      const emp = tot? tally[l]/tot : 0, pred = EX[start][l];
+      const y=BY-40+l*22;
+      g.fillStyle='#151c2e'; g.fillRect(BX+92,y-9,BW,9);
+      g.fillStyle=LBL_COL[l]; g.fillRect(BX+92,y-9,BW*emp,9);
+      g.strokeStyle='#fff'; g.lineWidth=2;
+      g.beginPath(); g.moveTo(BX+92+BW*pred, y-13); g.lineTo(BX+92+BW*pred, y+3); g.stroke();
+      g.fillStyle=LBL_COL[l]; g.font='12px system-ui,sans-serif';
+      g.fillText(LBL_NAME[l], BX, y);
+      g.fillStyle='#e6ecf7'; g.font='11px monospace';
+      g.fillText('ants '+(emp*100).toFixed(1)+'%   |   solve '+(pred*100).toFixed(1)+'%', BX+92+BW+12, y);
+    }
+    g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif';
+    g.fillText('white tick = the value predicted by the harmonic solution', BX+92, BY+2);
+    ro.innerHTML='start node <b>u'+start+'</b> (click another) &nbsp;·&nbsp; ants released: <b>'+tot+
+      '</b> &nbsp;·&nbsp; mean walk length: <b>'+(tot?(steps/tot).toFixed(1):'—')+
+      '</b> hops &nbsp;·&nbsp; empirical finance share <b>'+(tot?(100*tally[0]/tot).toFixed(1):'—')+
+      '%</b> vs predicted <b>'+(100*EX[start][0]).toFixed(1)+'%</b>'+
+      (tot>=500 && Math.abs((tally[0]/tot)-EX[start][0])<0.04
+        ? ' &nbsp;·&nbsp; <span style="color:#7ee787">they agree — the mixture IS an absorption probability</span>':'');
+  }
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    for(let i=0;i<NN;i++) if(Math.hypot(mx-POS[i][0],my-POS[i][1])<20 && lab[i]<0){
+      start=i; tally=[0,0]; steps=0; lastPath=[]; draw(); return;
+    }
+  });
+  cv.style.cursor='pointer';
+  document.getElementById('b2r').onclick=()=>run(200);
+  document.getElementById('b2m').onclick=()=>run(2000);
+  document.getElementById('b2z').onclick=()=>{ tally=[0,0]; steps=0; lastPath=[]; draw(); };
+  draw();
+})();
+</script>
+</body>
+</html>

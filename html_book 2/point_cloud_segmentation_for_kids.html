@@ -178,10 +178,59 @@
       The readout tells you how many separate islands the network currently has (you want exactly 1).</p>
       <canvas id="cvB" width="900" height="400"></canvas>
       <div class="controls">
-        <div class="control"><label>k  (neighbours per dot) <span class="val" id="vBk">6</span></label><input type="range" id="Bk" min="1" max="14" step="1" value="6"></div>
+        <div class="control"><label>k  (neighbours per dot) <span class="val" id="vBk">6</span></label><input type="range" id="Bk" min="1" max="16" step="1" value="6"></div>
+        <div class="control"><label>gap width <span class="val" id="vBg">wide</span></label><input type="range" id="Bg" min="2" max="26" step="1" value="9"></div>
+      </div>
+      <div class="btnrow">
+        <label class="chk"><input type="checkbox" id="Bcap"> apply the edge-length cap (3 × median 1-NN)</label>
       </div>
       <div class="readout" id="Bro"></div>
     </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">The rule the demo is measuring for you</span>
+    <p style="margin:6px 0 0">For kNN never to bridge the gap, <strong>every</strong> point needs its $k$-th
+    nearest neighbour to be closer than the nearest point on the other side. The binding case is at the
+    <strong>tip</strong> — everywhere else the across-gap distance is enormous and nothing can go wrong. So the
+    demo measures, at the tip, how many <em>genuine</em> neighbours are nearer than the gap. Call it
+    $k_{\text{safe}}$. Choose $k \le k_{\text{safe}}$ and you are fine; go one above and kNN is <em>forced</em> to
+    reach across.</p>
+    <p>Drag the gap slider and watch $k_{\text{safe}}$ track it — the prediction is exact:</p>
+    <table class="kv" style="margin-top:8px">
+      <tr><th>gap</th><th>spacing $s$</th><th>gap $G$</th><th>$k_{\text{safe}}$</th><th>first $k$ that bridges</th></tr>
+      <tr><td>wide (20°)</td><td>≈ 4.9 px</td><td>81 px</td><td>25</td><td class="yes">none, even at k = 16</td></tr>
+      <tr><td>medium (9°)</td><td>≈ 5.5 px</td><td>39 px</td><td>11</td><td><b>k = 12</b></td></tr>
+      <tr><td>narrow (4°)</td><td>≈ 5.1 px</td><td>16 px</td><td>2</td><td class="no"><b>k = 3</b> — even k = 4 bridges</td></tr>
+    </table>
+    <p style="margin-top:10px">So yes — <strong>shrink the gap and a perfectly reasonable k = 10 starts
+    failing.</strong> Nothing about $k$ changed; the geometry did.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">But k is the wrong knob to be fighting with</span>
+    <p style="margin:6px 0 0">What you actually want is <em>"connect to everything within radius $r$, where $r$ is
+    comfortably bigger than the spacing and comfortably smaller than the gap"</em> — a <strong>radius
+    graph</strong>. kNN is just a convenient approximation of that which adapts automatically when the scan's
+    point density varies, as real laser data always does.</p>
+    <p>Which means the two knobs do different jobs:</p>
+    <table class="kv" style="margin-top:8px">
+      <tr><th>knob</th><th>protects against</th><th>must be</th></tr>
+      <tr><td>$k$</td><td>islands / disconnection</td><td>large enough</td></tr>
+      <tr><td>length cap</td><td>bridging the gap</td><td>smaller than the gap</td></tr>
+    </table>
+    <p style="margin-top:10px"><strong>So if a small gap worries you, don't fiddle with $k$ — tick the cap.</strong>
+    kNN still <em>proposes</em> the across-gap neighbour; the cap <em>deletes</em> it before it becomes an edge.
+    That is exactly why step 1 of the answer says "optionally discarding edges longer than a cap": the cap is what
+    gives the guarantee, $k$ alone never does.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">And the limit where nothing saves you</span>
+    A usable cap exists only when the gap is <strong>a few times larger than the point spacing</strong>. Set the
+    gap slider to narrow and tick the cap: the cap now stops the bridges, but it also chops the surface itself
+    into islands. When two parts are separated by less than the sampling spacing, <strong>no purely positional
+    rule can separate them</strong> — your scan simply does not contain that information. That is when step 2's
+    normal-difference term must do the work instead: two panels meeting at a sharp crease have disagreeing
+    normals even when their points are millimetres apart. <em>Step 1 handles parts separated in <b>space</b>;
+    step 2 handles parts separated only in <b>orientation</b>.</em>
   </div>
 
   <!-- ==================================================================== -->
@@ -304,7 +353,163 @@
   </div>
 
   <!-- ==================================================================== -->
-  <h2>7 · The traps</h2>
+  <h2>7 · Steps 1 and 2 up close — with actual numbers</h2>
+
+  <div class="callout key"><span class="lbl">First, the thing that confuses everyone</span>
+    There are <strong>two different distances</strong> in this algorithm, doing two different jobs.
+    <table class="kv" style="margin-top:10px">
+      <tr><th></th><th>Which distance</th><th>Why it's allowed</th></tr>
+      <tr><td>Step 1 — who is <em>adjacent</em></td><td>plain Euclidean $\|p-q\|$ in 3D</td>
+        <td>you only ever use it <strong>locally</strong>, over a few cm</td></tr>
+      <tr><td>Step 4 — how <em>far</em> things are</td><td>geodesic = sum of edge weights along a path</td>
+        <td>this is what the segmentation actually decides with</td></tr>
+    </table>
+    <p style="margin-top:10px">The geodesic is <strong>built out of many small Euclidean steps</strong>. Euclidean
+    is trustworthy at 2 cm and a liar at 50 cm — the wheel and the handlebar are Euclidean-close but structurally
+    far. Since kNN only ever asks <em>"who are my 6 closest dots"</em>, it never gets the chance to tell that lie.</p>
+  </div>
+
+  <h3>Step 1 — which distance for the kNN? Just Euclidean.</h3>
+
+  <div class="eq">$$ \|p-q\| = \sqrt{(x_p-x_q)^2 + (y_p-y_q)^2 + (z_p-z_q)^2} $$</div>
+
+  <p>Nothing clever. Here is a worked example — eight points in cm: a flat panel lying in the plane $z=0$, a
+  vertical panel rising at $x=2$, and one point belonging to a completely different part.</p>
+
+  <pre class="ruler">A=(0,0,0)   B=(1,0,0)   C=(2,0,0)   D=(0,1,0)   E=(1,1,0)     &#8592; flat panel, z = 0
+F=(2,0,1)   G=(2,0,2)                                           &#8592; vertical panel, x = 2
+H=(0,0,8)                                                       &#8592; a different part entirely</pre>
+
+  <p>Take <strong>A = (0,0,0)</strong> and measure to everything else:</p>
+
+  <div class="summary">
+    <span class="summary-label">Every distance from A, sorted</span>
+    <table>
+      <tr><th>rank</th><th>to</th><th>difference vector</th><th>$\|p-q\|$</th><th>k = 3?</th></tr>
+      <tr><td>1</td><td>B</td><td>(1, 0, 0)</td><td>$\sqrt{1}$ = <b>1.000</b></td><td class="yes">kept</td></tr>
+      <tr><td>2</td><td>D</td><td>(0, 1, 0)</td><td>$\sqrt{1}$ = <b>1.000</b></td><td class="yes">kept</td></tr>
+      <tr><td>3</td><td>E</td><td>(1, 1, 0)</td><td>$\sqrt{2}$ = <b>1.414</b></td><td class="yes">kept</td></tr>
+      <tr><td>4</td><td>C</td><td>(2, 0, 0)</td><td>$\sqrt{4}$ = 2.000</td><td>—</td></tr>
+      <tr><td>5</td><td>F</td><td>(2, 0, 1)</td><td>$\sqrt{5}$ = 2.236</td><td>—</td></tr>
+      <tr><td>6</td><td>G</td><td>(2, 0, 2)</td><td>$\sqrt{8}$ = 2.828</td><td>—</td></tr>
+      <tr><td>7</td><td>H</td><td>(0, 0, 8)</td><td>$\sqrt{64}$ = 8.000</td><td>—</td></tr>
+    </table>
+    <p style="margin-top:12px">With <strong>k = 3</strong>, A's neighbours are <strong>{B, D, E}</strong>.
+    H is 8 cm away and never gets an edge — which is exactly the mechanism. A faraway part cannot become your
+    neighbour, so no bridge is ever built across empty space.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 4 — pick a point, watch its kNN get chosen</h4><span class="tag">click a point</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The eight points above, drawn in an isometric view. Click any point to
+      make it the query. The table on the right is every distance, sorted; the top k are kept, and anything longer
+      than the cap is thrown away even if it made the top k.</p>
+      <canvas id="cvD" width="900" height="420"></canvas>
+      <div class="controls">
+        <div class="control"><label>k <span class="val" id="vDk">3</span></label><input type="range" id="Dk" min="1" max="7" step="1" value="3"></div>
+        <div class="control"><label>edge-length cap (cm) <span class="val" id="vDc">3.0</span></label><input type="range" id="Dc" min="5" max="90" step="1" value="30"></div>
+      </div>
+      <div class="readout" id="Dro"></div>
+    </div>
+  </div>
+
+  <h4 class="mini">Two practical points about step 1</h4>
+  <ul>
+    <li><strong>Symmetrise the graph.</strong> kNN is <em>directed</em> — $q$ can be in $p$'s top-k without $p$
+    being in $q$'s. Add every edge in both directions, otherwise Dijkstra can reach a point but not leave it.</li>
+    <li><strong>Cap the edge length.</strong> kNN always returns $k$ neighbours <em>even when they are absurdly
+    far</em> — a lone point floating in space still gets $k$ edges, and those cross empty air. Take the median
+    1-NN distance over the cloud (here ≈ <b>1.0 cm</b>) and cap at, say, $3\times$ it = <b>3.0 cm</b>. For A that
+    changes nothing; for H it removes every edge, correctly isolating it.</li>
+    <li><strong>Cost.</strong> Brute force is $O(N^2)$. A <strong>k-d tree</strong> answers each query in about
+    $O(\log N)$, so the whole graph is $O(N\log N)$.</li>
+  </ul>
+
+  <h3>Step 2 — the weights</h3>
+
+  <div class="eq">$$ W_e \;=\; \underbrace{\|p-q\|}_{\text{how far you stepped}} \;\times\; \underbrace{\Big(1 + \lambda\big(1 - \langle n_p, n_q\rangle\big)\Big)}_{\text{surcharge for crossing a crease}} $$</div>
+
+  <div class="explain">
+    <p>The base $\|p-q\|$ alone already works — it makes "distance" mean <em>travel along the surface</em>. The
+    normal term is the <strong>upgrade</strong> that makes distance grow at part boundaries, and it is the direct
+    analogue of Chapter 9's image weight $W_e = |Y(x) - Y(x')|$.</p>
+
+    <h4 class="mini">Where $n_p$ comes from — you estimate it</h4>
+    <p>You aren't given normals. For each point, take its $k$ neighbours, build their $3\times3$ covariance
+    matrix, and take the eigenvector belonging to the <strong>smallest</strong> eigenvalue. That is the direction
+    of least spread, i.e. perpendicular to the locally fitted plane. (Same PCA idea as Chapter 2's structure
+    tensor, one dimension up.)</p>
+    <p>Both $n_p$ and $n_q$ are unit vectors, so $\langle n_p, n_q\rangle = \cos\theta$, the cosine of the angle
+    between the two surface orientations.</p>
+  </div>
+
+  <h4 class="mini">Numeric example — three edges, all exactly 1 cm long, with $\lambda = 3$</h4>
+
+  <div class="summary">
+    <span class="summary-label">Same length, very different cost</span>
+    <table>
+      <tr><th>edge</th><th>$n_p$</th><th>$n_q$</th><th>$\langle n_p,n_q\rangle$</th><th>factor $1+\lambda(1-\cos\theta)$</th><th>$W_e$</th></tr>
+      <tr><td>B → C<br><span class="muted">both on the flat panel</span></td><td>(0,0,1)</td><td>(0,0,1)</td>
+        <td>$\cos 0° = 1$</td><td>$1 + 3(1-1) = 1.00$</td><td><b class="yes">1.00</b></td></tr>
+      <tr><td>gentle 45° bend</td><td>—</td><td>—</td>
+        <td>$\cos 45° = 0.707$</td><td>$1 + 3(0.293) = 1.879$</td><td><b>1.88</b></td></tr>
+      <tr><td>C → F<br><span class="muted">across the crease</span></td><td>(0,0,1)</td><td>(1,0,0)</td>
+        <td>$\cos 90° = 0$</td><td>$1 + 3(1-0) = 4.00$</td><td><b class="no">4.00</b></td></tr>
+    </table>
+    <p style="margin-top:12px">Same geometric length every time — <strong>1 cm</strong> — but the cost is 1.00,
+    1.88 or 4.00 depending on whether you stayed on a panel, went round a gentle bend, or turned a sharp corner.
+    Sharper crease, bigger penalty, smoothly.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">What that actually buys you</span>
+    Crossing the crease costs <strong>4.00</strong>, which is more than walking <strong>4 cm along the flat
+    panel</strong> ($4 \times 1.00$). So a flood starting from a scribble on the horizontal panel spreads freely
+    across that whole panel and only reluctantly climbs onto the vertical one. The two floods therefore meet
+    <em>at the crease</em> — which is precisely where you wanted the segment boundary.
+    <br><br><strong>That is the entire purpose of the term: make distance grow fast exactly where a part boundary
+    should be.</strong>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 5 — bend the crease, watch the weight</h4><span class="tag">slide the angle</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Two surface pieces meeting at an angle, with their estimated normals
+      drawn as arrows. The step length is fixed at 1 cm, so everything you see in the weight comes from the
+      normals disagreeing.</p>
+      <canvas id="cvE" width="900" height="340"></canvas>
+      <div class="controls">
+        <div class="control"><label>crease angle θ between the normals <span class="val" id="vEa">90°</span></label><input type="range" id="Ea" min="0" max="180" step="1" value="90"></div>
+        <div class="control"><label>λ  (how much geometry matters) <span class="val" id="vEl">3.0</span></label><input type="range" id="El" min="0" max="60" step="1" value="30"></div>
+      </div>
+      <div class="btnrow">
+        <label class="chk"><input type="checkbox" id="Eflip"> flip one normal (the PCA sign ambiguity)</label>
+        <label class="chk"><input type="checkbox" id="Eabs" checked> use |⟨n<sub>p</sub>,n<sub>q</sub>⟩| (the fix)</label>
+      </div>
+      <div class="readout" id="Ero"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">The sign ambiguity — tick the checkbox in demo 5</span>
+    <p style="margin:6px 0 0">PCA gives you an eigen<em>vector</em>, and $n$ and $-n$ are equally valid answers.
+    So two points on the <strong>same flat panel</strong> can come out with $n_p = (0,0,1)$ and
+    $n_q = (0,0,-1)$, giving $\langle n_p,n_q\rangle = -1$ and</p>
+    <div class="eq" style="margin:10px 0">$$ W = 1.0 \times \big(1 + 3(1-(-1))\big) = 1 + 6 = 7.00 $$</div>
+    <p>— a <strong>huge penalty on perfectly flat ground</strong>. Fix: use $|\langle n_p,n_q\rangle|$, or orient
+    all normals consistently first (propagate a sign over a minimum spanning tree). One sentence in the exam, and
+    it shows you have actually thought about implementing this.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Units stay clean, and how to pick λ</span>
+    $\|p-q\|$ carries the length units; the bracket is <strong>dimensionless</strong>. So $W_e$ is still a length,
+    merely stretched — which is why $\lambda$ is a pure number you tune (1–5 is sensible) and why the base and
+    upgraded versions are directly comparable. If the scan has colour, it joins the same product as another
+    dimensionless factor, $\big(1 + \mu\|c_p - c_q\|\big)$. The pattern is always: <em>geometric step length,
+    scaled up by however much the surface itself changes.</em>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · The traps</h2>
 
   <div class="callout warn"><span class="lbl">1 · Do not answer "nearest scribble by Euclidean distance"</span>
     That's demo 1's left panel. It leaks labels across empty air between parts that are spatially close but
@@ -337,7 +542,7 @@
   </div>
 
   <!-- ==================================================================== -->
-  <h2>8 · The answer, as you would write it in the box</h2>
+  <h2>9 · The answer, as you would write it in the box</h2>
 
   <div class="answerbox">
     <span class="a-label">One page, in order</span>
@@ -364,7 +569,7 @@
   </div>
 
   <!-- ==================================================================== -->
-  <h2>9 · Exam drill</h2>
+  <h2>10 · Exam drill</h2>
 
   <details class="qa">
     <summary>Q. Why not simply label each point by its nearest scribble in Euclidean distance?</summary>
@@ -454,12 +659,15 @@
 /* ================= shared: the horseshoe point cloud ================= */
 const A0 = 9, A1 = 351;                                  // the arc runs 9° → 351° through 180°;
 const ARC = A1 - A0;                                     // the GAP is the narrow wedge on the right
-function makeCloud(n){
+// a0 lets a caller widen or narrow the gap: the arc runs a0° → (360-a0)°
+function makeCloud(n, a0){
+  if (a0 === undefined) a0 = A0;
+  const arc = 360 - 2 * a0;
   const pts = [];
   const R = 120, BAND = 24;
   for (let i = 0; i < n; i++){
     const f = i / (n - 1);
-    const a = A0 + f * ARC;
+    const a = a0 + f * arc;
     const rr = R + (Math.random() - 0.5) * BAND;
     pts.push({
       x: Math.cos(a * Math.PI / 180) * rr + (Math.random() - 0.5) * 6,
@@ -471,8 +679,9 @@ function makeCloud(n){
 }
 function dist(a, b){ const dx = a.x - b.x, dy = a.y - b.y; return Math.hypot(dx, dy); }
 
-/* build a symmetric k-nearest-neighbour graph */
-function knnGraph(pts, k){
+/* build a symmetric k-nearest-neighbour graph; `cap` optionally drops long edges */
+function knnGraph(pts, k, cap){
+  if (cap === undefined) cap = Infinity;
   const n = pts.length, adj = [];
   for (let i = 0; i < n; i++) adj.push([]);
   for (let i = 0; i < n; i++){
@@ -480,11 +689,22 @@ function knnGraph(pts, k){
     for (let j = 0; j < n; j++) if (j !== i) d.push({ j: j, w: dist(pts[i], pts[j]) });
     d.sort((a, b) => a.w - b.w);
     for (let m = 0; m < Math.min(k, d.length); m++){
+      if (d[m].w > cap) break;                             // ← the length cap
       adj[i].push(d[m]);
       adj[d[m].j].push({ j: i, w: d[m].w });               // keep it undirected
     }
   }
   return adj;
+}
+
+/* median distance from each point to its single nearest neighbour */
+function medianNN(pts){
+  const v = pts.map((p, i) => {
+    let b = Infinity;
+    pts.forEach((q, j) => { if (j !== i) b = Math.min(b, dist(p, q)); });
+    return b;
+  }).sort((a, b) => a - b);
+  return v[v.length >> 1] || 1;
 }
 
 /* multi-source Dijkstra; sources = [{i, label}] */
@@ -594,8 +814,11 @@ const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
   const cv = document.getElementById('cvB'), g = cv.getContext('2d');
   const ro = document.getElementById('Bro');
   const elK = document.getElementById('Bk'), vK = document.getElementById('vBk');
-  const pts = makeCloud(220);
+  const elG = document.getElementById('Bg'), vG = document.getElementById('vBg');
+  const cbCap = document.getElementById('Bcap');
   const CX = 450, CY = 205;
+
+  let pts, tip, s, G, kSafe, cap;
 
   function components(adj, n){
     const seen = new Int32Array(n).fill(-1);
@@ -612,9 +835,38 @@ const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
     return c;
   }
 
+  /* rebuild the cloud for the current gap, and measure the three numbers that matter */
+  function rebuild(){
+    pts = makeCloud(220, +elG.value);
+
+    // the tip = the point closest to one end of the arc
+    tip = 0;
+    for (let i = 0; i < pts.length; i++) if (pts[i].ang < pts[tip].ang) tip = i;
+
+    s = medianNN(pts);                                    // local point spacing
+
+    // G = the true gap: the shortest distance between points on opposite sides
+    G = Infinity;
+    for (let i = 0; i < pts.length; i++)
+      for (let j = i + 1; j < pts.length; j++)
+        if (Math.abs(pts[i].ang - pts[j].ang) > 90) G = Math.min(G, dist(pts[i], pts[j]));
+
+    // kSafe = how many GENUINE neighbours the tip has that are nearer than the gap.
+    // Take one more than this and kNN is forced to reach across.
+    kSafe = 0;
+    for (let j = 0; j < pts.length; j++){
+      if (j === tip) continue;
+      if (Math.abs(pts[tip].ang - pts[j].ang) < 90 && dist(pts[tip], pts[j]) < G) kSafe++;
+    }
+
+    cap = 3 * s;
+    draw();
+  }
+
   function draw(){
     const k = +elK.value;
-    const adj = knnGraph(pts, k);
+    const useCap = cbCap.checked;
+    const adj = knnGraph(pts, k, useCap ? cap : Infinity);
     g.clearRect(0, 0, cv.width, cv.height);
 
     // an edge "jumps the gap" when it links two points that are far apart ALONG the shape
@@ -637,6 +889,22 @@ const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
       g.beginPath(); g.arc(CX + p.x, CY + p.y, 2.6, 0, 7); g.fill();
     }
 
+    // the two radii around the tip: the gap, and the cap
+    const tx = CX + pts[tip].x, ty = CY + pts[tip].y;
+    g.strokeStyle = 'rgba(255,180,84,.75)'; g.lineWidth = 1.5; g.setLineDash([5, 4]);
+    g.beginPath(); g.arc(tx, ty, G, 0, 7); g.stroke();
+    g.fillStyle = '#ffb454'; g.font = '11px system-ui';
+    g.fillText('gap G = ' + G.toFixed(0) + ' px', tx - 30, ty - G - 6);
+    if (useCap){
+      g.strokeStyle = 'rgba(126,231,135,.85)';
+      g.beginPath(); g.arc(tx, ty, cap, 0, 7); g.stroke();
+      g.fillStyle = '#7ee787';
+      g.fillText('cap = ' + cap.toFixed(0) + ' px', tx + 6, ty + cap + 14);
+    }
+    g.setLineDash([]);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(tx, ty, 4, 0, 7); g.fill();
+
     g.fillStyle = '#9fb0cc'; g.font = '13px system-ui';
     g.fillText('the k-nearest-neighbour graph — these bridges are what "walking" means', 40, 34);
 
@@ -646,12 +914,35 @@ const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
     else if (cheats > 0){ verdict = cheats + ' bridge(s) jump straight across the gap — the walk can now cheat, and labels will leak'; col = '#ffb454'; }
     else { verdict = 'one connected graph, no bridges across empty space — this is what you want'; col = '#7ee787'; }
 
-    ro.innerHTML = 'k = <b>' + k + '</b> &nbsp;·&nbsp; islands: <b>' + nc + '</b> &nbsp;·&nbsp; gap-jumping bridges: <b>' +
-      cheats + '</b><br><span style="color:' + col + '">' + verdict + '</span>';
+    const capOK = cap < G;
+    ro.innerHTML =
+      'k = <b>' + k + '</b> &nbsp;·&nbsp; islands: <b>' + nc + '</b> &nbsp;·&nbsp; gap-jumping bridges: <b>' +
+      cheats + '</b><br><span style="color:' + col + '">' + verdict + '</span>' +
+      '<br><span style="color:#6b7a99">spacing s ≈ <b>' + s.toFixed(1) + ' px</b> &nbsp;·&nbsp; gap G ≈ <b>' +
+      G.toFixed(0) + ' px</b> &nbsp;·&nbsp; at the tip only <b style="color:#41d8c9">' + kSafe +
+      '</b> genuine neighbours are nearer than the gap → <b>k ≤ ' + kSafe + '</b> is safe without a cap</span>' +
+      (useCap
+        ? '<br><span style="color:' + (capOK ? '#7ee787' : '#ff6b81') + '">cap = 3s = <b>' + cap.toFixed(0) +
+          ' px</b> ' + (capOK
+            ? 'is below the gap → no edge can ever bridge it, whatever k you pick'
+            : 'is NOT below the gap (' + G.toFixed(0) + ' px) → the cap cannot save you here') +
+          '</span>' +
+          (nc > 1
+            ? '<br><span style="color:#ff6b81">…but the same cap is now also cutting the surface itself into ' + nc +
+              ' pieces. The gap has become comparable to the spacing, so <b>no purely positional rule can work</b> — ' +
+              'this is exactly where the normal-difference term of step 2 has to take over.</span>'
+            : '')
+        : '<br><span style="color:#6b7a99">tick the cap to stop worrying about k</span>');
   }
 
   elK.oninput = () => { vK.textContent = elK.value; draw(); };
-  draw();
+  elG.oninput = () => {
+    vG.textContent = (+elG.value >= 16 ? 'wide' : (+elG.value >= 7 ? 'medium' : 'narrow')) + ' (' + elG.value + '°)';
+    rebuild();
+  };
+  cbCap.onchange = draw;
+  vG.textContent = 'wide (9°)';
+  rebuild();
 })();
 
 /* =========================================================
@@ -760,6 +1051,244 @@ const COL_SOFT = ['rgba(255,107,129,.62)', 'rgba(110,168,255,.62)'];
   document.getElementById('Creset').onclick = () => { stop(); reset(); };
   cbD.onchange = draw;
   reset();
+})();
+
+/* =========================================================
+   DEMO 4 — kNN by plain Euclidean distance, with the numbers
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvD'), g = cv.getContext('2d');
+  const ro = document.getElementById('Dro');
+  const elK = document.getElementById('Dk'), vK = document.getElementById('vDk');
+  const elC = document.getElementById('Dc'), vC = document.getElementById('vDc');
+
+  // the eight points from the table above, in cm
+  const PTS = [
+    { n: 'A', p: [0,0,0], part: 0 }, { n: 'B', p: [1,0,0], part: 0 },
+    { n: 'C', p: [2,0,0], part: 0 }, { n: 'D', p: [0,1,0], part: 0 },
+    { n: 'E', p: [1,1,0], part: 0 }, { n: 'F', p: [2,0,1], part: 1 },
+    { n: 'G', p: [2,0,2], part: 1 }, { n: 'H', p: [0,0,8], part: 2 }
+  ];
+  const PART_COL = ['#41d8c9', '#6ea8ff', '#ff6b81'];
+  let q = 0;                                     // index of the query point
+
+  // isometric projection
+  const OX = 190, OY = 320;
+  function proj(p){ return [OX + (p[0] - p[1]) * 46, OY + (p[0] + p[1]) * 24 - p[2] * 30]; }
+  function dist(a, b){ return Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]); }
+
+  function ranked(){
+    return PTS.map((t, i) => ({ i: i, n: t.n, d: dist(PTS[q].p, t.p) }))
+              .filter(t => t.i !== q)
+              .sort((a, b) => a.d - b.d);
+  }
+
+  function draw(){
+    g.clearRect(0, 0, cv.width, cv.height);
+    const k = +elK.value, cap = (+elC.value) / 10;
+    const R = ranked();
+    const kept = new Set(R.slice(0, k).filter(t => t.d <= cap).map(t => t.i));
+
+    g.font = '12px system-ui'; g.fillStyle = '#9fb0cc';
+    g.fillText('the cloud (isometric view) — click any point to make it the query', 24, 28);
+
+    // the kept edges
+    for (const t of R){
+      if (!kept.has(t.i)) continue;
+      const a = proj(PTS[q].p), b = proj(PTS[t.i].p);
+      g.strokeStyle = 'rgba(126,231,135,.85)'; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    }
+    // rejected candidates, faint
+    for (const t of R){
+      if (kept.has(t.i)) continue;
+      const a = proj(PTS[q].p), b = proj(PTS[t.i].p);
+      g.strokeStyle = 'rgba(107,122,153,.16)'; g.lineWidth = 1; g.setLineDash([3, 4]);
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.setLineDash([]);
+    }
+
+    PTS.forEach((t, i) => {
+      const s = proj(t.p);
+      const isQ = (i === q);
+      g.fillStyle = isQ ? '#ffffff' : (kept.has(i) ? '#7ee787' : PART_COL[t.part]);
+      g.globalAlpha = (isQ || kept.has(i)) ? 1 : 0.5;
+      g.beginPath(); g.arc(s[0], s[1], isQ ? 9 : 6.5, 0, 7); g.fill(); g.globalAlpha = 1;
+      if (isQ){ g.strokeStyle = '#fff'; g.lineWidth = 2;
+        g.beginPath(); g.arc(s[0], s[1], 14, 0, 7); g.stroke(); }
+      g.fillStyle = isQ ? '#ffffff' : '#9fb0cc'; g.font = 'bold 12px system-ui';
+      g.fillText(t.n, s[0] + 12, s[1] - 8);
+      g.fillStyle = '#4c5a75'; g.font = '10px monospace';
+      g.fillText('(' + t.p.join(',') + ')', s[0] + 12, s[1] + 5);
+    });
+
+    /* ---------- the sorted table ---------- */
+    const TX = 470, TY = 60;
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('every distance from ' + PTS[q].n + ', sorted  —  plain Euclidean ‖p−q‖', TX, 28);
+    g.fillStyle = '#6b7a99'; g.font = 'bold 11px system-ui';
+    g.fillText('rank', TX, TY - 8); g.fillText('to', TX + 46, TY - 8);
+    g.fillText('‖p−q‖', TX + 96, TY - 8); g.fillText('verdict', TX + 176, TY - 8);
+    g.strokeStyle = '#2c3650'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(TX, TY - 3); g.lineTo(TX + 380, TY - 3); g.stroke();
+
+    R.forEach((t, r) => {
+      const y = TY + 20 + r * 26;
+      const inTopK = r < k, tooLong = t.d > cap;
+      const ok = inTopK && !tooLong;
+      g.fillStyle = ok ? 'rgba(126,231,135,.10)' : 'transparent';
+      g.fillRect(TX - 6, y - 15, 386, 24);
+      g.fillStyle = '#6b7a99'; g.font = '12px monospace'; g.fillText(String(r + 1), TX + 6, y);
+      g.fillStyle = ok ? '#7ee787' : '#9fb0cc'; g.font = 'bold 13px system-ui';
+      g.fillText(t.n, TX + 48, y);
+      g.fillStyle = ok ? '#7ee787' : '#9fb0cc'; g.font = '12px monospace';
+      g.fillText(t.d.toFixed(3), TX + 96, y);
+      g.font = '11.5px system-ui';
+      if (ok){ g.fillStyle = '#7ee787'; g.fillText('edge kept', TX + 176, y); }
+      else if (inTopK && tooLong){ g.fillStyle = '#ff6b81'; g.fillText('in top-k but > cap → dropped', TX + 176, y); }
+      else { g.fillStyle = '#6b7a99'; g.fillText('not in top-' + k, TX + 176, y); }
+    });
+
+    // the cap line
+    const capRow = R.findIndex(t => t.d > cap);
+    if (capRow >= 0){
+      const y = TY + 20 + capRow * 26 - 15;
+      g.strokeStyle = 'rgba(255,180,84,.75)'; g.setLineDash([5, 4]); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(TX - 6, y); g.lineTo(TX + 380, y); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#ffb454'; g.font = '10.5px system-ui';
+      g.fillText('cap = ' + cap.toFixed(1) + ' cm', TX + 300, y - 4);
+    }
+
+    const nKept = kept.size;
+    ro.innerHTML = 'query = <b>' + PTS[q].n + '</b> &nbsp;·&nbsp; k = <b>' + k + '</b> &nbsp;·&nbsp; cap = <b>' +
+      cap.toFixed(1) + ' cm</b> &nbsp;·&nbsp; edges built: <b>' + nKept + '</b>' +
+      (PTS[q].n === 'A' && k === 3 && cap >= 1.5
+        ? ' &nbsp;·&nbsp; <span style="color:#7ee787">A’s neighbours are {B, D, E} — H at 8 cm never gets an edge</span>'
+        : '') +
+      '<br><span style="color:#6b7a99">Euclidean is used <b>only</b> to decide who is adjacent. Every kept edge here is ≤ ' +
+      cap.toFixed(1) + ' cm, so it is a local, trustworthy measurement.</span>';
+  }
+
+  cv.addEventListener('pointerdown', ev => {
+    const r = cv.getBoundingClientRect();
+    const mx = (ev.clientX - r.left) * (cv.width / r.width);
+    const my = (ev.clientY - r.top) * (cv.height / r.height);
+    let bi = -1, bd = 22;
+    PTS.forEach((t, i) => { const s = proj(t.p); const d = Math.hypot(s[0] - mx, s[1] - my); if (d < bd){ bd = d; bi = i; } });
+    if (bi >= 0){ q = bi; draw(); }
+  });
+  elK.oninput = () => { vK.textContent = elK.value; draw(); };
+  elC.oninput = () => { vC.textContent = ((+elC.value) / 10).toFixed(1); draw(); };
+  draw();
+})();
+
+/* =========================================================
+   DEMO 5 — the crease angle and the resulting edge weight
+   ========================================================= */
+(function(){
+  const cv = document.getElementById('cvE'), g = cv.getContext('2d');
+  const ro = document.getElementById('Ero');
+  const elA = document.getElementById('Ea'), vA = document.getElementById('vEa');
+  const elL = document.getElementById('El'), vL = document.getElementById('vEl');
+  const cbF = document.getElementById('Eflip'), cbA = document.getElementById('Eabs');
+
+  function draw(){
+    const th = (+elA.value) * Math.PI / 180;
+    const lam = (+elL.value) / 10;
+    let dotRaw = Math.cos(th);
+    if (cbF.checked) dotRaw = -dotRaw;                 // the PCA sign ambiguity
+    const dot = cbA.checked ? Math.abs(dotRaw) : dotRaw;
+    const factor = 1 + lam * (1 - dot);
+    const len = 1.0;                                   // the step is always 1 cm
+    const W = len * factor;
+
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.font = '12px system-ui';
+
+    /* ---------- left: the two surface pieces + normals ---------- */
+    const CX = 230, CY = 200, L = 105;
+    g.fillStyle = '#9fb0cc'; g.fillText('two surface pieces meeting at the crease', 40, 30);
+
+    // piece p — always horizontal
+    g.strokeStyle = '#41d8c9'; g.lineWidth = 6; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(CX - L, CY); g.lineTo(CX, CY); g.stroke();
+    // piece q — rotated by the crease angle
+    g.strokeStyle = '#ffb454';
+    g.beginPath(); g.moveTo(CX, CY);
+    g.lineTo(CX + L * Math.cos(-th), CY + L * Math.sin(-th)); g.stroke();
+    g.lineCap = 'butt';
+
+    function arrow(x0, y0, dx, dy, col, label){
+      const S = 62, x1 = x0 + dx * S, y1 = y0 + dy * S;
+      g.strokeStyle = col; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      g.beginPath(); g.moveTo(x1, y1);
+      g.lineTo(x1 - 9 * Math.cos(a - 0.4), y1 - 9 * Math.sin(a - 0.4));
+      g.lineTo(x1 - 9 * Math.cos(a + 0.4), y1 - 9 * Math.sin(a + 0.4));
+      g.closePath(); g.fillStyle = col; g.fill();
+      g.fillStyle = col; g.font = 'bold 12px system-ui';
+      g.fillText(label, x1 + 6, y1 - 4);
+    }
+    // normal of p points up; normal of q is perpendicular to its piece
+    const sgn = cbF.checked ? -1 : 1;
+    arrow(CX - L / 2, CY, 0, -1, '#41d8c9', 'nₚ');
+    arrow(CX + L / 2 * Math.cos(-th), CY + L / 2 * Math.sin(-th),
+          sgn * Math.sin(-th) * -1, sgn * -Math.cos(-th), '#ffb454', 'n_q');
+
+    // the angle arc
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(CX, CY, 34, -th, 0); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.6)'; g.font = '11px system-ui';
+    g.fillText((+elA.value) + '°', CX + 40, CY - 14);
+
+    /* ---------- right: the computation ---------- */
+    const TX = 470;
+    g.fillStyle = '#9fb0cc'; g.font = '12px system-ui';
+    g.fillText('the weight of this one edge', TX, 30);
+    const rows = [
+      ['step length  ‖p−q‖', len.toFixed(2) + ' cm', '#9fb0cc'],
+      ['⟨nₚ, n_q⟩  =  cos θ', dotRaw.toFixed(3), cbF.checked && !cbA.checked ? '#ff6b81' : '#9fb0cc'],
+      [cbA.checked ? 'after |·|  (the fix)' : 'used as-is', dot.toFixed(3), cbA.checked ? '#7ee787' : '#9fb0cc'],
+      ['1 + λ(1 − ⟨nₚ,n_q⟩)', factor.toFixed(3), '#6ea8ff']
+    ];
+    rows.forEach(([k, v, c], i) => {
+      const y = 66 + i * 30;
+      g.fillStyle = '#6b7a99'; g.font = '12px system-ui'; g.fillText(k, TX, y);
+      g.fillStyle = c; g.font = 'bold 13px monospace'; g.fillText(v, TX + 250, y);
+    });
+
+    g.strokeStyle = '#2c3650'; g.beginPath(); g.moveTo(TX, 196); g.lineTo(TX + 380, 196); g.stroke();
+    g.fillStyle = '#9fb0cc'; g.font = '13px system-ui'; g.fillText('Wₑ  =  ‖p−q‖ × factor', TX, 222);
+    const bad = W > 5;
+    g.fillStyle = bad ? '#ff6b81' : (W < 1.4 ? '#7ee787' : '#ffb454');
+    g.font = 'bold 30px system-ui'; g.fillText(W.toFixed(2), TX + 250, 226);
+
+    // reference bars
+    g.fillStyle = '#6b7a99'; g.font = '11px system-ui';
+    g.fillText('for comparison, at λ = ' + lam.toFixed(1) + ':', TX, 258);
+    const refs = [['flat (0°)', 1 + lam * 0], ['bend (45°)', 1 + lam * (1 - Math.SQRT1_2)], ['corner (90°)', 1 + lam]];
+    refs.forEach(([n, w], i) => {
+      const y = 276 + i * 20;
+      g.fillStyle = '#6b7a99'; g.font = '11px system-ui'; g.fillText(n, TX, y + 8);
+      g.fillStyle = 'rgba(110,168,255,.55)';
+      g.fillRect(TX + 78, y, Math.min(240, w * 26), 12);
+      g.fillStyle = '#9fb0cc'; g.font = '11px monospace'; g.fillText(w.toFixed(2), TX + 84 + Math.min(240, w * 26), y + 10);
+    });
+
+    ro.innerHTML = 'θ = <b>' + (+elA.value) + '°</b> &nbsp;·&nbsp; λ = <b>' + lam.toFixed(1) +
+      '</b> &nbsp;·&nbsp; a <b>1 cm</b> step costs <b>' + W.toFixed(2) + '</b>' +
+      (cbF.checked && !cbA.checked
+        ? '<br><span style="color:#ff6b81">Sign flipped and no |·| — a flat surface is now being charged ' +
+          (1 + lam * 2).toFixed(2) + ' per step. This is the PCA sign-ambiguity bug.</span>'
+        : (cbF.checked
+            ? '<br><span style="color:#7ee787">Sign flipped, but |⟨n,n⟩| absorbs it — the weight is unchanged. This is why you take the absolute value.</span>'
+            : '<br><span style="color:#6b7a99">Length is fixed at 1 cm, so every change you see comes purely from the normals disagreeing.</span>'));
+  }
+
+  elA.oninput = () => { vA.textContent = elA.value + '°'; draw(); };
+  elL.oninput = () => { vL.textContent = ((+elL.value) / 10).toFixed(1); draw(); };
+  cbF.onchange = draw; cbA.onchange = draw;
+  draw();
 })();
 </script>
 

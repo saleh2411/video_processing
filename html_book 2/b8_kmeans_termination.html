@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q8 — Is k-means guaranteed to terminate?</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q8</b> · Does k-means terminate?</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="b7_graph_label_propagation.html">‹ Q7</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch06_layer_representation.html">Chapter 6 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 3 &amp; 6 · Moed B 2022, question 8 · 12 points</div>
+    <h1>Yes — and "the cost goes down" is only half the proof</h1>
+    <p class="lede">Almost everyone writes "each step decreases $J$, and $J\ge0$, therefore it stops". That
+    argument is <strong>not sufficient</strong> — a decreasing bounded sequence can decrease forever
+    ($1,\tfrac12,\tfrac14,\dots$ never terminates). The proof needs a second ingredient: there are only
+    <em>finitely many</em> possible assignments, and $J$ <em>strictly</em> decreases whenever the assignment
+    changes, so no assignment can ever recur. Get both halves in and the question is worth full marks.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 8 · 12 points · CLUSTERING</span>
+    <p style="margin-bottom:0">Is the k-means algorithm guaranteed to terminate? explain your answer.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid, the classroom, and the reading corners</span>
+    <p>A classroom of children and $k$ reading corners. Every round, two things happen:</p>
+    <p><strong>Round part 1 — everybody walks to the nearest corner.</strong> Nobody would walk further than
+    they have to, so the total walking gets shorter (or stays the same).</p>
+    <p><strong>Round part 2 — each corner moves to the middle of its group.</strong> Standing in the middle
+    of your group is the position that makes the total walking shortest for that group. So again, the total
+    walking gets shorter (or stays the same).</p>
+    <p>So total walking only ever goes <em>down</em>. Good. But does it <strong>stop</strong>? Careful —
+    imagine a number that goes $10, 5, 2.5, 1.25, \dots$ It goes down forever and never stops. Going down is
+    not enough!</p>
+    <p>Here is what saves us. <strong>What actually changes between rounds is only <em>who sits with
+    whom</em>.</strong> And there is only a <em>finite</em> number of ways to split the class into $k$ groups
+    — a big number, but finite, like the number of ways to deal a deck of cards.</p>
+    <p>Now put the two facts together. Every time the groups change, the total walking gets
+    <strong>strictly</strong> smaller. So the class can <em>never return to a grouping it has already had</em>
+    — that grouping had a bigger number, and the number only goes down. Since there are finitely many
+    groupings and none can repeat, sooner or later the groups stop changing. And when the groups stop
+    changing, the corners stop moving too. The algorithm halts. <strong>Guaranteed.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The two-part answer</span>
+    <b>Part 1 (monotonicity).</b> Both steps are exact minimisations of the same objective $J$ over
+    complementary blocks of variables, so $J$ never increases — it is coordinate descent.<br>
+    <b>Part 2 (finiteness, the part people forget).</b> $J$ depends on the continuous $\mu$ only through the
+    discrete assignment; there are at most $k^n$ assignments; a change in assignment makes $J$ strictly
+    decrease; therefore no assignment repeats and the algorithm stops after at most $k^n$ iterations.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Setting it up properly</h2>
+
+  <div class="explain">
+    <span class="explain-label">The objective and the algorithm</span>
+    <p>Given $\{\mathbf{x}_1,\dots,\mathbf{x}_n\}\subset\mathbb{R}^d$ and $k$, k-means (Lloyd's algorithm)
+    minimises the <span class="term">within-cluster sum of squares</span> over
+    <em>both</em> an assignment $c:\{1..n\}\to\{1..k\}$ and centres $\mu=(\mu_1,\dots,\mu_k)$:</p>
+  </div>
+
+  <div class="eq">$$ J(c,\mu) \;=\; \sum_{i=1}^{n}\big\|\mathbf{x}_i - \mu_{c(i)}\big\|^2 \;=\; \sum_{j=1}^{k}\sum_{i:\,c(i)=j}\big\|\mathbf{x}_i-\mu_j\big\|^2 \tag{1} $$</div>
+
+  <div class="explain">
+    <p>It alternates two steps until nothing changes:</p>
+    <ul>
+      <li><b>(A) Assignment</b> — fix $\mu$, choose $c$: &nbsp; $c^{(t+1)}(i)=\arg\min_j \|\mathbf{x}_i-\mu_j^{(t)}\|^2$</li>
+      <li><b>(U) Update</b> — fix $c$, choose $\mu$: &nbsp; $\mu_j^{(t+1)} = \dfrac{1}{|S_j|}\displaystyle\sum_{i\in S_j}\mathbf{x}_i$, &nbsp; $S_j=\{i: c^{(t+1)}(i)=j\}$</li>
+    </ul>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Step A does not increase $J$</span>
+    <p>Trivially, term by term: for every $i$,
+    $\|\mathbf{x}_i-\mu_{c^{(t+1)}(i)}\|^2 = \min_j\|\mathbf{x}_i-\mu_j\|^2 \le \|\mathbf{x}_i-\mu_{c^{(t)}(i)}\|^2$.
+    Summing over $i$ gives $J(c^{(t+1)},\mu^{(t)}) \le J(c^{(t)},\mu^{(t)})$. The inequality is
+    <strong>strict</strong> if any point actually switched (with a deterministic tie-breaking rule — see
+    below).</p>
+    <span class="explain-label" style="margin-top:14px">Step U does not increase $J$ — and the mean is the reason</span>
+    <p>For fixed $c$ the objective separates over $j$, and each term is a strictly convex quadratic in
+    $\mu_j$:</p>
+  </div>
+
+  <div class="eq">$$ \frac{\partial}{\partial \mu_j}\sum_{i\in S_j}\|\mathbf{x}_i-\mu_j\|^2 = -2\sum_{i\in S_j}(\mathbf{x}_i-\mu_j) = 0 \;\;\Longrightarrow\;\; \mu_j = \frac{1}{|S_j|}\sum_{i\in S_j}\mathbf{x}_i \tag{2} $$</div>
+
+  <div class="explain">
+    <p>with Hessian $2|S_j|\,\mathbb{I} \succ 0$, so the mean is the <em>unique global</em> minimiser of that
+    block. Hence $J(c^{(t+1)},\mu^{(t+1)}) \le J(c^{(t+1)},\mu^{(t)})$. Equivalently, via the bias–variance
+    style identity</p>
+  </div>
+
+  <div class="eq">$$ \sum_{i\in S_j}\|\mathbf{x}_i-\mu_j\|^2 \;=\; \sum_{i\in S_j}\|\mathbf{x}_i-\bar{\mathbf{x}}_{S_j}\|^2 \;+\; |S_j|\,\big\|\bar{\mathbf{x}}_{S_j}-\mu_j\big\|^2 $$</div>
+
+  <div class="explain">
+    <p>the second term is a non-negative penalty for not being at the mean, and it vanishes exactly when
+    $\mu_j=\bar{\mathbf{x}}_{S_j}$. Chaining the two steps: $J$ is <strong>monotonically
+    non-increasing</strong> and bounded below by $0$.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">Why that is still not a termination proof</span>
+    Monotone + bounded gives you <em>convergence of the sequence $J^{(t)}$</em> (a real analysis fact), not
+    <em>termination of the algorithm</em>. The sequence $1,\frac12,\frac14,\dots$ is monotone and bounded and
+    its algorithm never halts. You must show the process cannot take infinitely many <em>distinct</em> steps.
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">The finiteness argument — the actual proof</span>
+    <ol style="color:var(--ink-dim);margin-left:18px">
+      <li>After step U, $\mu$ is a deterministic function of $c$ (the vector of cluster means). So the
+      algorithm's whole state is captured by the <strong>assignment $c$</strong>, a discrete object.</li>
+      <li>The number of assignments is at most $k^n$ — <em>finite</em>. (Partitions into non-empty labelled
+      clusters: $k!\,S(n,k)$, still finite.)</li>
+      <li>Define $\Phi(c) = J\big(c,\mu(c)\big)$, the cost after re-centring. If one full iteration changes
+      the assignment from $c$ to $c'\ne c$, then $\Phi(c') < \Phi(c)$ <em>strictly</em>: at least one point
+      moved to a strictly closer centre (strictly, by the tie-break rule), so step A strictly decreased $J$,
+      and step U cannot increase it.</li>
+      <li>Therefore $\Phi$ is strictly decreasing along the sequence of visited assignments, so
+      <strong>no assignment can be visited twice</strong> — a repeat would require $\Phi(c)<\Phi(c)$.</li>
+      <li>A sequence of distinct elements from a finite set is finite. Hence after at most $k^n$ iterations
+      the assignment stops changing; then the means do not change either, so the algorithm is at a fixed
+      point and terminates. $\blacksquare$</li>
+    </ol>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · See both halves</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — step it, and watch $J$ and the assignment together</h4><span class="tag">step A · step U</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: the points, coloured by assignment; large rings are the
+      centres. Right: $J$ after every <em>half</em> step — <b style="color:#6ea8ff">blue</b> markers are
+      assignment steps, <b style="color:#ffb454">amber</b> are update steps. The staircase only ever goes
+      down. Underneath, the running list of assignments visited, so you can check that none repeats.</p>
+      <canvas id="c1" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>$k$ <span class="val" id="v1k">4</span></label><input type="range" id="s1k" min="2" max="7" step="1" value="4"></div>
+        <div class="control"><label>points $n$ <span class="val" id="v1n">160</span></label><input type="range" id="s1n" min="30" max="400" step="10" value="160"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b1a">A · assign</button>
+        <button class="act primary" id="b1u">U · update centres</button>
+        <button class="act" id="b1f">▶ full iteration</button>
+        <button class="act" id="b1r">⏩ run to termination</button>
+        <button class="act" id="b1z">↺ new random seeds</button>
+        <label class="chk"><input type="checkbox" id="k1b"> break the proof: set each centre to a <b>random member</b> instead of the mean</label>
+      </div>
+      <div class="readout" id="r1"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Tick the "break the proof" box</span>
+    Replacing the mean by a random member of the cluster keeps the algorithm well defined and keeps step A
+    intact — but step U is no longer a minimisation, so <strong>$J$ starts going up as well as down</strong>
+    (the readout counts the rises, and those steps are ringed in red on the staircase). Monotonicity is gone,
+    so the "no assignment can recur" argument collapses and the run simply never settles — press <em>run to
+    termination</em> and it stops only because of the 200-iteration safety cap, never because the assignment
+    stopped changing. Drop $n$ to 30 or so and you can watch it announce an actual repeated assignment, i.e.
+    a genuine cycle. This is the cleanest way to see that termination is a property of <em>the mean being the
+    exact minimiser</em>, not of "the algorithm alternates two steps".
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — it terminates, but where?</h4><span class="tag">100 random restarts</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Every restart terminates — that is the theorem. But they
+      terminate at <em>different</em> values of $J$. The histogram is the distribution of final costs over
+      100 random initialisations; the panels show the best and worst outcomes. Termination is guaranteed;
+      optimality is not.</p>
+      <canvas id="c2" width="900" height="360"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="b2r">🎲 run 100 restarts</button>
+        <label class="chk"><input type="checkbox" id="k2p" checked> use k-means++ seeding instead of uniform</label>
+      </div>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The fine print you should mention</h2>
+
+  <div class="summary">
+    <span class="summary-label">Caveats that turn a correct answer into a complete one</span>
+    <table>
+      <tr><th>Point</th><th>Detail</th></tr>
+      <tr><td><b>Ties must be broken deterministically</b></td>
+        <td>If $\mathbf{x}_i$ is exactly equidistant from two centres and you re-toss a coin each time, the
+        assignment can change without $J$ changing — and then it can oscillate forever. The standard rule
+        ("keep the current assignment on a tie", or "lowest index wins") restores the implication
+        <em>assignment changed ⇒ $J$ strictly decreased</em>, which is exactly what the proof needs.</td></tr>
+      <tr><td><b>Empty clusters</b></td>
+        <td>$\mu_j$ is undefined when $S_j=\emptyset$. Any deterministic repair keeps the proof: drop the
+        cluster ($k$ decreases), or re-seed it at the point currently furthest from its centre — the latter
+        strictly decreases $J$, so monotonicity survives. <b>But</b> if you re-seed it <em>randomly</em>, $J$
+        can increase and the finiteness argument collapses. Same trap as the demo's checkbox.</td></tr>
+      <tr><td><b>Terminates ≠ optimal</b></td>
+        <td>It stops at a fixed point of Lloyd's map — an assignment that is stable under "reassign all, then
+        re-centre". That is a local minimum with respect to those block moves, and it may be arbitrarily
+        worse than the global optimum. Finding the global optimum is <b>NP-hard</b> (even for $k=2$ in general
+        dimension, and for general $k$ in the plane). Hence random restarts, and <b>k-means++</b> seeding,
+        which gives an $O(\log k)$ expected approximation guarantee before Lloyd even starts.</td></tr>
+      <tr><td><b>How long is "eventually"?</b></td>
+        <td>The bound $k^n$ is astronomically loose but it is what the proof gives. The true worst case is
+        superpolynomial: Arthur &amp; Vassilvitskii construct instances needing $2^{\Omega(\sqrt n)}$
+        iterations, even in the plane. Yet the <em>smoothed</em> complexity is polynomial, and in practice
+        convergence takes tens of iterations — which is why nobody worries about it.</td></tr>
+      <tr><td><b>Which distances still work?</b></td>
+        <td>The proof used only one property: <em>the update step must return the exact minimiser of the
+        within-cluster cost for the chosen dissimilarity</em>. The arithmetic mean is that minimiser for
+        squared Euclidean distance — and, more generally, for <b>every Bregman divergence</b> (Banerjee et
+        al.), so k-means terminates for KL divergence, Itakura–Saito, etc. It does <b>not</b> work if you pair
+        the mean with $L_1$: there the minimiser is the median, so using the mean can increase $J$ and
+        termination is no longer guaranteed. Use the median ($k$-medians) or a medoid ($k$-medoids /
+        PAM) and the same finiteness proof goes through again.</td></tr>
+    </table>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Yes — k-means (Lloyd's algorithm) always terminates after a finite number of iterations</strong>
+    (assuming a deterministic tie-breaking rule and a deterministic rule for empty clusters). The proof has
+    two parts, and the second is the essential one.</p>
+
+    <p><strong>Part 1 — the objective never increases.</strong> The algorithm is block coordinate descent on</p>
+    <div class="eq">$$ J(c,\mu)=\sum_{i=1}^n \|\mathbf{x}_i-\mu_{c(i)}\|^2 . $$</div>
+    <p><em>Assignment step:</em> for fixed $\mu$, $c(i)=\arg\min_j\|\mathbf{x}_i-\mu_j\|^2$ minimises each
+    term independently, so $J$ cannot increase. <em>Update step:</em> for fixed $c$, $J$ separates over
+    clusters and each part is a strictly convex quadratic in $\mu_j$ whose unique minimiser is the mean
+    ($\nabla=-2\sum_{i\in S_j}(\mathbf{x}_i-\mu_j)=0 \Rightarrow \mu_j=\frac{1}{|S_j|}\sum_{i\in S_j}\mathbf{x}_i$,
+    Hessian $2|S_j|\mathbb{I}\succ0$), so again $J$ cannot increase. Hence $J^{(t)}$ is monotonically
+    non-increasing and bounded below by $0$.</p>
+
+    <p><strong>Part 2 — finiteness (why part 1 alone is insufficient).</strong> A monotone bounded sequence
+    only converges; it need not terminate (e.g. $2^{-t}$). But after the update step $\mu$ is a deterministic
+    function of the assignment $c$, so the algorithm's state is the discrete object $c$, and there are at
+    most $k^n$ possible assignments — a finite set. Moreover, if one full iteration changes the assignment
+    then at least one point moved to a <em>strictly</em> closer centre (strict, by the tie-break rule), so
+    $J$ strictly decreased. Since $J$ never increases, a strictly decreasing value means <strong>no
+    assignment can ever recur</strong>. A sequence of distinct elements of a finite set must be finite, so
+    after at most $k^n$ iterations the assignment stops changing; then the means do not change either, the
+    algorithm is at a fixed point, and it halts. $\blacksquare$</p>
+
+    <p><strong>What terminating does <em>not</em> mean.</strong> It converges to a local minimum (a fixed
+    point of Lloyd's map), not the global one; the global problem is NP-hard, so in practice one uses
+    multiple random restarts or k-means++ seeding ($O(\log k)$ expected approximation). The $k^n$ bound is
+    very loose, but the true worst case is still superpolynomial — $2^{\Omega(\sqrt n)}$ iterations exist
+    even in the plane — while the smoothed complexity is polynomial and practice needs tens of iterations.</p>
+
+    <p><strong>What the proof depends on.</strong> Only that the update step returns the exact minimiser of
+    the within-cluster cost. That holds for squared Euclidean distance and, more generally, for any Bregman
+    divergence. It fails if you mix a distance with the wrong centroid — e.g. $L_1$ distance with the
+    arithmetic mean — in which case $J$ can increase, assignments can cycle, and termination is no longer
+    guaranteed. Likewise, re-seeding an empty cluster at random (rather than deterministically, e.g. at the
+    point furthest from its centre) breaks monotonicity and the guarantee with it.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Give the shortest complete answer you could write under time pressure.</summary>
+    <p>"Yes. Both steps exactly minimise $J$ over one block of variables, so $J$ never increases. After the
+    update, $\mu$ is determined by the assignment, so the state is the assignment; there are at most $k^n$
+    of them. If the assignment changes, $J$ strictly decreases (with deterministic tie-breaking), so no
+    assignment repeats. Finitely many states, none repeated ⇒ it halts, in at most $k^n$ iterations. It
+    reaches a local, not global, minimum." That is five sentences and it contains every load-bearing idea.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Is "$J$ decreases and is bounded below" wrong, or just incomplete?</summary>
+    <p>Incomplete, and specifically it proves the wrong statement. It proves the <em>sequence of costs
+    converges</em>, which would also be true of an algorithm that runs forever making ever-smaller
+    improvements. Termination is a statement about the algorithm's <em>state</em>, not its cost, and the
+    state is discrete. The reason the two get conflated is that in k-means the cost happens to certify the
+    state (a strict decrease certifies non-repetition), but you have to say that step out loud — it is
+    exactly the step being tested.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Could the centres keep moving forever while the assignment stays fixed?</summary>
+    <p>No. Once the assignment is fixed at $c$, the update step sets $\mu_j$ to the mean of $S_j$ — a single
+    formula, evaluated once, giving one specific value. Applying it again gives the same value (the mean of
+    a fixed set is idempotent). So the centres reach their final positions in <em>one</em> update. That is
+    why the whole dynamic lives in the discrete assignment and why the state space is finite. It is also why
+    a good implementation's stopping test is "the assignment did not change" rather than
+    "$\|\mu^{(t+1)}-\mu^{(t)}\|<\varepsilon$" — the former is exact, the latter is a heuristic that can stop
+    early.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where exactly does the tie-breaking rule enter the proof?</summary>
+    <p>In the claim "assignment changed ⇒ $J$ strictly decreased". Suppose $\mathbf{x}_i$ is exactly
+    equidistant from $\mu_1$ and $\mu_2$. Moving it from cluster 1 to cluster 2 changes the assignment but
+    changes $J$ by exactly zero. Now the strict-decrease argument fails and the algorithm could shuttle that
+    point back and forth forever between two assignments of equal cost. Rules that fix it: "on a tie keep the
+    current assignment" (the usual choice — then a change implies a strict improvement) or "on a tie choose
+    the lowest cluster index" (then the map is a deterministic function of $\mu$, so the whole iteration is a
+    deterministic map on a finite set, and combined with non-increasing $J$ it must reach a fixed point
+    rather than a longer cycle). In floating point exact ties are rare, which is why this subtlety is usually
+    invisible — but it is the kind of detail an exam question about <em>guarantees</em> is fishing for.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does k-means terminate if you use the $L_1$ distance?</summary>
+    <p>Only if you also change the centroid. The proof's single requirement is that step U returns the
+    minimiser of $\sum_{i\in S_j} d(\mathbf{x}_i,\mu_j)$. For $L_1$ that minimiser is the coordinate-wise
+    <em>median</em>, not the mean. Pair $L_1$ with the median ($k$-medians) and every line of the proof goes
+    through unchanged. Pair $L_1$ with the mean and step U can increase $J$; monotonicity is lost, an
+    assignment can recur, and you can cycle. The general statement is Banerjee et al.: the mean is the
+    minimiser precisely for <em>Bregman divergences</em>, and k-means terminates for exactly that family.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How is this used in the course?</summary>
+    <p>Chapter 6, layered motion representation: estimate a local affine/translational motion model per
+    block, then cluster those motion parameters with k-means to discover how many independently-moving layers
+    the video contains and which pixels belong to each. The clustering is over motion vectors, not colours,
+    but the algorithm and every property discussed here apply unchanged — including the local-minimum
+    problem, which is why layer extraction is sensitive to initialisation and typically warm-started from the
+    previous frame's layers. It also appears in the clustering material alongside the distortion/elbow
+    criterion for choosing $k$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Is the $k^n$ bound tight?</summary>
+    <p>Far from it as a practical estimate, but it is the right kind of bound for this proof, which only
+    needs <em>some</em> finite number. The genuinely tight picture: the worst case is superpolynomial —
+    Arthur &amp; Vassilvitskii exhibit planar instances forcing $2^{\Omega(\sqrt n)}$ iterations, so no
+    polynomial bound exists; the best known general upper bound is $O(n^{kd})$ (the number of distinct
+    Voronoi partitions of $n$ points by $k$ centres in $\mathbb{R}^d$), which is much better than $k^n$;
+    and the <em>smoothed</em> complexity, under tiny random perturbations of the input, is polynomial —
+    which explains the gap between the terrifying worst case and the observed handful of iterations.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>answer</td><td><b>Yes</b>, in finitely many iterations (≤ $k^n$)</td></tr>
+      <tr><td>objective</td><td>$J(c,\mu)=\sum_i\|\mathbf{x}_i-\mu_{c(i)}\|^2$</td></tr>
+      <tr><td>step A</td><td>nearest centre — minimises $J$ over $c$ term by term ⇒ $J\downarrow$</td></tr>
+      <tr><td>step U</td><td>mean — unique minimiser of a strictly convex quadratic ⇒ $J\downarrow$</td></tr>
+      <tr><td>half a proof</td><td>monotone + bounded ⇒ the <em>cost</em> converges, <b>not</b> that it halts</td></tr>
+      <tr><td>the other half</td><td>state = assignment, finite ($\le k^n$); change ⇒ strict decrease ⇒ no repeat</td></tr>
+      <tr><td>needs</td><td>deterministic tie-breaking; deterministic empty-cluster rule</td></tr>
+      <tr><td>doesn't give</td><td>global optimality — NP-hard; use restarts / k-means++</td></tr>
+      <tr><td>breaks if</td><td>step U is not the exact minimiser (e.g. $L_1$ + mean, or random re-seeding)</td></tr>
+      <tr><td>worst case</td><td>$2^{\Omega(\sqrt n)}$ iterations exist; smoothed complexity polynomial</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="b7_graph_label_propagation.html"><span class="dir">Previous</span><span class="ttl">Q7 · Label propagation</span></a>
+    <a class="next" href="index.html"><span class="dir">Back to</span><span class="ttl">All chapters ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   DEMO 1 — step-by-step k-means with a monotone-cost staircase
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d'), ro=document.getElementById('r1');
+  const sK=document.getElementById('s1k'), vK=document.getElementById('v1k');
+  const sN=document.getElementById('s1n'), vN=document.getElementById('v1n');
+  const kB=document.getElementById('k1b');
+  const COL=['#41d8c9','#ff6b81','#ffb454','#6ea8ff','#c792ea','#7ee787','#f78c6c'];
+  const PW=430, PH=340, PX=20, PY=44;   // scatter panel
+  const QX=490, QY=44, QW=386, QH=290;  // cost panel
+
+  let pts=[], k=4, C=[], asg=[], hist=[], seen=new Map(), repeat=null, done=false;
+
+  function genPts(n){
+    const rs={s:987654321}, rnd=()=>{ rs.s=(rs.s*1103515245+12345)&0x7fffffff; return rs.s/0x7fffffff; };
+    const centres=[[0.24,0.28],[0.74,0.24],[0.30,0.76],[0.72,0.72],[0.50,0.48]];
+    const P=[];
+    for(let i=0;i<n;i++){
+      const c=centres[i%centres.length];
+      let u=rnd()||1e-9, v=rnd();
+      const r=Math.sqrt(-2*Math.log(u))*0.075;
+      P.push([Math.min(.97,Math.max(.03,c[0]+r*Math.cos(2*Math.PI*v))),
+              Math.min(.97,Math.max(.03,c[1]+r*Math.sin(2*Math.PI*v)))]);
+    }
+    return P;
+  }
+  function cost(){
+    let J=0;
+    for(let i=0;i<pts.length;i++){
+      if(asg[i]<0) continue;
+      const c=C[asg[i]];
+      J+=(pts[i][0]-c[0])**2+(pts[i][1]-c[1])**2;
+    }
+    return J;
+  }
+  function reset(){
+    k=+sK.value; vK.textContent=k;
+    const n=+sN.value; vN.textContent=n;
+    pts=genPts(n);
+    C=[]; for(let j=0;j<k;j++) C.push([0.08+Math.random()*0.84, 0.08+Math.random()*0.84]);
+    asg=new Array(pts.length).fill(-1);
+    hist=[]; seen=new Map(); repeat=null; done=false;
+    draw();
+  }
+  function stepA(){
+    if(done) return;
+    let changed=0;
+    for(let i=0;i<pts.length;i++){
+      let best=asg[i]<0?0:asg[i], bd=Infinity;
+      for(let j=0;j<k;j++){
+        const d=(pts[i][0]-C[j][0])**2+(pts[i][1]-C[j][1])**2;
+        if(d<bd-1e-15){ bd=d; best=j; }          // strict: ties keep the current winner
+      }
+      if(best!==asg[i]){ asg[i]=best; changed++; }
+    }
+    hist.push({J:cost(),kind:'A',changed});
+    if(changed===0){
+      // the assignment did not move: this is termination, not a cycle
+      done=true; draw(); return;
+    }
+    // record the assignment signature — a repeat here IS a cycle
+    const sig=asg.join(',');
+    if(seen.has(sig)){ if(repeat===null) repeat={at:hist.length, was:seen.get(sig)}; }
+    else seen.set(sig,hist.length);
+    draw();
+  }
+  function stepU(){
+    if(done) return;
+    for(let j=0;j<k;j++){
+      const mem=[];
+      for(let i=0;i<pts.length;i++) if(asg[i]===j) mem.push(i);
+      if(!mem.length) continue;
+      if(kB.checked){                                   // the deliberately broken rule
+        const r=mem[Math.floor(Math.random()*mem.length)];
+        C[j]=[pts[r][0],pts[r][1]];
+      } else {
+        let sx=0,sy=0; for(const i of mem){ sx+=pts[i][0]; sy+=pts[i][1]; }
+        C[j]=[sx/mem.length, sy/mem.length];
+      }
+    }
+    hist.push({J:cost(),kind:'U',changed:0});
+    draw();
+  }
+  function draw(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    // scatter
+    g.fillStyle='#0c1322'; g.fillRect(PX,PY,PW,PH);
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(PX+.5,PY+.5,PW,PH);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('the data, coloured by current assignment',PX,PY-8);
+    for(let i=0;i<pts.length;i++){
+      const x=PX+pts[i][0]*PW, y=PY+pts[i][1]*PH;
+      g.fillStyle= asg[i]<0? '#3a4767' : COL[asg[i]%COL.length];
+      g.beginPath(); g.arc(x,y,3,0,7); g.fill();
+    }
+    for(let j=0;j<k;j++){
+      const x=PX+C[j][0]*PW, y=PY+C[j][1]*PH;
+      g.strokeStyle='#0e1320'; g.lineWidth=4;
+      g.beginPath(); g.arc(x,y,9,0,7); g.stroke();
+      g.strokeStyle=COL[j%COL.length]; g.lineWidth=3;
+      g.beginPath(); g.arc(x,y,9,0,7); g.stroke();
+      g.beginPath(); g.moveTo(x-5,y); g.lineTo(x+5,y); g.moveTo(x,y-5); g.lineTo(x,y+5); g.stroke();
+    }
+    // cost staircase
+    g.fillStyle='#0c1322'; g.fillRect(QX,QY,QW,QH);
+    g.strokeStyle='#2c3650'; g.strokeRect(QX+.5,QY+.5,QW,QH);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('J after every half-step   ● assign   ● update',QX,QY-8);
+    if(hist.length){
+      const mx=Math.max(...hist.map(h=>h.J))*1.06, n=hist.length;
+      const xOf=i=>QX+16+(n>1? i/(n-1):0.5)*(QW-32);
+      const yOf=v=>QY+QH-26-(v/mx)*(QH-48);
+      g.strokeStyle='#41d8c9'; g.lineWidth=2; g.beginPath();
+      hist.forEach((h,i)=> i?g.lineTo(xOf(i),yOf(h.J)):g.moveTo(xOf(i),yOf(h.J)));
+      g.stroke();
+      hist.forEach((h,i)=>{
+        g.fillStyle= h.kind==='A'?'#6ea8ff':'#ffb454';
+        g.beginPath(); g.arc(xOf(i),yOf(h.J),3.6,0,7); g.fill();
+        if(i>0 && h.J>hist[i-1].J+1e-12){
+          g.strokeStyle='#ff6b81'; g.lineWidth=2;
+          g.beginPath(); g.arc(xOf(i),yOf(h.J),8,0,7); g.stroke();
+        }
+      });
+      g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif';
+      g.fillText('J = '+hist[hist.length-1].J.toFixed(4), QX+16, QY+16);
+      g.fillText('half-steps →', QX+QW/2-30, QY+QH-8);
+    } else {
+      g.fillStyle='#4b5878'; g.font='13px system-ui,sans-serif';
+      g.fillText('press "A · assign" to begin', QX+90, QY+QH/2);
+    }
+    let rises=0;
+    for(let i=1;i<hist.length;i++) if(hist[i].J>hist[i-1].J+1e-12) rises++;
+    ro.innerHTML='half-steps: <b>'+hist.length+'</b> &nbsp;·&nbsp; distinct assignments visited: <b>'+
+      seen.size+'</b> &nbsp;·&nbsp; the proof\'s bound k<sup>n</sup> = <b>'+k+'<sup>'+pts.length+'</sup></b> &nbsp;·&nbsp; J = <b>'+
+      (hist.length?hist[hist.length-1].J.toFixed(5):'—')+'</b>'+
+      '<br>steps where J went <b>up</b>: <b style="color:'+(rises?'#ff6b81':'#7ee787')+'">'+rises+'</b>'+
+      (rises? ' — monotonicity is broken, so the finiteness argument no longer applies':' — monotone, as the proof requires')+
+      (repeat? '<br><span style="color:#ff6b81">⚠ assignment repeated (half-step '+repeat.at+' equals half-step '+
+        repeat.was+') — this is a cycle; with the mean update this is impossible</span>':'')+
+      (done? '<br><span style="color:#7ee787">✓ TERMINATED — the assignment step changed nothing, so the centres cannot move either</span>':'');
+  }
+  document.getElementById('b1a').onclick=stepA;
+  document.getElementById('b1u').onclick=stepU;
+  document.getElementById('b1f').onclick=()=>{ stepA(); stepU(); };
+  document.getElementById('b1r').onclick=()=>{ for(let t=0;t<200 && !done;t++){ stepA(); if(!done) stepU(); } };
+  document.getElementById('b1z').onclick=reset;
+  [sK,sN].forEach(s=>s.addEventListener('input',reset));
+  kB.addEventListener('change',reset);
+  reset();
+})();
+
+/* =========================================================================
+   DEMO 2 — 100 restarts: always terminates, not always the same answer
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  const kP=document.getElementById('k2p');
+  const COL=['#41d8c9','#ff6b81','#ffb454','#6ea8ff','#c792ea'];
+  const K=5;
+  let pts=[], results=[];
+
+  (function gen(){
+    let s=24680;
+    const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+    const centres=[[0.18,0.22],[0.80,0.20],[0.22,0.80],[0.80,0.80],[0.50,0.50]];
+    for(let i=0;i<260;i++){
+      const c=centres[i%centres.length];
+      let u=rnd()||1e-9, v=rnd();
+      const r=Math.sqrt(-2*Math.log(u))*0.062;
+      pts.push([c[0]+r*Math.cos(2*Math.PI*v), c[1]+r*Math.sin(2*Math.PI*v)]);
+    }
+  })();
+  const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2;
+
+  function seedUniform(){
+    const C=[]; for(let j=0;j<K;j++) C.push(pts[Math.floor(Math.random()*pts.length)].slice());
+    return C;
+  }
+  function seedPP(){
+    const C=[pts[Math.floor(Math.random()*pts.length)].slice()];
+    while(C.length<K){
+      const D=pts.map(p=>Math.min(...C.map(c=>d2(p,c))));
+      const tot=D.reduce((a,b)=>a+b,0);
+      let r=Math.random()*tot, i=0;
+      while(i<D.length-1 && (r-=D[i])>0) i++;
+      C.push(pts[i].slice());
+    }
+    return C;
+  }
+  function lloyd(C){
+    const asg=new Array(pts.length).fill(-1);
+    let iters=0;
+    for(;;){
+      let changed=0;
+      for(let i=0;i<pts.length;i++){
+        let best=asg[i]<0?0:asg[i], bd=Infinity;
+        for(let j=0;j<K;j++){ const d=d2(pts[i],C[j]); if(d<bd-1e-15){ bd=d; best=j; } }
+        if(best!==asg[i]){ asg[i]=best; changed++; }
+      }
+      iters++;
+      if(!changed || iters>500) break;
+      for(let j=0;j<K;j++){
+        let sx=0,sy=0,c=0;
+        for(let i=0;i<pts.length;i++) if(asg[i]===j){ sx+=pts[i][0]; sy+=pts[i][1]; c++; }
+        if(c) C[j]=[sx/c,sy/c];
+      }
+    }
+    let J=0; for(let i=0;i<pts.length;i++) J+=d2(pts[i],C[asg[i]]);
+    return {J,C,asg,iters};
+  }
+  function run(){
+    results=[];
+    for(let r=0;r<100;r++) results.push(lloyd(kP.checked?seedPP():seedUniform()));
+    results.sort((a,b)=>a.J-b.J);
+    draw();
+  }
+  function panel(res,px,py,S,title,col){
+    g.fillStyle='#0c1322'; g.fillRect(px,py,S,S);
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(px+.5,py+.5,S,S);
+    if(res){
+      for(let i=0;i<pts.length;i++){
+        g.fillStyle=COL[res.asg[i]%COL.length];
+        g.beginPath(); g.arc(px+pts[i][0]*S, py+pts[i][1]*S, 2.2,0,7); g.fill();
+      }
+      res.C.forEach((c,j)=>{
+        g.strokeStyle='#fff'; g.lineWidth=2;
+        g.beginPath(); g.arc(px+c[0]*S, py+c[1]*S, 6,0,7); g.stroke();
+      });
+    }
+    g.fillStyle=col; g.font='12px system-ui,sans-serif'; g.fillText(title,px,py-8);
+  }
+  function draw(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    const HX=20, HY=44, HW=470, HH=280;
+    g.fillStyle='#0c1322'; g.fillRect(HX,HY,HW,HH);
+    g.strokeStyle='#2c3650'; g.strokeRect(HX+.5,HY+.5,HW,HH);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('final J over 100 restarts  (each one terminated)',HX,HY-8);
+    if(results.length){
+      const lo=results[0].J, hi=results[results.length-1].J;
+      const NB=26, bins=new Array(NB).fill(0);
+      const span=Math.max(1e-9,hi-lo);
+      results.forEach(r=>bins[Math.min(NB-1,Math.floor((r.J-lo)/span*NB))]++);
+      const bmax=Math.max(...bins);
+      bins.forEach((b,i)=>{
+        const x=HX+14+i*(HW-28)/NB, w=(HW-28)/NB-2;
+        const h=(b/bmax)*(HH-58);
+        g.fillStyle= i===0? '#7ee787' : (i===NB-1? '#ff6b81':'#41d8c9');
+        g.fillRect(x,HY+HH-30-h,w,h);
+      });
+      g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif';
+      g.fillText('best  J='+lo.toFixed(4), HX+14, HY+HH-14);
+      g.fillText('worst  J='+hi.toFixed(4), HX+HW-124, HY+HH-14);
+      panel(results[0], 520, HY, 170, 'BEST outcome', '#7ee787');
+      panel(results[results.length-1], 712, HY, 170, 'WORST outcome', '#ff6b81');
+      const it=results.map(r=>r.iters);
+      const uniqJ=new Set(results.map(r=>r.J.toFixed(4))).size;
+      ro.innerHTML='seeding: <b>'+(kP.checked?'k-means++':'uniform random')+
+        '</b> &nbsp;·&nbsp; restarts: <b>100</b>, all terminated &nbsp;·&nbsp; iterations: min <b>'+
+        Math.min(...it)+'</b>, mean <b>'+(it.reduce((a,b)=>a+b,0)/it.length).toFixed(1)+
+        '</b>, max <b>'+Math.max(...it)+'</b> &nbsp;(the k<sup>n</sup> bound would be '+K+'<sup>'+pts.length+'</sup>)'+
+        '<br>distinct local minima reached: <b>'+uniqJ+'</b> &nbsp;·&nbsp; best J <b>'+lo.toFixed(4)+
+        '</b>, worst J <b style="color:#ff6b81">'+hi.toFixed(4)+'</b> — <b>'+
+        ((hi/lo-1)*100).toFixed(0)+'% worse</b>. Termination is guaranteed; optimality is not.';
+    } else {
+      g.fillStyle='#4b5878'; g.font='13px system-ui,sans-serif';
+      g.fillText('press "run 100 restarts"',HX+150,HY+HH/2);
+      ro.textContent='';
+    }
+  }
+  document.getElementById('b2r').onclick=run;
+  kP.addEventListener('change',()=>{ if(results.length) run(); });
+  run();
+})();
+</script>
+</body>
+</html>

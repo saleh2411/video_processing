@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q2 — Markov + conditional independence ⇒ the tracking recursion</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q2</b> · The tracking recursion, proved</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="b1_optic_flow_lidar.html">‹ Q1</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b3_dynamic_texture_word2vec.html">Q3 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 4 · Moed B 2022, question 2 · 12 points</div>
+    <h1>Why tracking only ever needs yesterday</h1>
+    <p class="lede">This is the single most important equation in the tracking chapter, and it is a
+    three-line proof once you know which two assumptions to invoke. The whole point: without them, tracking
+    would need the entire history at every frame; with them, it becomes a recursion you can run forever in
+    constant memory. Story, the two assumptions stated precisely, the derivation line by line, and a live
+    filter you can step.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 2 · 12 points · TRACKING</span>
+    <p>Write down the Markov model assumption and the Conditional Independence of observations assumption
+    and show that:</p>
+    <div class="eq">$$ p(\mathbf{x}_{1:t}\mid \mathbf{z}_{1:t}) \;\propto\; p(\mathbf{z}_t\mid\mathbf{x}_t)\, p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\, p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1}) \tag{1} $$</div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid with the diary and the terrible eyes</span>
+    <p>A puppy is running around the garden. You want to know where it is. You have two things:</p>
+    <ul>
+      <li><strong>$\mathbf{x}_t$ — the truth.</strong> Where the puppy really is at time $t$. You never see
+      this. It is <em>hidden</em>.</li>
+      <li><strong>$\mathbf{z}_t$ — what you saw.</strong> A blurry glance through a dirty window at time
+      $t$. You do see this.</li>
+    </ul>
+    <p>By evening you have a whole diary of glances $\mathbf{z}_1,\dots,\mathbf{z}_t$, and you want the whole
+    story of the puppy's day, $\mathbf{x}_1,\dots,\mathbf{x}_t$. That is exactly what
+    $p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t})$ means: <em>how likely is this whole story, given everything I
+    saw?</em></p>
+    <p>Now the two beliefs that make life easy:</p>
+    <p><strong>Belief 1 — the puppy has no memory (Markov).</strong> To guess where the puppy will be
+    <em>next</em>, you only need to know where it is <em>now</em>. Knowing where it was at breakfast adds
+    nothing once you know it is standing by the tree right now. A puppy standing by the tree will do the same
+    thing whether it arrived from the left or from the right.</p>
+    <p><strong>Belief 2 — each glance only reports the present (conditional independence).</strong> The
+    blurriness of the glance you take right now depends only on where the puppy is <em>right now</em>. The
+    dirty window doesn't remember yesterday's glances, and it doesn't know the puppy's plans. So given the
+    true position now, this glance tells you nothing extra about any other glance.</p>
+    <p>Put them together and something wonderful happens: <strong>you never have to re-read your diary.</strong>
+    Yesterday's belief plus one motion guess plus one new glance = today's belief. That is equation (1), and
+    it is why a tracker can run for a million frames on a phone.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">Read equation (1) out loud</span>
+    <b>new belief about the whole story</b> = <b>how well the new glance fits</b> ($p(\mathbf{z}_t|\mathbf{x}_t)$)
+    × <b>how plausible the step from yesterday to today is</b> ($p(\mathbf{x}_t|\mathbf{x}_{t-1})$)
+    × <b>yesterday's belief about the story so far</b> ($p(\mathbf{x}_{1:t-1}|\mathbf{z}_{1:t-1})$).
+    Three factors, one new frame each. Nothing else survives.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The model, drawn</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the hidden Markov chain</h4><span class="tag">hover a node</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Every arrow is a conditional dependence. There are exactly two
+      kinds: <b>state → next state</b> (the Markov chain) and <b>state → its own observation</b>. There is no
+      arrow from $\mathbf{x}_{t-2}$ to $\mathbf{x}_t$, and no arrow from $\mathbf{z}_{t-1}$ to
+      $\mathbf{z}_t$. <b>Those two missing arrows are the two assumptions.</b> Hover a node to see what it is
+      allowed to depend on.</p>
+      <canvas id="c1" width="900" height="260"></canvas>
+      <div class="readout" id="r1">Hover a node.</div>
+    </div>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Assumption 1 — the Markov (state transition) model</span>
+    <p>The state at time $t$ depends on the past <em>only through the immediately preceding state</em>:</p>
+  </div>
+
+  <div class="eq">$$ p(\mathbf{x}_t \mid \mathbf{x}_{1:t-1}) = p(\mathbf{x}_t\mid\mathbf{x}_{t-1}) \tag{2} $$</div>
+
+  <div class="explain">
+    <p>and, in the form actually needed below (which also follows from the graph, since the past observations
+    influence $\mathbf{x}_t$ only through $\mathbf{x}_{t-1}$, which we are conditioning on):</p>
+  </div>
+
+  <div class="eq">$$ p(\mathbf{x}_t \mid \mathbf{x}_{1:t-1},\,\mathbf{z}_{1:t-1}) = p(\mathbf{x}_t\mid\mathbf{x}_{t-1}) \tag{2'} $$</div>
+
+  <div class="explain">
+    <span class="explain-label">Assumption 2 — conditional independence of observations</span>
+    <p>Given the states, observations are mutually independent and each depends only on its own state:</p>
+  </div>
+
+  <div class="eq">$$ p(\mathbf{z}_{1:t}\mid \mathbf{x}_{1:t}) = \prod_{k=1}^{t} p(\mathbf{z}_k\mid\mathbf{x}_k) \tag{3} $$</div>
+
+  <div class="explain">
+    <p>whose one-step consequence — the form used in the proof — is</p>
+  </div>
+
+  <div class="eq">$$ p(\mathbf{z}_t \mid \mathbf{x}_{1:t},\,\mathbf{z}_{1:t-1}) = p(\mathbf{z}_t\mid\mathbf{x}_t) \tag{3'} $$</div>
+
+  <div class="callout note"><span class="lbl">Why (3) ⇒ (3′)</span>
+    $p(\mathbf{z}_t\mid\mathbf{x}_{1:t},\mathbf{z}_{1:t-1}) = \dfrac{p(\mathbf{z}_{1:t}\mid\mathbf{x}_{1:t})}{p(\mathbf{z}_{1:t-1}\mid\mathbf{x}_{1:t})}
+    = \dfrac{\prod_{k=1}^{t}p(\mathbf{z}_k\mid\mathbf{x}_k)}{\prod_{k=1}^{t-1}p(\mathbf{z}_k\mid\mathbf{x}_k)} = p(\mathbf{z}_t\mid\mathbf{x}_t)$,
+    where the denominator used (3) with $\mathbf{z}_{1:t-1}$ (the extra conditioning on $\mathbf{x}_t$ is
+    harmless — no $\mathbf{z}_k$, $k<t$, depends on it).
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The derivation</h2>
+
+  <div class="explain">
+    <p>Start from the definition of conditional probability and split off the newest frame. Everything below
+    is just Bayes' rule plus the chain rule; the two assumptions are used exactly once each, and they are
+    flagged.</p>
+  </div>
+
+  <ol class="steps">
+    <li><b>Bayes.</b> Write the posterior as a joint over a normaliser:
+      <div class="eq">$$ p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) = \frac{p(\mathbf{x}_{1:t},\,\mathbf{z}_{1:t})}{p(\mathbf{z}_{1:t})} $$</div>
+    </li>
+    <li><b>Chain rule on the numerator</b>, peeling off $\mathbf{z}_t$ then $\mathbf{x}_t$:
+      <div class="eq">$$ p(\mathbf{x}_{1:t},\mathbf{z}_{1:t}) = p(\mathbf{z}_t\mid \mathbf{x}_{1:t},\mathbf{z}_{1:t-1})\; p(\mathbf{x}_t\mid \mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1})\; p(\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1}) $$</div>
+      This step is exact — no assumptions yet.
+    </li>
+    <li><b>Apply the two assumptions.</b> The first factor collapses by (3′), the second by (2′):
+      <div class="eq">$$ p(\mathbf{x}_{1:t},\mathbf{z}_{1:t}) = \underbrace{p(\mathbf{z}_t\mid\mathbf{x}_t)}_{\text{cond. indep. (3')}}\;\underbrace{p(\mathbf{x}_t\mid\mathbf{x}_{t-1})}_{\text{Markov (2')}}\; p(\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1}) $$</div>
+    </li>
+    <li><b>Re-expand the tail</b> as a posterior times an evidence:
+      <div class="eq">$$ p(\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1}) = p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1})\; p(\mathbf{z}_{1:t-1}) $$</div>
+    </li>
+    <li><b>Factor the normaliser</b> the same way:
+      <div class="eq">$$ p(\mathbf{z}_{1:t}) = p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})\, p(\mathbf{z}_{1:t-1}) $$</div>
+    </li>
+    <li><b>Divide and cancel</b> $p(\mathbf{z}_{1:t-1})$:
+      <div class="eq">$$ p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) = \frac{p(\mathbf{z}_t\mid\mathbf{x}_t)\,p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\,p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1})}{p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})} $$</div>
+    </li>
+    <li><b>Drop the denominator.</b> $p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})$ does not depend on
+      $\mathbf{x}_{1:t}$ — it is a constant as far as the distribution over trajectories is concerned (it is
+      the integral of the numerator over all $\mathbf{x}_{1:t}$). Hence
+      <div class="eq">$$ \boxed{\;p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) \;\propto\; p(\mathbf{z}_t\mid\mathbf{x}_t)\,p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\,p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1})\;} \qquad \blacksquare $$</div>
+    </li>
+  </ol>
+
+  <div class="callout key"><span class="lbl">Where each assumption did its job</span>
+    Without (3′) the first factor would stay $p(\mathbf{z}_t\mid\mathbf{x}_{1:t},\mathbf{z}_{1:t-1})$ — you
+    would need every past frame to evaluate the new one. Without (2′) the second factor would stay
+    $p(\mathbf{x}_t\mid\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1})$ — you would need the whole trajectory to
+    predict one step. Each assumption deletes one growing history. Together they turn an $O(t)$ evaluation
+    into an $O(1)$ one.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The corollary everyone actually uses</h2>
+
+  <div class="explain">
+    <p>Equation (1) is about the <em>whole trajectory</em>. Marginalising $\mathbf{x}_{1:t-1}$ out of it
+    gives the <span class="term">filtering</span> recursion — the two-line predict/update loop that Kalman
+    and particle filters implement:</p>
+  </div>
+
+  <div class="eq">$$ \underbrace{p(\mathbf{x}_t\mid\mathbf{z}_{1:t-1}) = \int p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\, p(\mathbf{x}_{t-1}\mid\mathbf{z}_{1:t-1})\, d\mathbf{x}_{t-1}}_{\textbf{predict} \;\text{(Chapman–Kolmogorov)}} \tag{4} $$</div>
+
+  <div class="eq">$$ \underbrace{p(\mathbf{x}_t\mid\mathbf{z}_{1:t}) = \frac{p(\mathbf{z}_t\mid\mathbf{x}_t)\,p(\mathbf{x}_t\mid\mathbf{z}_{1:t-1})}{p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})}}_{\textbf{update} \;\text{(Bayes)}} \tag{5} $$</div>
+
+  <div class="summary">
+    <span class="summary-label">Same three factors, three different algorithms</span>
+    <table>
+      <tr><th>Algorithm</th><th>$p(\mathbf{x}_t\mid\mathbf{x}_{t-1})$</th><th>$p(\mathbf{z}_t\mid\mathbf{x}_t)$</th><th>How the posterior is stored</th></tr>
+      <tr><td>Kalman filter</td><td>$\mathcal{N}(A\mathbf{x}_{t-1},Q)$ — linear + Gaussian</td>
+        <td>$\mathcal{N}(H\mathbf{x}_t,R)$ — linear + Gaussian</td>
+        <td>closed form: a mean $\hat{\mathbf{x}}$ and a covariance $P$. The integral in (4) and the product
+        in (5) stay Gaussian, so the recursion is exact and costs a few matrix operations.</td></tr>
+      <tr><td>Particle filter<br>(Condensation)</td><td>anything you can <em>sample</em> from</td>
+        <td>anything you can <em>evaluate</em></td>
+        <td>$N$ weighted samples $\{\mathbf{x}^{(n)},\pi^{(n)}\}$. Predict = push each particle through the
+        motion model; update = multiply weights by the likelihood; then resample.</td></tr>
+      <tr><td>HMM / discrete</td><td>a transition matrix $A_{ij}$</td><td>an emission table $B_{jk}$</td>
+        <td>a vector of probabilities over the finite state set — the forward algorithm is literally (4)+(5).</td></tr>
+    </table>
+    <p style="margin-top:12px">The three columns are exactly the three factors of equation (1). Everything in
+    Chapter 4 is a choice of how to represent them.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — predict · update, one frame at a time</h4><span class="tag">press step</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A 1-D Bayes filter drawn as three curves. <b style="color:#c792ea">Purple</b>
+      = last frame's posterior. <b style="color:#6ea8ff">Blue</b> = after applying $p(\mathbf{x}_t|\mathbf{x}_{t-1})$
+      (predict: it shifts and <em>widens</em> — uncertainty always grows when you only guess).
+      <b style="color:#ffb454">Amber</b> = the likelihood $p(\mathbf{z}_t|\mathbf{x}_t)$ of the new
+      measurement. <b style="color:#7ee787">Green</b> = their product renormalised, the new posterior — always
+      <em>narrower</em> than blue, because a measurement can only add information. The vertical white line is
+      the true position, which the filter never sees.</p>
+      <canvas id="c2" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>process noise $\sigma_Q$ (how unpredictably it moves) <span class="val" id="v2q">1.6</span></label><input type="range" id="s2q" min="2" max="60" step="1" value="16"></div>
+        <div class="control"><label>measurement noise $\sigma_R$ (how dirty the window is) <span class="val" id="v2r">2.0</span></label><input type="range" id="s2r" min="3" max="80" step="1" value="20"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b2step">▶ step one frame</button>
+        <button class="act" id="b2run">⏩ run 20 frames</button>
+        <button class="act" id="b2res">↺ reset</button>
+        <label class="chk"><input type="checkbox" id="k2miss"> blind frame (no measurement this step)</label>
+      </div>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <div class="callout note"><span class="lbl">Tick "blind frame" and step</span>
+    With no $\mathbf{z}_t$, the update stage is skipped and the posterior <em>is</em> the prediction — it just
+    keeps widening. That is the visual meaning of "the likelihood factor is missing". Untick it and one
+    measurement snaps the belief back. This is also why the Markov assumption is what lets you survive
+    dropped frames: the recursion only ever asks for $\mathbf{x}_{t-1}$, never for the history.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Assumption 1 (Markov model / first-order state transition).</strong> The state is a complete
+    summary of the past: the next state depends on the history only through the current state,</p>
+    <div class="eq">$$ p(\mathbf{x}_t\mid\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1}) = p(\mathbf{x}_t\mid\mathbf{x}_{t-1}). $$</div>
+
+    <p><strong>Assumption 2 (conditional independence of observations).</strong> Given the states,
+    observations are independent of one another and each depends only on the state at its own time,</p>
+    <div class="eq">$$ p(\mathbf{z}_{1:t}\mid\mathbf{x}_{1:t}) = \prod_{k=1}^{t} p(\mathbf{z}_k\mid\mathbf{x}_k) \;\;\Longrightarrow\;\; p(\mathbf{z}_t\mid\mathbf{x}_{1:t},\mathbf{z}_{1:t-1}) = p(\mathbf{z}_t\mid\mathbf{x}_t). $$</div>
+
+    <p><strong>Derivation.</strong> By Bayes' rule and the chain rule, splitting off the newest frame,</p>
+    <div class="eq">$$ p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) = \frac{p(\mathbf{x}_{1:t},\mathbf{z}_{1:t})}{p(\mathbf{z}_{1:t})} = \frac{p(\mathbf{z}_t\mid\mathbf{x}_{1:t},\mathbf{z}_{1:t-1})\,p(\mathbf{x}_t\mid\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1})\,p(\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1})}{p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})\,p(\mathbf{z}_{1:t-1})}. $$</div>
+    <p>Apply Assumption 2 to the first numerator factor and Assumption 1 to the second, and write
+    $p(\mathbf{x}_{1:t-1},\mathbf{z}_{1:t-1}) = p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1})\,p(\mathbf{z}_{1:t-1})$.
+    The factor $p(\mathbf{z}_{1:t-1})$ cancels top and bottom:</p>
+    <div class="eq">$$ p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) = \frac{p(\mathbf{z}_t\mid\mathbf{x}_t)\,p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\,p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1})}{p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1})}. $$</div>
+    <p>The remaining denominator is independent of $\mathbf{x}_{1:t}$ (it is the normalising evidence,
+    obtained by integrating the numerator over all trajectories), therefore</p>
+    <div class="eq">$$ p(\mathbf{x}_{1:t}\mid\mathbf{z}_{1:t}) \propto p(\mathbf{z}_t\mid\mathbf{x}_t)\,p(\mathbf{x}_t\mid\mathbf{x}_{t-1})\,p(\mathbf{x}_{1:t-1}\mid\mathbf{z}_{1:t-1}). \qquad\blacksquare $$</div>
+
+    <p><strong>Significance.</strong> The posterior over the whole trajectory is obtained from the previous
+    posterior by multiplying two <em>local</em> factors only. Nothing depends on $\mathbf{z}_{1:t-1}$
+    explicitly, so the tracker needs constant memory and constant work per frame. Marginalising
+    $\mathbf{x}_{1:t-1}$ gives the standard predict/update filtering recursion
+    $p(\mathbf{x}_t|\mathbf{z}_{1:t-1}) = \int p(\mathbf{x}_t|\mathbf{x}_{t-1})p(\mathbf{x}_{t-1}|\mathbf{z}_{1:t-1})d\mathbf{x}_{t-1}$
+    and $p(\mathbf{x}_t|\mathbf{z}_{1:t}) \propto p(\mathbf{z}_t|\mathbf{x}_t)p(\mathbf{x}_t|\mathbf{z}_{1:t-1})$,
+    which the Kalman filter solves in closed form (linear-Gaussian case) and Condensation approximates with
+    weighted particles.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why $\propto$ and not $=$? What exactly was thrown away?</summary>
+    <p>The evidence $p(\mathbf{z}_t\mid\mathbf{z}_{1:t-1}) = \int p(\mathbf{z}_t\mid\mathbf{x}_t)p(\mathbf{x}_t\mid\mathbf{z}_{1:t-1})d\mathbf{x}_t$.
+    It is a number, not a function of $\mathbf{x}$, so it rescales every trajectory equally and cannot change
+    which trajectory is most probable. It is not useless, though: it is the <em>likelihood of the new
+    measurement under the model</em>, and its running product $\prod_t p(\mathbf{z}_t|\mathbf{z}_{1:t-1})$ is
+    the model evidence — used for failure detection ("this frame is very surprising, the target may be
+    occluded or lost") and for comparing motion models.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. In the particle filter, which factor does each of the three stages implement?</summary>
+    <p>Condensation's three stages line up one-to-one with the recursion. <b>Select</b> (resample from the
+    weighted set) realises $p(\mathbf{x}_{1:t-1}|\mathbf{z}_{1:t-1})$ — it turns last frame's weighted
+    representation into an unweighted sample of it. <b>Predict</b> (push each particle through the dynamics
+    plus noise) applies $p(\mathbf{x}_t|\mathbf{x}_{t-1})$. <b>Measure</b> (weight each particle by the
+    image evidence, $\pi^{(n)} \propto p(\mathbf{z}_t|\mathbf{x}_t^{(n)})$, then normalise) applies
+    $p(\mathbf{z}_t|\mathbf{x}_t)$ — and the normalisation is exactly the $\propto$ we dropped.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What if the motion is second order, e.g. constant acceleration?</summary>
+    <p>Then $p(\mathbf{x}_t|\mathbf{x}_{t-1})$ is false as stated — position alone doesn't predict the next
+    position. The fix is never to abandon the Markov assumption but to <strong>enlarge the state</strong>:
+    take $\mathbf{x}_t = (\text{position},\text{velocity})^{\!\top}$, or
+    $(\text{position},\text{velocity},\text{acceleration})$. In the new state the process is first-order
+    Markov again and equation (1) holds verbatim. This is the standard trick: "the state is whatever you must
+    know about the past to predict the future", and any finite-order dependence can be absorbed by stacking.
+    In the Kalman filter this is the constant-velocity model
+    $A=\left[\begin{smallmatrix}1&\Delta t\\0&1\end{smallmatrix}\right]$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Give a real case where the observation independence assumption fails.</summary>
+    <p>A fixed occluder — a lamp post. When the target passes behind it, several <em>consecutive</em>
+    measurements are bad, and they are bad for a common reason that is not the target's state. Given
+    $\mathbf{x}_t$, $\mathbf{z}_t$ and $\mathbf{z}_{t+1}$ are then still correlated, violating (3). Same for
+    a mis-calibrated sensor, a static background clutter patch that looks like the target, or JPEG blocking
+    artefacts. Consequences: the filter becomes overconfident, because it treats $k$ correlated errors as $k$
+    independent votes. Remedies: model the occluder in the state (add a visibility flag, making the model
+    Markov again in the bigger state), inflate $R$, or use a robust/heavy-tailed likelihood so a run of bad
+    frames cannot dominate.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The trajectory posterior vs the filtering posterior — what's the difference, and why do
+    particle filters degrade on the first?</summary>
+    <p>$p(\mathbf{x}_{1:t}|\mathbf{z}_{1:t})$ lives in a space whose dimension <em>grows with $t$</em>;
+    $p(\mathbf{x}_t|\mathbf{z}_{1:t})$ does not. A particle filter technically samples the trajectory version
+    (each particle carries an ancestral path), and repeated resampling means all particles eventually share
+    one common ancestor — so the early part of the trajectory posterior collapses to a single sample. This is
+    <span class="term">path degeneracy</span>. It doesn't hurt the filtering marginal at recent times, which
+    is what tracking needs, but it means you cannot trust a particle filter's estimate of where the target
+    was 200 frames ago. Fixing that requires smoothing (forward–backward), not filtering.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Prove the predict equation (4) from (1).</summary>
+    <p>Marginalise (1) over $\mathbf{x}_{1:t-2}$ to get the joint of the last two states,
+    $p(\mathbf{x}_{t-1},\mathbf{x}_t|\mathbf{z}_{1:t-1}) = p(\mathbf{x}_t|\mathbf{x}_{t-1})p(\mathbf{x}_{t-1}|\mathbf{z}_{1:t-1})$
+    (using the pre-measurement version of the recursion), then marginalise $\mathbf{x}_{t-1}$:
+    $p(\mathbf{x}_t|\mathbf{z}_{1:t-1}) = \int p(\mathbf{x}_t|\mathbf{x}_{t-1})p(\mathbf{x}_{t-1}|\mathbf{z}_{1:t-1})\,d\mathbf{x}_{t-1}$.
+    That is Chapman–Kolmogorov. Then multiply by $p(\mathbf{z}_t|\mathbf{x}_t)$ and normalise for (5).</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Is the initial condition part of the assumptions?</summary>
+    <p>Yes — the recursion needs a starting point $p(\mathbf{x}_1)$ (the prior), otherwise there is nothing to
+    recurse from. Formally the model is the triple $\big(p(\mathbf{x}_1),\, p(\mathbf{x}_t|\mathbf{x}_{t-1}),\,
+    p(\mathbf{z}_t|\mathbf{x}_t)\big)$, and at $t=1$ equation (1) degenerates to
+    $p(\mathbf{x}_1|\mathbf{z}_1) \propto p(\mathbf{z}_1|\mathbf{x}_1)p(\mathbf{x}_1)$, plain Bayes. In
+    practice this is the detection that initialises the tracker; a broad prior means "I don't know where it
+    is", and the filter concentrates it over the first few frames.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Symbol</th><th>Name</th><th>Plain version</th></tr>
+      <tr><td>$\mathbf{x}_t$</td><td>state</td><td>the truth you can't see</td></tr>
+      <tr><td>$\mathbf{z}_t$</td><td>observation</td><td>the blurry glance you do see</td></tr>
+      <tr><td>$p(\mathbf{x}_t|\mathbf{x}_{t-1})$</td><td>motion / process model</td><td>where could it have gone in one frame</td></tr>
+      <tr><td>$p(\mathbf{z}_t|\mathbf{x}_t)$</td><td>likelihood / measurement model</td><td>how well the frame matches a hypothesis</td></tr>
+      <tr><td>Assumption 1</td><td>Markov</td><td>only yesterday matters ⇒ deletes $\mathbf{x}_{1:t-2}$</td></tr>
+      <tr><td>Assumption 2</td><td>cond. independence</td><td>each glance reports only its own instant ⇒ deletes $\mathbf{z}_{1:t-1}$</td></tr>
+      <tr><td>$p(\mathbf{z}_t|\mathbf{z}_{1:t-1})$</td><td>evidence</td><td>a constant in $\mathbf{x}$ ⇒ becomes the "$\propto$"</td></tr>
+      <tr><td>consequence</td><td>recursion</td><td>constant memory and constant work per frame, forever</td></tr>
+    </table>
+    <p style="margin-top:12px"><strong>The whole proof in one line:</strong> chain-rule the joint, use each
+    assumption once to shorten the two conditionals, cancel $p(\mathbf{z}_{1:t-1})$, drop the constant.</p>
+  </div>
+
+  <div class="pager">
+    <a href="b1_optic_flow_lidar.html"><span class="dir">Previous</span><span class="ttl">Q1 · Optic flow + LiDAR</span></a>
+    <a class="next" href="b3_dynamic_texture_word2vec.html"><span class="dir">Next question</span><span class="ttl">Q3 · Text as a dynamic texture ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   DEMO 1 — the graphical model
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d'), ro=document.getElementById('r1');
+  const names=['t-2','t-1','t'];
+  const X=[], Z=[];
+  const y0=80, y1=195, x0=200, dx=250;
+  for(let k=0;k<3;k++){ X.push({x:x0+k*dx, y:y0, lbl:'x'+names[k], k:k, kind:'x'});
+                        Z.push({x:x0+k*dx, y:y1, lbl:'z'+names[k], k:k, kind:'z'}); }
+  let hov=null;
+
+  function arrow(a,b,col,w){
+    const ang=Math.atan2(b.y-a.y,b.x-a.x), R=26;
+    const sx=a.x+Math.cos(ang)*R, sy=a.y+Math.sin(ang)*R;
+    const ex=b.x-Math.cos(ang)*R, ey=b.y-Math.sin(ang)*R;
+    g.strokeStyle=col; g.lineWidth=w; g.beginPath(); g.moveTo(sx,sy); g.lineTo(ex,ey); g.stroke();
+    g.fillStyle=col; g.beginPath();
+    g.moveTo(ex,ey);
+    g.lineTo(ex-9*Math.cos(ang-0.35), ey-9*Math.sin(ang-0.35));
+    g.lineTo(ex-9*Math.cos(ang+0.35), ey-9*Math.sin(ang+0.35));
+    g.fill();
+  }
+  function node(n,fill,stroke,txt){
+    g.beginPath(); g.arc(n.x,n.y,26,0,7);
+    g.fillStyle=fill; g.fill(); g.strokeStyle=stroke; g.lineWidth=2; g.stroke();
+    g.fillStyle=txt; g.font='bold 14px system-ui,sans-serif'; g.textAlign='center';
+    const m=n.lbl.match(/^(\w)(.*)$/);
+    g.fillText(m[1],n.x-6,n.y+5);
+    g.font='10px system-ui,sans-serif'; g.fillText(m[2],n.x+9,n.y+9);
+    g.textAlign='left';
+  }
+  function render(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    g.fillStyle='#6b7a99'; g.font='12px system-ui,sans-serif';
+    g.fillText('hidden states  (never observed)', 20, y0+5);
+    g.fillText('observations  (what you measure)', 20, y1+5);
+    // "..." before and after
+    g.fillStyle='#3a4767'; g.font='20px system-ui'; g.fillText('· · ·', x0-72, y0+6);
+    g.fillText('· · ·', x0+2*dx+52, y0+6);
+    // dashed forbidden arrows
+    g.setLineDash([5,5]);
+    g.strokeStyle='#41202c'; g.lineWidth=2;
+    g.beginPath(); g.moveTo(X[0].x, X[0].y-30); g.bezierCurveTo(X[0].x+80,X[0].y-70,X[2].x-80,X[2].y-70,X[2].x,X[2].y-30); g.stroke();
+    g.beginPath(); g.moveTo(Z[0].x, Z[0].y+30); g.bezierCurveTo(Z[0].x+60,Z[0].y+55,Z[1].x-60,Z[1].y+55,Z[1].x,Z[1].y+30); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle='#ff6b81'; g.font='11px system-ui,sans-serif';
+    g.fillText('✗ no long-range state arrow  (Markov assumption)', x0+40, y0-58);
+    g.fillText('✗ no observation→observation arrow  (cond. independence)', x0-20, y1+72);
+
+    for(let k=0;k<2;k++) arrow(X[k],X[k+1], hov&&hov.kind==='x'&&hov.k===k+1?'#7ee787':'#41d8c9', 2.5);
+    for(let k=0;k<3;k++) arrow(X[k],Z[k],  hov&&hov.kind==='z'&&hov.k===k ?'#7ee787':'#6ea8ff', 2.5);
+
+    X.forEach(n=>node(n, hov===n?'#7ee787':'#1b2336', '#41d8c9', hov===n?'#07221f':'#e6ecf7'));
+    Z.forEach(n=>node(n, hov===n?'#7ee787':'#222c44', '#6ea8ff', hov===n?'#07221f':'#e6ecf7'));
+  }
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    let f=null;
+    [...X,...Z].forEach(n=>{ if(Math.hypot(mx-n.x,my-n.y)<28) f=n; });
+    if(f!==hov){
+      hov=f; render();
+      if(!f) ro.textContent='Hover a node.';
+      else if(f.kind==='x') ro.innerHTML='<b>State x<sub>'+names[f.k]+'</sub></b> — its only parent is the previous state. '+
+        'Formally $p(\\mathbf{x}_t\\mid \\mathbf{x}_{1:t-1},\\mathbf{z}_{1:t-1}) = p(\\mathbf{x}_t\\mid\\mathbf{x}_{t-1})$: '+
+        'once you know where it was one frame ago, nothing else in the past changes the prediction.';
+      else ro.innerHTML='<b>Observation z<sub>'+names[f.k]+'</sub></b> — its only parent is the state at the same instant. '+
+        'Formally $p(\\mathbf{z}_t \\mid \\mathbf{x}_{1:t},\\mathbf{z}_{1:t-1}) = p(\\mathbf{z}_t\\mid\\mathbf{x}_t)$: '+
+        'the measurement is a noisy function of the present truth only.';
+      if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([ro]);
+    }
+  });
+  render();
+})();
+
+/* =========================================================================
+   DEMO 2 — 1-D Bayes filter, predict/update drawn as curves
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  const sQ=document.getElementById('s2q'), sR=document.getElementById('s2r');
+  const vQ=document.getElementById('v2q'), vR=document.getElementById('v2r');
+  const bStep=document.getElementById('b2step'), bRun=document.getElementById('b2run'),
+        bRes=document.getElementById('b2res'), kMiss=document.getElementById('k2miss');
+
+  const XMIN=-2, XMAX=42, NB=440;
+  let post=null, prevPost=null, pred=null, lik=null, truth=8, vel=0.9, t=0, lastZ=null;
+
+  function gauss(mu,s){ const a=new Float64Array(NB);
+    for(let i=0;i<NB;i++){ const x=XMIN+(XMAX-XMIN)*i/(NB-1);
+      a[i]=Math.exp(-0.5*Math.pow((x-mu)/s,2)); }
+    return norm(a); }
+  function norm(a){ let s=0; for(const v of a) s+=v; if(s<=0) return a;
+    for(let i=0;i<NB;i++) a[i]/=s; return a; }
+  function convolveShift(a, shift, sig){        // predict: shift by `shift`, blur by sig
+    const out=new Float64Array(NB);
+    const dx=(XMAX-XMIN)/(NB-1);
+    const half=Math.max(1,Math.ceil(3*sig/dx));
+    const ker=[]; let ks=0;
+    for(let k=-half;k<=half;k++){ const w=Math.exp(-0.5*Math.pow(k*dx/sig,2)); ker.push(w); ks+=w; }
+    const sh=Math.round(shift/dx);
+    for(let i=0;i<NB;i++){
+      if(a[i]===0) continue;
+      for(let k=-half;k<=half;k++){
+        const j=i+sh+k; if(j<0||j>=NB) continue;
+        out[j]+=a[i]*ker[k+half]/ks;
+      }
+    }
+    return norm(out);
+  }
+  function reset(){
+    t=0; truth=8; post=gauss(8,3.0); prevPost=null; pred=null; lik=null; lastZ=null; render();
+  }
+  function step(){
+    const sq=+sQ.value/10, sr=+sR.value/10;
+    prevPost=post;
+    truth += vel + (Math.random()-0.5)*sq*0.9;
+    if(truth>38||truth<2) vel=-vel;
+    pred = convolveShift(post, vel, sq);
+    if(kMiss.checked){ lik=null; lastZ=null; post=pred; }
+    else {
+      lastZ = truth + (Math.random()*2-1)*sr*1.2;
+      lik = gauss(lastZ, sr);
+      const p=new Float64Array(NB);
+      for(let i=0;i<NB;i++) p[i]=pred[i]*lik[i];
+      post = norm(p);
+    }
+    t++; render();
+  }
+  function stats(a){
+    let m=0; for(let i=0;i<NB;i++){ const x=XMIN+(XMAX-XMIN)*i/(NB-1); m+=x*a[i]; }
+    let v=0; for(let i=0;i<NB;i++){ const x=XMIN+(XMAX-XMIN)*i/(NB-1); v+=a[i]*(x-m)*(x-m); }
+    return [m, Math.sqrt(v)];
+  }
+  function curve(a,col,fill,lbl,yi){
+    if(!a) return;
+    let mx=0; for(const v of a) mx=Math.max(mx,v);
+    const H=cv.height-52, base=cv.height-26;
+    g.beginPath();
+    for(let i=0;i<NB;i++){
+      const x=(i/(NB-1))*(cv.width-40)+20, y=base-(a[i]/mx)*(H-30);
+      i?g.lineTo(x,y):g.moveTo(x,y);
+    }
+    if(fill){ g.lineTo(cv.width-20,base); g.lineTo(20,base); g.closePath();
+      g.fillStyle=fill; g.fill(); }
+    g.strokeStyle=col; g.lineWidth=2; g.stroke();
+    g.fillStyle=col; g.font='12px system-ui,sans-serif'; g.fillText(lbl, 28, 20+yi*17);
+  }
+  function render(){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    const base=cv.height-26;
+    g.strokeStyle='#2c3650'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(20,base); g.lineTo(cv.width-20,base); g.stroke();
+    g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif';
+    for(let x=0;x<=40;x+=5){
+      const px=((x-XMIN)/(XMAX-XMIN))*(cv.width-40)+20;
+      g.fillRect(px,base,1,4); g.fillText(x, px-5, base+17);
+    }
+    curve(prevPost,'#c792ea','rgba(199,146,234,.10)','● p(x_{t-1} | z_{1:t-1})   last posterior',0);
+    curve(pred,'#6ea8ff','rgba(110,168,255,.13)','● predict:  ∫ p(x_t|x_{t-1}) p(x_{t-1}|z_{1:t-1}) dx  — wider',1);
+    curve(lik,'#ffb454',null,'● likelihood  p(z_t | x_t)   the new measurement',2);
+    curve(post,'#7ee787','rgba(126,231,135,.18)','● update:  ∝ p(z_t|x_t) · predict   — narrower',3);
+    // truth line + measurement tick
+    const tx=((truth-XMIN)/(XMAX-XMIN))*(cv.width-40)+20;
+    g.strokeStyle='#ffffff'; g.setLineDash([4,4]); g.lineWidth=1.5;
+    g.beginPath(); g.moveTo(tx,18); g.lineTo(tx,base); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#fff'; g.font='11px system-ui'; g.fillText('true x', tx+5, 16);
+    if(lastZ!==null){
+      const zx=((lastZ-XMIN)/(XMAX-XMIN))*(cv.width-40)+20;
+      g.fillStyle='#ffb454'; g.beginPath(); g.moveTo(zx,base); g.lineTo(zx-6,base+11); g.lineTo(zx+6,base+11); g.fill();
+    }
+    const [mp,sp]=stats(post);
+    const pr = pred?stats(pred):null;
+    ro.innerHTML='frame <b>'+t+'</b> &nbsp;·&nbsp; true position <b>'+truth.toFixed(2)+'</b>'+
+      (lastZ!==null?' &nbsp;·&nbsp; measured <b>'+lastZ.toFixed(2)+'</b>':' &nbsp;·&nbsp; <span style="color:#ff6b81">no measurement</span>')+
+      ' &nbsp;·&nbsp; posterior mean <b>'+mp.toFixed(2)+'</b>, σ <b>'+sp.toFixed(2)+'</b>'+
+      (pr?' &nbsp;(prediction σ was <b>'+pr[1].toFixed(2)+'</b> → the measurement '+
+        (sp<pr[1]?'<span style="color:#7ee787">shrank</span>':'<span style="color:#ff6b81">grew</span>')+' it)':'')+
+      ' &nbsp;·&nbsp; error <b>'+Math.abs(mp-truth).toFixed(2)+'</b>';
+  }
+  [sQ,sR].forEach(s=>s.addEventListener('input',()=>{
+    vQ.textContent=(+sQ.value/10).toFixed(1); vR.textContent=(+sR.value/10).toFixed(1); }));
+  bStep.onclick=step;
+  bRun.onclick=()=>{ let n=0; const id=setInterval(()=>{ step(); if(++n>=20) clearInterval(id); },110); };
+  bRes.onclick=reset;
+  vQ.textContent=(+sQ.value/10).toFixed(1); vR.textContent=(+sR.value/10).toFixed(1);
+  reset();
+})();
+</script>
+</body>
+</html>

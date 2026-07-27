@@ -154,6 +154,64 @@
     </a>
   </div>
 
+  <h3>Moed B 2022 — all 8 questions, worked from zero</h3>
+  <section class="block">
+    <p class="muted">The 1/8/2022 paper (0512-4263, Prof. Shai Avidan). One page per question, same recipe:
+    the question quoted verbatim, a story with no math, the course material it is built on, the full
+    derivation, live demos you can drive, the answer written out as you would put it in the box, and drill
+    Q&amp;A. <em>Every question is covered.</em></p>
+  </section>
+  <div class="grid">
+    <a class="scard" href="b1_optic_flow_lidar.html">
+      <div class="num">B1</div><h3>Horn–Schunck + sparse LiDAR</h3>
+      <p>Depth enters twice: an extra data term switched on at laser dots, and a smoothness weight that
+      collapses at depth cliffs. Full Euler–Lagrange, and a solver you watch stop bleeding across the car's
+      edge. <span class="muted">Ch.2 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="b2_tracking_markov.html">
+      <div class="num">B2</div><h3>The tracking recursion, proved</h3>
+      <p>Markov + conditional independence ⇒ p(x<sub>1:t</sub>|z<sub>1:t</sub>) ∝ p(z<sub>t</sub>|x<sub>t</sub>)
+      p(x<sub>t</sub>|x<sub>t−1</sub>) p(x<sub>1:t−1</sub>|z<sub>1:t−1</sub>).
+      Seven lines, each assumption used exactly once, plus a Bayes filter you can step.
+      <span class="muted">Ch.4 · 12 pts</span></p>
+    </a>
+    <a class="scard" href="b3_dynamic_texture_word2vec.html">
+      <div class="num">B3</div><h3>Text as a dynamic texture</h3>
+      <p>A sentence is a video; words are frames. Video Textures' jump matrix and the ARMA state-space model,
+      both ported to Word2Vec space — with the decode step that only text needs.
+      <span class="muted">Ch.5 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="b4_light_fields_concentric.html">
+      <div class="num">B4</div><h3>Camera on a rotating arm</h3>
+      <p>Concentric mosaics. <em>r = R·sin β</em> is the whole answer; drag a virtual camera inside the circle and
+      watch every ray get routed to the real frame that recorded it. <span class="muted">Light fields · 12 pts</span></p>
+    </a>
+    <a class="scard" href="b5_knn_patchmatch.html">
+      <div class="num">B5</div><h3>k-NN PatchMatch</h3>
+      <p>Swap the single offset for a bounded max-heap. The three details that break it — duplicates,
+      diversity, where random search is centred — with the algorithm running live on four repeated motifs.
+      <span class="muted">Ch.11 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="b6_geodesic_intelligent_scissors.html">
+      <div class="num">B6</div><h3>The path along Lena's hat</h3>
+      <p>Intelligent Scissors = Dijkstra with a cost that is <em>cheap on edges</em> — the colorization metric
+      with the sign flipped. A live wire that follows your cursor, and the two metrics side by side.
+      <span class="muted">Ch.9/10 · 12 pts</span></p>
+    </a>
+    <a class="scard" href="b7_graph_label_propagation.html">
+      <div class="num">B7</div><h3>A mix of interests on a graph</h3>
+      <p>It says social network; it means colorization. The harmonic solution of the graph Laplacian, why the
+      output is automatically a percentage, and ants that measure it by random walk.
+      <span class="muted">Ch.9/6 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="b8_kmeans_termination.html">
+      <div class="num">B8</div><h3>Does k-means terminate?</h3>
+      <p>Yes — and "the cost goes down" is only half the proof. The finiteness argument, a checkbox that
+      breaks it on purpose, and 100 restarts showing termination ≠ optimality.
+      <span class="muted">Ch.3/6 · 12 pts</span></p>
+    </a>
+  </div>
+
   <h2>Practice Exams</h2>
   <section class="block">
     <p class="muted">Nine interactive quizzes rebuilt from the course's Moodle exams — one per topic. Every question

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q5 — From 1-NN PatchMatch to k-NN PatchMatch</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q5</b> · k-NN PatchMatch</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">‹ Chapter 11</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b6_geodesic_intelligent_scissors.html">Q6 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 11 · Moed B 2022, question 5 · 13 points</div>
+    <h1>Keep the best k, not the best one</h1>
+    <p class="lede">PatchMatch works because a good match, found anywhere by luck, gets <em>passed along</em> to
+    its neighbours. That mechanism does not care how many matches each pixel is holding. So the extension is
+    almost mechanical: replace the single stored offset with a bounded <strong>max-heap of size $k$</strong>,
+    and change "is this better than my match?" into "is this better than my <em>worst</em> match?". The
+    interesting parts are the three details that break if you are careless: duplicates, diversity, and where
+    random search should be centred.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 5 · 13 points · PATCHMATCH</span>
+    <p>PatchMatch returns, for every patch in the source image, its nearest neighbor in the target image. We
+    can term this as 1-NN PatchMatch.</p>
+    <p style="margin-bottom:0">Suggest how to extend it to $k$-NN PatchMatch that returns, for each patch in
+    the source image, a list of the top $k$ Nearest Neighbors in the target image ($k$ is a parameter
+    supplied by the user).</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid looking for their friend in a huge crowd</span>
+    <p>You have a photo of a face and a stadium full of people, and you must find who looks most like the
+    photo. Checking everyone takes forever.</p>
+    <p><strong>PatchMatch's trick #1 — luck is cheap when you buy a lot of it.</strong> Everyone in your own
+    stadium picks a random stranger in the other stadium. Most of these guesses are rubbish. But there are so
+    many guesses that <em>somebody</em> got lucky.</p>
+    <p><strong>Trick #2 — good news travels.</strong> If the person on your left found a great match, then
+    <em>the person standing next to their match</em> is probably a great match for you — because you and your
+    neighbour look similar, and so do people standing next to each other over there. So each person just asks
+    their left and top neighbour: "who did you find? let me try the seat next to them." One lucky guess
+    spreads across the whole stadium in a single sweep.</p>
+    <p><strong>Trick #3 — then look around a bit.</strong> Once you have a decent match, search near it —
+    first in a big circle, then half that, then half again. Fine-tune.</p>
+    <p>Now the question: you don't want the single best look-alike, you want the <strong>top 5</strong>.
+    What changes? Almost nothing! Instead of remembering one name, you carry a <strong>small notebook with 5
+    lines, kept sorted worst-at-the-top</strong>. When somebody suggests a candidate you compare it against
+    the <em>worst</em> line; if it beats it, you cross that line out and write the new name. And your
+    neighbours don't hand you one suggestion any more — they hand you all 5 of theirs.</p>
+    <p>Two traps, both obvious once you name them:</p>
+    <ul>
+      <li><strong>Don't write the same person 5 times.</strong> Your neighbour's 5 suggestions might all be
+      the same seat. Check before inserting.</li>
+      <li><strong>Don't write 5 people sitting in the same row.</strong> Seats 40, 41, 42, 43, 44 look almost
+      identical, so all five will score well — and you learn nothing. Require the entries to be
+      <em>spread out</em>.</li>
+    </ul>
+  </div>
+
+  <div class="callout key"><span class="lbl">The whole answer, in one sentence</span>
+    Replace the per-pixel single offset with a <strong>bounded max-heap of $k$ (offset, distance) pairs</strong>
+    keyed by distance; propagate <em>all</em> $k$ of a neighbour's offsets; run random search around each (or
+    a randomly chosen) heap entry; and guard insertion with a duplicate test and a minimum-offset-separation
+    test. Cost per iteration goes from $O(n)$ to $O(nk\log k)$, memory from $O(n)$ to $O(nk)$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Recap — the 1-NN algorithm you are modifying</h2>
+
+  <div class="explain">
+    <span class="explain-label">PatchMatch (Barnes et al., SIGGRAPH 2009)</span>
+    <p>Goal: the <span class="term">nearest-neighbour field</span> $f:\, S \to \mathbb{R}^2$ mapping each
+    patch centre $p$ in the source to an offset $f(p)$ such that the patch at $p+f(p)$ in the target
+    minimises a patch distance $D$ (usually SSD over a $w\times w$ window). Brute force is
+    $O(|S|\,|T|\,w^2)$ — hopeless. PatchMatch gets a good approximation in a few sweeps using three stages:</p>
+    <ol style="color:var(--ink-dim);margin-left:18px">
+      <li><b>Initialisation</b> — $f(p)$ random (or from a coarser level / a rough prior).</li>
+      <li><b>Propagation</b> — on even iterations scan top-left → bottom-right and test the candidates
+      $f(p-(1,0))$ and $f(p-(0,1))$ at $p$; on odd iterations reverse the scan order and use
+      $f(p+(1,0)),f(p+(0,1))$. Rests on the <span class="term">coherence</span> assumption: neighbouring
+      patches usually have neighbouring matches.</li>
+      <li><b>Random search</b> — test $u_i = f(p) + w\alpha^i \mathbf{R}_i$ for $i=0,1,2,\dots$ with
+      $\mathbf{R}_i$ uniform in $[-1,1]^2$, $\alpha=\tfrac12$, until $w\alpha^i<1$. Exponentially decreasing
+      radius = a coarse-to-fine local search that also lets a pixel escape a bad local minimum.</li>
+    </ol>
+    <p>Complexity: $O(|S|\,w^2\log|T|)$ per iteration; 4–5 iterations usually suffice.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The extension, stage by stage</h2>
+
+  <div class="summary">
+    <span class="summary-label">1-NN → k-NN, line by line</span>
+    <table>
+      <tr><th>Stage</th><th>1-NN</th><th>k-NN</th></tr>
+      <tr><td>state per pixel</td><td>one offset $f(p)$ and its distance</td>
+        <td>a <b>bounded max-heap</b> $H_p$ of at most $k$ pairs $(D, u)$, ordered by $D$, so the
+        <em>root is the worst</em> of the current $k$. Plus a small hash-set of the offsets it contains, for
+        $O(1)$ duplicate rejection.</td></tr>
+      <tr><td>initialisation</td><td>1 random offset</td><td>$k$ random offsets (rejecting duplicates), which
+        also guarantees $|H_p| = k$ from the very start, so the "beat the worst" test is always well
+        defined.</td></tr>
+      <tr><td>propagation</td><td>try the neighbour's 1 offset</td>
+        <td>try <b>all $k$</b> of the neighbour's offsets. Because they are already sorted, you can stop
+        early: if the neighbour's $j$-th offset already fails to beat your root, so will $j{+}1,\dots,k$
+        <em>at that neighbour's distances</em> — but distances are re-evaluated at $p$, so this is a
+        heuristic, not a guarantee; a cheap and effective version is to break after two consecutive
+        rejections.</td></tr>
+      <tr><td>random search</td><td>around $f(p)$</td>
+        <td>around <b>each</b> heap entry (thorough, $O(k\log|T|)$ tests), or around a <b>randomly chosen</b>
+        entry each iteration (cheaper, $O(\log|T|)$, and works well in practice). Searching only around the
+        best entry is a mistake — the weaker entries never get refined and stay random noise.</td></tr>
+      <tr><td>the test</td><td><code>if (d &lt; D[p]) accept</code></td>
+        <td><code>if (|H| &lt; k) push; else if (d &lt; H.root.D &amp;&amp; !dup &amp;&amp; separated) { pop; push; }</code>
+        — $O(\log k)$ per insertion.</td></tr>
+      <tr><td>output</td><td>an NN field</td><td>$k$ NN fields (or one $n\times k$ array), each sorted best
+        first.</td></tr>
+    </table>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">The three details that actually matter</span>
+    <h4 class="mini">(a) Duplicates</h4>
+    <p>Propagation shifts a neighbour's offsets by one pixel, and random search perturbs existing ones — both
+    routinely regenerate an offset already in the heap. Without a check, a heap of $k=5$ happily fills with
+    five copies of one match and the answer is worthless. Keep a hash set (or a small linear scan, since $k$
+    is tiny) of the offsets currently in $H_p$ and reject exact repeats in $O(1)$.</p>
+    <h4 class="mini">(b) Diversity — the deeper version of the same problem</h4>
+    <p>Offsets $u$ and $u+(1,0)$ are not duplicates, but the patches they point to overlap in $w{-}1$ of
+    their $w$ columns, so they are near-identical matches. Left alone, the top $k$ collapse into one blob:
+    you get the best match and its four immediate neighbours instead of $k$ genuinely different places in the
+    target. Enforce a minimum separation</p>
+  </div>
+
+  <div class="eq">$$ \forall\, u' \in H_p:\quad \|u - u'\|_\infty \;\ge\; \delta \qquad (\delta \approx w \text{ is a good default}) \tag{1} $$</div>
+
+  <div class="explain">
+    <p>A softer variant, better when the target has smooth repetitions: allow the insertion but treat entries
+    within $\delta$ as competing for the <em>same slot</em> — i.e. replace the near-by entry if the new one
+    is better, otherwise reject. This is non-maximum suppression over the offset space, and it is what makes
+    the output usable for symmetry detection, denoising and clone detection.</p>
+    <h4 class="mini">(c) Enrichment — the accelerator the k-NN paper adds</h4>
+    <p>With $k$ candidates in hand you can generate new ones for free by <em>composition</em>, no image
+    distance evaluated to propose them:</p>
+    <ul>
+      <li><strong>Forward enrichment.</strong> If $a \in H_p$ and $b \in H_a$ (the heap of the pixel that $a$
+      points at), then $b\circ a$ is a plausible candidate for $p$: "a good match of my good match".
+      Generates $k^2$ proposals per pixel.</li>
+      <li><strong>Inverse enrichment.</strong> If $a \in H_p$, then $p$ is a plausible candidate for $a$ —
+      push your own offset backwards to the pixel you matched. Fills in pixels that propagation has not
+      reached.</li>
+    </ul>
+    <p>Enrichment spreads information <em>through the match graph</em> rather than through the image grid, so
+    it converges much faster than propagation alone when the good matches are scattered rather than
+    contiguous — exactly the regime $k$-NN is used in.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">The tempting wrong answer</span>
+    "Just run 1-NN PatchMatch $k$ times with different random seeds and collect the results." It seems
+    reasonable and it is <strong>strictly worse</strong>, for three reasons. <b>(1) No guarantee of the top
+    $k$</b> — nothing stops all $k$ runs converging to the <em>same</em> best match, which is in fact the
+    likely outcome, since propagation is what makes PatchMatch work and it drives every run toward the same
+    strong minimum. <b>(2) Wasted work</b> — $k$ independent runs cost $k$ full passes but share no
+    information; the heap version pays $O(k)$ per pixel and shares everything. <b>(3) No control of
+    diversity</b> — you cannot enforce (1) across independent runs without a merge step afterwards, which is
+    the heap you were trying to avoid. Demo 1 measures exactly this gap; mention the idea in the exam, then
+    reject it with the first reason.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Pseudocode</h2>
+
+  <pre class="ruler">for each p in S:                         # INITIALISE
+    H[p] = empty max-heap (capacity k)
+    repeat k times: try_insert(p, random_offset())
+
+for it in 1..T:                          # ITERATE
+    order = raster if it odd else reverse-raster
+    d1,d2 = (-1,0),(0,-1) if it odd else (+1,0),(0,+1)
+
+    for p in order:                                        # PROPAGATION
+        for q in (p+d1, p+d2):
+            if q inside S:
+                for (dist,u) in H[q]:        # all k of them, best first
+                    try_insert(p, u)         # note: u, not u+(p-q); the offset is what propagates
+
+        for (dist,u) in H[p]:                               # RANDOM SEARCH
+            w = max(W_T, H_T); i = 0
+            while w * alpha**i >= 1:
+                try_insert(p, u + round(w*alpha**i * uniform([-1,1]^2)))
+                i += 1
+
+    for p in S:                                            # ENRICHMENT (optional)
+        for (dist,a) in H[p]:
+            for (dist2,b) in H[p+a]: try_insert(p, a+b)     # forward
+            try_insert(p+a, -a)                             # inverse
+
+
+def try_insert(p, u):
+    if p+u outside T: return
+    if u in offsetset[p]: return                    # (a) exact duplicate
+    if any(||u - u'||_inf < delta for u' in H[p]): # (b) diversity / NMS
+        u0 = the offending entry
+        if D(p, u) >= D(p, u0): return
+        remove u0 from H[p]
+    d = D(p, u)                                     # SSD over the w x w patch
+    if |H[p]| < k:            push (d,u)
+    elif d < H[p].root.dist:  pop root; push (d,u)  # O(log k)</pre>
+
+  <div class="explain">
+    <span class="explain-label">Complexity</span>
+    <table class="kv">
+      <tr><th></th><th>1-NN</th><th>k-NN</th></tr>
+      <tr><td>memory</td><td>$O(n)$ offsets</td><td>$O(nk)$ — the real practical limit; at $k=16$ on a 1 MP image that is 16 M offsets</td></tr>
+      <tr><td>patch evaluations / iteration</td><td>$O\!\big(n(2+\log|T|)\big)$</td><td>$O\!\big(nk(2+\log|T|)\big)$ thorough, or $O\!\big(n(2k+\log|T|)\big)$ with the cheap random-search variant</td></tr>
+      <tr><td>bookkeeping</td><td>a comparison</td><td>$O(\log k)$ heap op + $O(1)$ dup test + $O(k)$ separation test</td></tr>
+      <tr><td>per iteration total</td><td>$O(nw^2\log|T|)$</td><td>$O(nkw^2\log|T|)$ — <b>linear in $k$</b>, which is the point: brute-force top-$k$ would be $O(n|T|w^2 + n|T|\log k)$</td></tr>
+    </table>
+    <p>Speed-ups that carry over unchanged: early termination of the SSD once the partial sum exceeds the
+    current root distance, and computing the patch distance incrementally when scanning ($O(w)$ instead of
+    $O(w^2)$ for a one-pixel shift).</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Watch it converge</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — real k-NN PatchMatch, running</h4><span class="tag">click a source pixel</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The target contains <b>four copies</b> of the same motif (plus a
+      background texture). The source contains one copy. Click anywhere in the source — ideally on the motif
+      — and the algorithm's top-$k$ list for that patch is drawn on the target, numbered 1..k. A correct
+      $k$-NN result should land on <em>different copies</em>, not four boxes stacked on the same one; that is
+      the diversity constraint doing its job. The plot compares the heap algorithm against the naive "run
+      1-NN $k$ times" baseline, using the mean distance of each pixel's $k$-th (worst) neighbour.</p>
+      <canvas id="c1" width="900" height="470"></canvas>
+      <div class="controls">
+        <div class="control"><label>$k$ <span class="val" id="v1k">4</span></label><input type="range" id="s1k" min="1" max="8" step="1" value="4"></div>
+        <div class="control"><label>iterations <span class="val" id="v1i">5</span></label><input type="range" id="s1i" min="1" max="8" step="1" value="5"></div>
+        <div class="control"><label>diversity radius $\delta$ (0 = off) <span class="val" id="v1d">5</span></label><input type="range" id="s1d" min="0" max="14" step="1" value="5"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b1r">↻ re-run (new random seed)</button>
+        <label class="chk"><input type="checkbox" id="k1c" checked> show the naive "k × 1-NN" baseline</label>
+      </div>
+      <div class="readout" id="r1"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Things to try</span>
+    <b>1.</b> Set $\delta = 0$ (diversity off) and click on the motif: the $k$ boxes pile up on
+    <em>one</em> copy, one pixel apart. Raise $\delta$ to ~5 and they spread to the four real copies. That
+    single slider is detail (b) above. <b>2.</b> Set iterations to 1 — nearly random. Two iterations already
+    fixes most of the field; that is propagation. <b>3.</b> Raise $k$ and watch the baseline curve separate
+    from the heap curve: independent runs keep rediscovering the same match, so their $k$-th neighbour is
+    much worse.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the bounded max-heap, by hand</h4><span class="tag">feed it candidates</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A heap of capacity $k$ holding (distance, offset) pairs, with the
+      <b>worst at the root</b>. Press the buttons to offer candidates and watch which are accepted, which
+      bounce off the root test, which are rejected as duplicates, and which are rejected for being too close
+      to an existing entry.</p>
+      <canvas id="c2" width="900" height="300"></canvas>
+      <div class="btnrow">
+        <button class="act primary" id="b2g">＋ offer a good candidate</button>
+        <button class="act" id="b2b">＋ offer a poor candidate</button>
+        <button class="act" id="b2d">＋ offer a near-duplicate of the best</button>
+        <button class="act" id="b2r">↺ reset</button>
+      </div>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Why you would want this</h2>
+
+  <div class="summary">
+    <span class="summary-label">What $k$ neighbours buy you</span>
+    <table>
+      <tr><th>Application</th><th>Why 1-NN is not enough</th></tr>
+      <tr><td>Non-local means / BM3D denoising</td><td>You average over many similar patches to cancel noise.
+        With one neighbour there is nothing to average; the variance reduction is $\propto 1/k$.</td></tr>
+      <tr><td>Symmetry &amp; repetition detection</td><td>A repeated element by definition has several equally
+        good matches. The <em>set</em> of offsets is the answer — its structure (a lattice, a reflection) is
+        the symmetry.</td></tr>
+      <tr><td>Clone / copy-paste forgery detection <span class="muted">(Moed A Q5)</span></td><td>Self-matching
+        needs $k>1$ because the trivial match (a patch to itself, distance 0) always wins slot 1; the
+        <em>evidence</em> lives in slot 2 and beyond.</td></tr>
+      <tr><td>Image completion &amp; retargeting</td><td>Voting from $k$ candidates instead of copying one
+        avoids the seams and the "winner-takes-all" artefacts, and gives you a confidence measure (how much
+        do the top $k$ disagree?).</td></tr>
+      <tr><td>Label transfer / correspondence</td><td>A ranked shortlist lets a global optimiser (MRF, graph
+        cut) pick a spatially coherent choice per pixel instead of being stuck with the local argmin.</td></tr>
+    </table>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Key observation.</strong> PatchMatch's three stages — random initialisation, propagation,
+    random search — are all "propose a candidate offset, keep it if it is good". Nothing in them depends on
+    how many matches a pixel stores. So $k$-NN PatchMatch is obtained by changing the per-pixel state and the
+    acceptance test, leaving the algorithm's structure intact.</p>
+
+    <p><strong>Data structure.</strong> Each source pixel $p$ keeps a <em>bounded max-heap</em> $H_p$ of at
+    most $k$ pairs $(D(p,u), u)$ ordered by distance, so the root is the <em>worst</em> of the current $k$,
+    plus a hash set of the offsets it holds. Insertion:
+    if $|H_p|<k$ push; else if $D<D_{\rm root}$ pop the root and push — $O(\log k)$.</p>
+
+    <p><strong>Modified stages.</strong>
+    (i) <em>Initialise</em> with $k$ distinct random offsets per pixel.
+    (ii) <em>Propagate</em>: from each scan-order neighbour $q$, offer <b>all $k$</b> offsets of $H_q$ to
+    $p$ (they are re-evaluated at $p$).
+    (iii) <em>Random search</em>: around each entry of $H_p$ (or one entry chosen at random per iteration),
+    test $u + w\alpha^i\mathbf{R}_i$ with the usual exponentially shrinking radius until it drops below a
+    pixel. Alternate scan direction each iteration exactly as before, 4–5 iterations.</p>
+
+    <p><strong>Two guards on insertion.</strong> (a) <em>Duplicates</em>: reject an offset already present
+    (propagation and random search regenerate existing offsets constantly). (b) <em>Diversity</em>: reject —
+    or replace, if better — any candidate with $\|u-u'\|_\infty < \delta$ for some $u'\in H_p$, with
+    $\delta$ of the order of the patch width. Without (b), overlapping patches around a single strong match
+    fill all $k$ slots and the result carries no more information than 1-NN.</p>
+
+    <p><strong>Optional accelerator (enrichment).</strong> Use the match graph to propose candidates for
+    free: <em>forward</em>, $b\circ a$ for $a\in H_p,\,b\in H_{p+a}$ ("a good match of my good match"), and
+    <em>inverse</em>, offering $-a$ to pixel $p+a$. This propagates information between distant but similar
+    regions, which plain grid propagation cannot do, and markedly speeds up convergence for large $k$.</p>
+
+    <p><strong>Cost.</strong> Memory $O(nk)$; per iteration $O(nk\,w^2\log|T|)$ patch evaluations — linear in
+    $k$, versus $O(n|T|w^2)$ for exact top-$k$. Keep the standard early-termination of the SSD, now against
+    the heap root.</p>
+
+    <p><strong>Why not just run 1-NN $k$ times?</strong> Independent runs are not independent in outcome:
+    propagation drives them to the same dominant minimum, so you may get the same match $k$ times and have no
+    guarantee of covering the true top $k$; you also pay $k$ full passes without sharing information, and
+    diversity cannot be enforced across runs without a merge step — i.e. without the heap.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>8 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why a <em>max</em>-heap when you want the <em>smallest</em> distances?</summary>
+    <p>Because the operation you perform millions of times is "is this candidate better than the worst thing
+    I am keeping?" — and to answer that in $O(1)$ you need the worst element at the root. The heap is a
+    <em>bounded top-$k$ container</em>: the max-heap of size $k$ over distances holds the $k$ smallest, with
+    the largest of them immediately visible for eviction. A min-heap would put the best at the root, which is
+    the one element you never need to touch during the algorithm; you would have to scan all $k$ entries for
+    every rejection. (At the end you sort the $k$ entries once for output.) With $k$ small — 4 to 16 in
+    practice — a plain sorted array with insertion is equally fine and has better cache behaviour; the heap
+    matters asymptotically.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. In propagation, do you shift the neighbour's offset or copy it?</summary>
+    <p>Copy it. The state is the <em>offset</em> $u = f(p) $, not the absolute target coordinate. The
+    coherence assumption is precisely that neighbouring source patches have <em>the same</em> offset (they
+    belong to the same coherently-moving/matching region), so testing $u_q$ unchanged at $p$ is exactly
+    testing "the seat next to the one my neighbour found". If you stored absolute positions you would have
+    to shift them by $p-q$, which is the same thing written less conveniently. Note it is still tested
+    honestly: $D(p, u_q)$ is recomputed at $p$, so a bad guess is rejected.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why must random search be centred on more than the best entry?</summary>
+    <p>Because random search is the only stage that <em>refines</em> an offset. Entries 2..$k$ arrive from
+    random initialisation or from a neighbour and are typically a few pixels off their local optimum; if you
+    never search around them they stay coarse, and their distances stay high, and the "top $k$" is really
+    "the top 1 plus $k-1$ mediocre ones". The thorough version searches around every entry
+    ($O(k\log|T|)$ tests per pixel); the cheap version picks one entry uniformly at random each iteration,
+    which over 4–5 iterations refines all of them in expectation at $1/k$ of the cost, and is what you would
+    implement in practice.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How should $\delta$ be chosen, and what if the target genuinely has two good matches one pixel apart?</summary>
+    <p>$\delta \approx w$ (the patch width) is the standard choice: it means two entries must point at
+    patches that overlap in less than half their area, so they carry mostly independent evidence. If the
+    application genuinely wants sub-$\delta$ resolution — e.g. sub-pixel-accurate correspondence — use the
+    soft variant: entries within $\delta$ compete for a single slot (non-maximum suppression) rather than
+    being hard-rejected, so the best member of each cluster survives and you get $k$ <em>local minima</em>
+    rather than $k$ arbitrary points. That is the more principled formulation: <b>you want the top $k$
+    modes, not the top $k$ samples.</b></p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does the convergence guarantee still hold?</summary>
+    <p>PatchMatch never had a hard guarantee — it is a randomised approximation, and the argument is
+    probabilistic: with $n$ random initial guesses, the probability that <em>at least one</em> pixel in a
+    coherent region of size $m$ gets a good offset is $1-(1-m/|T|)^n$, which is essentially 1 for image-sized
+    $n$; propagation then distributes it. That argument is unchanged for $k$-NN — in fact it is stronger,
+    since you draw $nk$ initial samples instead of $n$, so the chance of seeding each of the $k$ true modes
+    goes up. What you do lose is monotonicity of any single slot: an entry can be evicted by a better one, so
+    a particular offset does not survive forever. The multiset's worst distance is monotone
+    non-increasing, which is the quantity plotted in Demo 1.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How does this interact with the coarse-to-fine pyramid?</summary>
+    <p>The same way as 1-NN, and it helps more. Initialise level $\ell$'s heaps by upsampling level
+    $\ell+1$'s heaps (each offset doubled), which gives $k$ already-good starting points instead of $k$
+    random ones, so one or two iterations per level suffice. It also stabilises the modes: a repetition that
+    is visible at a coarse scale seeds all its copies before fine-scale noise can distract the search. The
+    only care needed is that the diversity radius must be scaled with the level, $\delta_\ell = \delta/2^\ell$
+    in offset units, or you will over-suppress at coarse levels.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Sketch how you would use the output for clone detection.</summary>
+    <p>Run $k$-NN PatchMatch with source = target = the same image, $k$ small (say 3), and a diversity radius
+    large enough to exclude the trivial neighbourhood. Slot 1 is always the patch itself ($u=0$, $D=0$) —
+    discard it, or exclude $\|u\| < \tau$ outright. Then look at slot 2: a clone produces a
+    <em>large region</em> of pixels that all share nearly the same non-trivial offset $v$, and — because a
+    copy-paste is symmetric — the pasted region shows the offset $-v$. So build a histogram of offsets, take
+    the peaks, and verify each candidate offset by checking that the set of pixels supporting it is spatially
+    connected and reasonably large. This is exactly the Moed A Q5 answer, and it is the cleanest example of
+    why $k>1$ is necessary rather than merely nice.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>state</td><td>bounded <b>max</b>-heap of $k$ (distance, offset) pairs — worst at the root</td></tr>
+      <tr><td>init</td><td>$k$ distinct random offsets per pixel</td></tr>
+      <tr><td>propagate</td><td>offer <b>all $k$</b> of each scan-order neighbour's offsets</td></tr>
+      <tr><td>random search</td><td>around each entry (or one random entry), radius $w\alpha^i$, $\alpha=\frac12$</td></tr>
+      <tr><td>accept test</td><td>$d < D_{\rm root}$ ⇒ pop &amp; push, $O(\log k)$</td></tr>
+      <tr><td>guard (a)</td><td>reject exact duplicate offsets</td></tr>
+      <tr><td>guard (b)</td><td>reject / NMS offsets within $\|\cdot\|_\infty < \delta \approx w$ — <b>diversity</b></td></tr>
+      <tr><td>bonus</td><td>enrichment: forward $b\circ a$, inverse $-a$ — propagate through the match graph</td></tr>
+      <tr><td>cost</td><td>memory $O(nk)$, time $O(nkw^2\log|T|)$ per iteration</td></tr>
+      <tr><td>reject</td><td>"$k$ independent 1-NN runs" — no top-$k$ guarantee, no sharing, no diversity</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="b4_light_fields_concentric.html"><span class="dir">Previous</span><span class="ttl">Q4 · Light fields</span></a>
+    <a class="next" href="b6_geodesic_intelligent_scissors.html"><span class="dir">Next question</span><span class="ttl">Q6 · Geodesic path along an edge ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   DEMO 1 — k-NN PatchMatch for real
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d'), ro=document.getElementById('r1');
+  const sK=document.getElementById('s1k'), sI=document.getElementById('s1i'), sD=document.getElementById('s1d');
+  const vK=document.getElementById('v1k'), vI=document.getElementById('v1i'), vD=document.getElementById('v1d');
+  const bR=document.getElementById('b1r'), kC=document.getElementById('k1c');
+
+  const SZ=48, PW=5, HW=(PW-1)/2, LO=HW, HI=SZ-1-HW;     // valid patch-centre range
+  const SRC=new Float64Array(SZ*SZ), TGT=new Float64Array(SZ*SZ);
+  const MOTIF_T=[[12,13],[34,12],[13,35],[35,34]], MOTIF_S=[[14,15]];
+
+  function bg(x,y,seed){
+    return 0.48 + 0.11*Math.sin(x*0.42+seed) + 0.09*Math.cos(y*0.37-seed*1.7)
+                + 0.07*Math.sin((x+y)*0.23+seed*0.5);
+  }
+  function motif(img,cx,cy,amp){
+    for(let dy=-6;dy<=6;dy++) for(let dx=-6;dx<=6;dx++){
+      const x=cx+dx, y=cy+dy; if(x<0||y<0||x>=SZ||y>=SZ) continue;
+      const r=Math.hypot(dx,dy);
+      let v=0;
+      if(r<2.2) v=0.42*amp;
+      else if(r>3.4&&r<5.2) v=-0.38*amp;
+      img[y*SZ+x]=Math.max(0.02,Math.min(0.98, img[y*SZ+x]+v));
+    }
+  }
+  (function build(){
+    for(let y=0;y<SZ;y++) for(let x=0;x<SZ;x++){
+      SRC[y*SZ+x]=bg(x,y,0.0);
+      TGT[y*SZ+x]=bg(x,y,2.1);
+    }
+    MOTIF_S.forEach(([x,y])=>motif(SRC,x,y,1.0));
+    MOTIF_T.forEach(([x,y],i)=>motif(TGT,x,y,1.0-0.06*i));
+  })();
+
+  function patchD(sx,sy,tx,ty,cut){
+    let s=0;
+    for(let dy=-HW;dy<=HW;dy++){
+      const so=(sy+dy)*SZ+sx, to=(ty+dy)*SZ+tx;
+      for(let dx=-HW;dx<=HW;dx++){ const d=SRC[so+dx]-TGT[to+dx]; s+=d*d; }
+      if(s>cut) return s;
+    }
+    return s;
+  }
+  /* --- heaps as short sorted arrays (k <= 8) --- */
+  function makeField(k){
+    const F=[];
+    for(let i=0;i<SZ*SZ;i++) F.push([]);
+    return F;
+  }
+  function tryInsert(F,px,py,ux,uy,k,delta){
+    const tx=px+ux, ty=py+uy;
+    if(tx<LO||tx>HI||ty<LO||ty>HI) return false;
+    const L=F[py*SZ+px];
+    let replaceIdx=-1;
+    for(let i=0;i<L.length;i++){
+      if(L[i][1]===ux && L[i][2]===uy) return false;                       // exact duplicate
+      if(delta>0 && Math.max(Math.abs(L[i][1]-ux),Math.abs(L[i][2]-uy))<delta){
+        if(replaceIdx<0 || L[i][0]<L[replaceIdx][0]) replaceIdx=i;         // nearest offender
+      }
+    }
+    const worst = L.length>=k ? L[L.length-1][0] : Infinity;
+    const cut = replaceIdx>=0 ? Math.min(worst, L[replaceIdx][0]) : worst;
+    const d=patchD(px,py,tx,ty,cut);
+    if(replaceIdx>=0){
+      if(d>=L[replaceIdx][0]) return false;
+      L.splice(replaceIdx,1);
+    } else if(L.length>=k){
+      if(d>=worst) return false;
+      L.pop();
+    }
+    let j=L.length; L.push([d,ux,uy]);
+    while(j>0 && L[j-1][0]>L[j][0]){ const t=L[j-1]; L[j-1]=L[j]; L[j]=t; j--; }
+    return true;
+  }
+  function randOff(px,py){
+    return [LO+Math.floor(Math.random()*(HI-LO+1))-px, LO+Math.floor(Math.random()*(HI-LO+1))-py];
+  }
+  function initField(k){
+    const F=makeField(k);
+    for(let y=LO;y<=HI;y++) for(let x=LO;x<=HI;x++)
+      for(let t=0;t<k*3 && F[y*SZ+x].length<k;t++){ const o=randOff(x,y); tryInsert(F,x,y,o[0],o[1],k,0); }
+    return F;
+  }
+  /* one PatchMatch sweep over F: propagation + random search */
+  function sweep(F,k,delta,it){
+    const fwd=(it%2===1), dd=fwd?-1:1;
+    for(let yi=LO;yi<=HI;yi++) for(let xi=LO;xi<=HI;xi++){
+      const x=fwd?xi:(HI-(xi-LO)), y=fwd?yi:(HI-(yi-LO));
+      // propagation: all k offsets of both scan-order neighbours
+      for(const [nx,ny] of [[x+dd,y],[x,y+dd]]){
+        if(nx<LO||nx>HI||ny<LO||ny>HI) continue;
+        const L=F[ny*SZ+nx];
+        let fails=0;
+        for(let i=0;i<L.length;i++){
+          if(!tryInsert(F,x,y,L[i][1],L[i][2],k,delta)){ if(++fails>=2) break; }
+          else fails=0;
+        }
+      }
+      // random search around every entry
+      const L=F[y*SZ+x];
+      for(let i=0;i<L.length;i++){
+        let w=SZ; const bx=L[i][1], by=L[i][2];
+        while(w>=1){
+          tryInsert(F,x,y, bx+Math.round((Math.random()*2-1)*w),
+                           by+Math.round((Math.random()*2-1)*w), k, delta);
+          w*=0.5;
+        }
+      }
+    }
+  }
+  function run(k,iters,delta,onIter){
+    const F=initField(k);
+    if(onIter) onIter(0,F);
+    for(let it=1;it<=iters;it++){ sweep(F,k,delta,it); if(onIter) onIter(it,F); }
+    return F;
+  }
+  /* naive baseline: k independent 1-NN runs, stepped in lock-step and merged
+     after every iteration so the curve costs one pass, not iters passes. */
+  function baselineCurve(k,iters,delta){
+    const runs=[]; for(let r=0;r<k;r++) runs.push(initField(1));
+    const merged=()=>{
+      const F=makeField(k);
+      for(let y=LO;y<=HI;y++) for(let x=LO;x<=HI;x++)
+        for(const R of runs){ const e=R[y*SZ+x][0]; if(e) tryInsert(F,x,y,e[1],e[2],k,delta); }
+      return {J:meanWorst(F,k), fill:meanFilled(F)};
+    };
+    const curve=[merged().J];
+    let fill=merged().fill;
+    for(let it=1;it<=iters;it++){
+      for(const R of runs) sweep(R,1,0,it);
+      const m=merged(); curve.push(m.J); fill=m.fill;
+    }
+    curve.fill_ = fill;
+    return curve;
+  }
+  /* Expected distance of a patch pair picked at random — what an empty slot is worth.
+     Charging missing slots at this value is what makes the comparison honest: a method
+     that returns only 2 of the 5 requested neighbours has not "won" on slot 5. */
+  let CAP=null;
+  function randomPairCost(){
+    let s=0;
+    for(let t=0;t<400;t++){
+      const px=LO+Math.floor(Math.random()*(HI-LO+1)), py=LO+Math.floor(Math.random()*(HI-LO+1));
+      const tx=LO+Math.floor(Math.random()*(HI-LO+1)), ty=LO+Math.floor(Math.random()*(HI-LO+1));
+      s+=patchD(px,py,tx,ty,Infinity);
+    }
+    return s/400;
+  }
+  /* mean distance of the k-th (worst) neighbour, missing slots charged at CAP */
+  function meanWorst(F,k){
+    if(CAP===null) CAP=randomPairCost();
+    let s=0,n=0;
+    for(let y=LO;y<=HI;y++) for(let x=LO;x<=HI;x++){
+      const L=F[y*SZ+x];
+      s += (L.length>=k) ? L[k-1][0] : CAP;
+      n++;
+    }
+    return n? s/n : 0;
+  }
+  /* mean number of neighbours actually delivered */
+  function meanFilled(F){
+    let s=0,n=0;
+    for(let y=LO;y<=HI;y++) for(let x=LO;x<=HI;x++){ s+=F[y*SZ+x].length; n++; }
+    return n? s/n : 0;
+  }
+
+  let FIELD=null, CURVE=[], BCURVE=[], FILL=0, sel=[15,16];
+
+  function compute(){
+    const k=+sK.value, iters=+sI.value, delta=+sD.value;
+    vK.textContent=k; vI.textContent=iters; vD.textContent=delta;
+    CURVE=[];
+    FIELD=run(k,iters,delta,(it,F)=>CURVE.push(meanWorst(F,k)));
+    FILL=meanFilled(FIELD);
+    BCURVE = kC.checked ? baselineCurve(k,iters,delta) : [];
+    draw();
+  }
+  function drawImg(img,px,py,S){
+    const im=g.createImageData(SZ,SZ);
+    for(let i=0;i<SZ*SZ;i++){ const v=Math.round(Math.max(0,Math.min(1,img[i]))*255);
+      im.data[i*4]=v; im.data[i*4+1]=v; im.data[i*4+2]=v; im.data[i*4+3]=255; }
+    const t=document.createElement('canvas'); t.width=SZ; t.height=SZ;
+    t.getContext('2d').putImageData(im,0,0);
+    g.imageSmoothingEnabled=false; g.drawImage(t,px,py,S,S);
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(px+.5,py+.5,S,S);
+  }
+  function draw(){
+    const k=+sK.value, S=196, SX=30, SY=52, TX=252, TY=52, sc=S/SZ;
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    drawImg(SRC,SX,SY,S); drawImg(TGT,TX,TY,S);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('SOURCE  (click a patch)',SX,SY-8);
+    g.fillText('TARGET  (4 copies of the motif)',TX,TY-8);
+
+    // selection box
+    g.strokeStyle='#7ee787'; g.lineWidth=2;
+    g.strokeRect(SX+(sel[0]-HW)*sc, SY+(sel[1]-HW)*sc, PW*sc, PW*sc);
+
+    const L = FIELD? FIELD[sel[1]*SZ+sel[0]] : [];
+    L.forEach((e,i)=>{
+      const tx=sel[0]+e[1], ty=sel[1]+e[2];
+      const hue=(i/Math.max(1,L.length))*280;
+      g.strokeStyle='hsl('+hue+',80%,62%)'; g.lineWidth=2;
+      g.strokeRect(TX+(tx-HW)*sc, TY+(ty-HW)*sc, PW*sc, PW*sc);
+      g.fillStyle='hsl('+hue+',80%,62%)'; g.font='bold 11px system-ui,sans-serif';
+      g.fillText(String(i+1), TX+(tx-HW)*sc-9, TY+(ty-HW)*sc+9);
+    });
+
+    /* --- convergence plot --- */
+    const PX=486, PY=52, PW2=386, PH=196;
+    g.fillStyle='#0c1322'; g.fillRect(PX,PY,PW2,PH);
+    g.strokeStyle='#2c3650'; g.strokeRect(PX+.5,PY+.5,PW2,PH);
+    const all=[...CURVE,...BCURVE].filter(v=>isFinite(v));
+    const mx=Math.max(...all,1e-6)*1.08, n=CURVE.length;
+    const xOf=i=>PX+ (n>1? i/(n-1):0.5)*(PW2-30)+18;
+    const yOf=v=>PY+PH-22-(v/mx)*(PH-44);
+    g.strokeStyle='#1c2438';
+    for(let q=0;q<=4;q++){ const y=yOf(mx*q/4);
+      g.beginPath(); g.moveTo(PX+8,y); g.lineTo(PX+PW2-8,y); g.stroke(); }
+    if(BCURVE.length){
+      g.strokeStyle='#ff6b81'; g.lineWidth=2; g.beginPath();
+      BCURVE.forEach((v,i)=> i?g.lineTo(xOf(i),yOf(v)):g.moveTo(xOf(i),yOf(v))); g.stroke();
+      BCURVE.forEach((v,i)=>{ g.fillStyle='#ff6b81'; g.beginPath(); g.arc(xOf(i),yOf(v),3,0,7); g.fill(); });
+    }
+    g.strokeStyle='#7ee787'; g.lineWidth=2; g.beginPath();
+    CURVE.forEach((v,i)=> i?g.lineTo(xOf(i),yOf(v)):g.moveTo(xOf(i),yOf(v))); g.stroke();
+    CURVE.forEach((v,i)=>{ g.fillStyle='#7ee787'; g.beginPath(); g.arc(xOf(i),yOf(v),3,0,7); g.fill(); });
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('mean distance of the k-th (worst) neighbour',PX,PY-8);
+    g.fillStyle='#7ee787'; g.font='11px system-ui,sans-serif';
+    g.fillText('— k-NN heap',PX+PW2-104,PY+16);
+    if(BCURVE.length){ g.fillStyle='#ff6b81'; g.fillText('— k × 1-NN (naive)',PX+PW2-104,PY+32); }
+    g.fillStyle='#6b7a99';
+    g.fillText('iteration',PX+PW2/2-24,PY+PH-4);
+    for(let i=0;i<n;i++) g.fillText(String(i), xOf(i)-3, PY+PH-8);
+
+    /* --- the selected pixel's heap, as a table --- */
+    const TY2=290;
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('heap H[p] for the selected patch p = ('+sel[0]+', '+sel[1]+')  —  best first', 30, TY2);
+    L.forEach((e,i)=>{
+      const y=TY2+22+i*19;
+      const hue=(i/Math.max(1,L.length))*280;
+      g.fillStyle='hsl('+hue+',80%,62%)'; g.fillRect(30,y-9,10,10);
+      g.fillStyle='#e6ecf7'; g.font='12px monospace';
+      g.fillText('#'+(i+1)+'   offset u = ('+String(e[1]).padStart(4)+','+String(e[2]).padStart(4)+
+        ')    target = ('+(sel[0]+e[1])+','+(sel[1]+e[2])+')    D = '+e[0].toFixed(4)+
+        (i===L.length-1&&L.length>1?'      ← the heap ROOT: everything is compared against this':''), 48, y);
+    });
+
+    const uniq=new Set(L.map(e=>(sel[0]+e[1]>>3)+','+(sel[1]+e[2]>>3))).size;
+    ro.innerHTML='k = <b>'+k+'</b> &nbsp;·&nbsp; patch '+PW+'×'+PW+' &nbsp;·&nbsp; image '+SZ+'×'+SZ+
+      ' &nbsp;·&nbsp; final mean k-th distance: heap <b>'+(CURVE.length?CURVE[CURVE.length-1].toFixed(4):'—')+'</b>'+
+      (BCURVE.length?' vs naive <b style="color:#ff6b81">'+BCURVE[BCURVE.length-1].toFixed(4)+'</b> ('+
+        ((BCURVE[BCURVE.length-1]/Math.max(1e-9,CURVE[CURVE.length-1])).toFixed(1))+'× worse)':'')+
+      '<br>neighbours actually delivered per pixel: heap <b>'+FILL.toFixed(2)+'/'+k+'</b>'+
+      (BCURVE.length&&BCURVE.fill_!==undefined
+        ? ' vs naive <b style="color:#ff6b81">'+BCURVE.fill_.toFixed(2)+'/'+k+
+          '</b> — the naive runs keep rediscovering the same match, so most slots stay empty':'')+
+      '<br>the '+L.length+' matches land in <b>'+uniq+'</b> distinct 8×8 regions of the target'+
+      (uniq<Math.min(L.length,4)&&+sD.value===0? ' &nbsp;·&nbsp; <span style="color:#ff6b81">they are piled on one spot — raise δ</span>':'')+
+      (uniq>=Math.min(L.length,4)&&L.length>1? ' &nbsp;·&nbsp; <span style="color:#7ee787">genuinely diverse</span>':'');
+  }
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    const S=196, SX=30, SY=52, sc=S/SZ;
+    if(mx>=SX&&mx<SX+S&&my>=SY&&my<SY+S){
+      sel=[Math.max(LO,Math.min(HI,Math.floor((mx-SX)/sc))), Math.max(LO,Math.min(HI,Math.floor((my-SY)/sc)))];
+      draw();
+    }
+  });
+  cv.style.cursor='crosshair';
+  [sK,sI,sD].forEach(s=>s.addEventListener('change',compute));
+  kC.addEventListener('change',compute);
+  bR.onclick=compute;
+  compute();
+})();
+
+/* =========================================================================
+   DEMO 2 — the bounded max-heap by hand
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  const K=5, DELTA=4;
+  let H=[], log='', n=0;
+  function reset(){ H=[]; log='empty heap — the first '+K+' candidates are accepted unconditionally'; n=0; draw(); }
+  function offer(d,ux,uy,tag){
+    n++;
+    let msg='';
+    let rep=-1;
+    for(const e of H) if(e[1]===ux&&e[2]===uy){ msg='<span style="color:#ff6b81">REJECTED — exact duplicate of an entry already in the heap</span>'; draw(msg); return; }
+    for(let i=0;i<H.length;i++)
+      if(Math.max(Math.abs(H[i][1]-ux),Math.abs(H[i][2]-uy))<DELTA){ rep=i; break; }
+    if(rep>=0){
+      if(d>=H[rep][0]){ msg='<span style="color:#ff6b81">REJECTED — within δ='+DELTA+' of entry '+
+        (rep+1)+' (offset '+H[rep][1]+','+H[rep][2]+') and not better than it. This is the diversity guard.</span>'; draw(msg); return; }
+      msg='<span style="color:#ffb454">REPLACED entry '+(rep+1)+' — same neighbourhood, better distance (non-max suppression)</span>';
+      H.splice(rep,1);
+    } else if(H.length>=K){
+      if(d>=H[H.length-1][0]){ msg='<span style="color:#ff6b81">REJECTED — D='+d.toFixed(3)+
+        ' ≥ root D='+H[H.length-1][0].toFixed(3)+'. One comparison, O(1). This is the whole acceptance test.</span>'; draw(msg); return; }
+      msg='<span style="color:#7ee787">ACCEPTED — beat the root ('+H[H.length-1][0].toFixed(3)+
+        '), so the root was popped and this was pushed. O(log k).</span>';
+      H.pop();
+    } else msg='<span style="color:#7ee787">ACCEPTED — heap not yet full</span>';
+    H.push([d,ux,uy]);
+    H.sort((a,b)=>a[0]-b[0]);
+    draw(msg);
+  }
+  function draw(msg){
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    g.fillStyle='#9fb0cc'; g.font='13px system-ui,sans-serif';
+    g.fillText('H[p]   capacity k = '+K+',  δ = '+DELTA+'   (sorted best → worst; the LAST row is the heap root)',30,26);
+    for(let i=0;i<K;i++){
+      const y=48+i*40, filled=i<H.length;
+      const isRoot=filled && i===H.length-1 && H.length===K;
+      g.fillStyle= filled? (isRoot?'#2a1c26':'#151c2e') : '#101522';
+      g.fillRect(30,y,620,32);
+      g.strokeStyle= isRoot?'#ff6b81':(filled?'#2c3650':'#1c2438'); g.lineWidth=isRoot?2:1;
+      g.strokeRect(30.5,y+.5,620,32);
+      g.font='13px monospace';
+      if(filled){
+        g.fillStyle= isRoot?'#ff6b81':'#41d8c9';
+        g.fillText('slot '+(i+1),44,y+21);
+        g.fillStyle='#e6ecf7';
+        g.fillText('D = '+H[i][0].toFixed(3),128,y+21);
+        g.fillText('offset u = ('+String(H[i][1]).padStart(4)+', '+String(H[i][2]).padStart(4)+')',248,y+21);
+        // bar
+        g.fillStyle= isRoot?'rgba(255,107,129,.5)':'rgba(65,216,201,.4)';
+        g.fillRect(452,y+10,Math.min(180,H[i][0]*180),12);
+        if(isRoot){ g.fillStyle='#ff6b81'; g.font='12px system-ui,sans-serif';
+          g.fillText('← ROOT: the worst kept. New candidates are compared against THIS.',664,y+21); }
+      } else { g.fillStyle='#4b5878'; g.fillText('slot '+(i+1)+'   — empty —',44,y+21); }
+    }
+    g.fillStyle='#6b7a99'; g.font='12px system-ui,sans-serif';
+    g.fillText('candidates offered so far: '+n, 30, 48+K*40+22);
+    ro.innerHTML = msg || log;
+  }
+  document.getElementById('b2g').onclick=()=>offer(0.02+Math.random()*0.25,
+    Math.round((Math.random()*2-1)*30), Math.round((Math.random()*2-1)*30));
+  document.getElementById('b2b').onclick=()=>offer(0.55+Math.random()*0.4,
+    Math.round((Math.random()*2-1)*30), Math.round((Math.random()*2-1)*30));
+  document.getElementById('b2d').onclick=()=>{
+    if(!H.length) return offer(0.1,3,4);
+    const b=H[0];
+    offer(b[0]+(Math.random()-0.55)*0.06, b[1]+(Math.random()<0.5?1:2), b[2]+(Math.random()<0.5?0:1));
+  };
+  document.getElementById('b2r').onclick=reset;
+  reset();
+})();
+</script>
+</body>
+</html>

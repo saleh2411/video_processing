@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q6 — Geodesic distance: the path along Lena's hat</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q6</b> · Geodesic distance along an edge</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch09_video_colorization.html">‹ Chapter 9</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b7_graph_label_propagation.html">Q7 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 9 &amp; 10 · Moed B 2022, question 6 · 12 points</div>
+    <h1>Same machinery as colorization — with the sign flipped</h1>
+    <p class="lede">Two clicks and a curve appears, glued to the brim of the hat. This is
+    <em>Intelligent Scissors</em> (Mortensen &amp; Barrett), and it is a shortest path on the pixel graph.
+    The trap: the geodesic metric you memorised for colorization and matting makes crossing an edge
+    <strong>expensive</strong>. Here you want to <em>travel along</em> an edge, so the cost must be
+    <strong>cheap where the gradient is strong</strong>. Get that sign right and the rest is Dijkstra.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 6 · 12 points · GEODESIC DISTANCE</span>
+    <p style="margin-bottom:0">Consider Figure 3. The user clicks on points $A$ and $B$ and the system
+    automatically draws the black path between them that follows the edge of Lena's hat. Suggest a way to
+    compute the path between these two points, as shown in the figure.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid, the field, and the footpath</span>
+    <p>You are standing at point A in a big field and your friend is at point B. You want to walk over.</p>
+    <p>The <em>shortest</em> way is a straight line. But suppose the field is muddy everywhere
+    <strong>except</strong> along a nice hard footpath that curves across it. Then the fastest way is not the
+    straight line — it is: step onto the footpath, run along it, step off at the end. Even though that is
+    <em>longer in metres</em>, it is <em>cheaper in effort</em>.</p>
+    <p>Now look at the picture of Lena. The brim of the hat is a place where the picture suddenly changes
+    from bright hat to dark background. That sudden change is <span class="term">an edge</span>. And an edge
+    is our footpath: <strong>we will simply declare that walking on an edge is cheap and walking anywhere
+    else is expensive.</strong></p>
+    <p>Then we ask the computer the simplest question in the world: <em>what is the cheapest way from A to
+    B?</em> The computer does not know what a hat is. It just adds up costs. But because we made the edge
+    cheap, the cheapest route <em>is</em> the brim of the hat, and the curve appears as if by magic.</p>
+    <p><strong>Now the part that trips everyone up.</strong> In the colorization chapter we used almost this
+    exact formula — but there we wanted the opposite! There, colour had to <em>stay inside</em> an object, so
+    crossing an edge had to be <strong>expensive</strong>. Here we want to <em>ride</em> the edge, so being on
+    an edge must be <strong>cheap</strong>. Same graph, same Dijkstra, opposite sign. Whether you flip that
+    sign is the entire question.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The whole answer, in one sentence</span>
+    Build a graph whose nodes are pixels and whose 8-connected edge weights are <strong>small where the
+    gradient magnitude is large</strong> (plus a term that keeps the path aligned with the edge direction),
+    then run <strong>Dijkstra from $A$</strong>; the minimum-cost path to $B$ is the drawn curve. Because
+    Dijkstra gives you the cost to <em>every</em> pixel in one run, the path to a moving cursor is free —
+    which is what makes the tool feel interactive ("live wire").
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The material this sits on, and the sign flip</h2>
+
+  <div class="explain">
+    <span class="explain-label">The geodesic distance from Chapters 9 &amp; 10</span>
+    <p>The course defines the geodesic distance between two points as the infimum, over all paths, of an
+    integrated cost:</p>
+  </div>
+
+  <div class="eq">$$ d(\mathbf{a},\mathbf{b}) \;=\; \inf_{\Gamma\in\mathcal{P}_{\mathbf{a},\mathbf{b}}} \int_0^{l(\Gamma)} W\big(\Gamma(s)\big)\, ds \tag{1} $$</div>
+
+  <div class="explain">
+    <p>Everything is in the choice of the local cost $W$ — the "how tired do I get per step here" function.
+    Two opposite choices appear in this course:</p>
+    <table class="kv">
+      <tr><th>Task</th><th>Local cost $W$</th><th>Effect</th></tr>
+      <tr><td>Colorization / matting <span class="muted">(Moed A Q6)</span></td>
+        <td>$\sqrt{1+\gamma^2(\nabla I\cdot\Gamma')^2}$ — <b>increases</b> with the gradient</td>
+        <td>Crossing an edge is expensive ⇒ distance stays <em>inside</em> a region ⇒ good for spreading
+        colour/opacity without leaking.</td></tr>
+      <tr><td><b>This question</b> — boundary tracing</td>
+        <td><b>decreases</b> with the gradient, e.g. $\;W = 1-\dfrac{|\nabla I|}{\max|\nabla I|}\;$ or
+        $\;W=\exp(-|\nabla I|^2/2\sigma^2)$ or $\;W=\dfrac{1}{1+|\nabla I|}$</td>
+        <td>Being on an edge is cheap ⇒ the shortest path <em>runs along</em> the boundary ⇒ good for
+        segmentation by contour.</td></tr>
+    </table>
+    <p>Both are the same equation (1) and both are computed by the same algorithm. Only $W$ differs — and it
+    differs by a sign. Saying this explicitly is worth marks, because it shows you understand that
+    "geodesic distance" is a <em>framework</em>, not a formula.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">The classical cost — Intelligent Scissors / Live Wire</span>
+    <p>Mortensen &amp; Barrett's local cost on the directed link from pixel $p$ to a neighbour $q$ is a
+    weighted sum of three features:</p>
+  </div>
+
+  <div class="eq">$$ l(p,q) \;=\; \omega_Z\, f_Z(q) \;+\; \omega_G\, f_G(q) \;+\; \omega_D\, f_D(p,q) \tag{2} $$</div>
+
+  <ol class="steps">
+    <li><b>Gradient magnitude</b> — the main term, the one that makes edges cheap:
+      <div class="eq">$$ f_G(q) \;=\; 1 - \frac{|\nabla I(q)|}{\max_r |\nabla I(r)|} \;\in[0,1] $$</div>
+      $f_G=0$ on the strongest edge in the image, $f_G=1$ in a flat region. For diagonal links the cost is
+      scaled by $1/\sqrt2$ (equivalently, multiply the whole local cost by the step length) so that
+      $8$-connected paths are not artificially cheap.</li>
+    <li><b>Laplacian zero-crossing</b> — sub-pixel edge localisation:
+      $f_Z(q) = 0$ if a zero-crossing of $\nabla^2 I$ passes through $q$, else $1$. This is a binary snap:
+      it costs nothing to sit exactly on the edge and a fixed penalty to sit one pixel beside it, which stops
+      the path wobbling across the boundary.</li>
+    <li><b>Gradient direction</b> — smoothness, and the term that keeps you <em>travelling along</em> rather
+    than <em>across</em>. With the unit edge direction $\mathbf{D}(p) = \big(I_y(p), -I_x(p)\big)/|\nabla I(p)|$
+    (perpendicular to the gradient) and the link direction $\mathbf{L}(p,q)$ oriented so that
+    $\mathbf{D}(p)\cdot\mathbf{L}\ge0$:
+      <div class="eq">$$ f_D(p,q) \;=\; \tfrac{2}{3\pi}\Big[\arccos\big(\mathbf{D}(p)\!\cdot\!\mathbf{L}(p,q)\big) + \arccos\big(\mathbf{L}(p,q)\!\cdot\!\mathbf{D}(q)\big)\Big] $$</div>
+      It is $0$ when the step is parallel to the local edge and grows as the step turns away, so the path is
+      penalised for cutting across a boundary or making sharp turns.</li>
+  </ol>
+
+  <div class="callout note"><span class="lbl">Why $f_D$ matters more than it looks</span>
+    Without it, any bright cluster of gradient pixels is cheap to <em>enter</em>, and the path will happily
+    zig-zag through a textured region, hopping between unrelated strong-gradient pixels. $f_D$ asks the step
+    to be tangent to the local edge at <em>both</em> ends, which is what turns "visit cheap pixels" into
+    "follow a contour". It is the discrete analogue of the tangency condition
+    $\Gamma' \perp \nabla I$ that made a path free along an isophote in the colorization metric — the
+    <em>same geometric quantity</em> $\nabla I\cdot\Gamma'$, used for the opposite purpose.
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">The algorithm</span>
+    <ol style="color:var(--ink-dim);margin-left:18px">
+      <li>Smooth $I$ (Gaussian $\sigma$) and compute $I_x, I_y, |\nabla I|, \nabla^2 I$ once.</li>
+      <li>Build the 8-connected graph with weights (2). $|V| = N$ pixels, $|E| = 8N$.</li>
+      <li><b>Dijkstra from $A$</b> with a binary heap / priority queue: $O(N\log N)$. Store a back-pointer
+      per pixel.</li>
+      <li>Follow back-pointers from $B$ to $A$ — that is the path. $O(\text{path length})$.</li>
+    </ol>
+    <p>Correctness needs $l(p,q)\ge0$, which (2) satisfies by construction. Dijkstra is therefore exact for
+    this graph; no dynamic-programming subtleties, no local minima (unlike snakes).</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Try it</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the live wire</h4><span class="tag">move the mouse over the image</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A synthetic "hat": a bright region with a curved brim, plus
+      noise and two distractor edges. <b>Point A is fixed on the left of the brim; just move the mouse over
+      the left panel</b> and the minimum-cost path from A to the cursor is drawn instantly — that is the
+      live-wire experience, and it is free because one Dijkstra run gives the cost to every pixel at once.
+      Click to freeze B. Middle: the local cost $W$ (dark = cheap — note the brim is a dark ribbon). Right:
+      the accumulated cost from A (the geodesic distance map), with the path overlaid.</p>
+      <canvas id="c1" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>$\omega_G$ — gradient-magnitude weight <span class="val" id="v1g">0.60</span></label><input type="range" id="s1g" min="0" max="100" step="1" value="60"></div>
+        <div class="control"><label>$\omega_D$ — direction / smoothness weight <span class="val" id="v1d">0.30</span></label><input type="range" id="s1d" min="0" max="100" step="1" value="30"></div>
+        <div class="control"><label>$\omega_Z$ — zero-crossing weight <span class="val" id="v1z">0.10</span></label><input type="range" id="s1z" min="0" max="100" step="1" value="10"></div>
+        <div class="control"><label>image noise <span class="val" id="v1n">0.03</span></label><input type="range" id="s1n" min="0" max="30" step="1" value="3"></div>
+      </div>
+      <div class="readout" id="r1"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Things to try</span>
+    <b>1.</b> Set $\omega_G=0$: nothing is cheap any more, all steps cost the same, and the path becomes a
+    <strong>straight line</strong> — plain Euclidean distance. That is the sanity check that the gradient
+    term is what bends the path onto the boundary. <b>2.</b> Set $\omega_D = 0$ and raise the noise: the path
+    starts zig-zagging through noise pixels that happen to have a high gradient. That is exactly the failure
+    $f_D$ exists to prevent. <b>3.</b> Move the cursor to the far side of the image and watch the path prefer
+    a long detour along the brim over a short walk through flat background.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the sign flip, side by side</h4><span class="tag">the exam's real trap</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Identical image, identical endpoints, identical Dijkstra. The
+      <b>only</b> difference is the local cost. Left: $W$ <em>decreases</em> with $|\nabla I|$ →
+      <b style="color:#7ee787">the path hugs the brim</b> (this question). Right: the colorization/matting
+      metric $W=\sqrt{1+\gamma^2(\nabla I\cdot\Gamma')^2}$, which <em>increases</em> with the gradient →
+      <b style="color:#ff6b81">the path avoids the brim</b> and cuts across the flat region, going round the
+      structure rather than along it (Moed A Q6). Slide $\gamma$ and watch the right-hand path bend
+      <em>away</em> from exactly the curve the left-hand path is drawn to.</p>
+      <canvas id="c2" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>$\gamma$ for the right-hand (region-growing) metric <span class="val" id="v2g">6.0</span></label><input type="range" id="s2g" min="0" max="300" step="5" value="60"></div>
+      </div>
+      <div class="readout" id="r2"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Practical points that make it usable</h2>
+
+  <div class="summary">
+    <span class="summary-label">Refinements from the paper — mention two or three</span>
+    <table>
+      <tr><th>Feature</th><th>What it does</th></tr>
+      <tr><td><b>Live wire</b></td><td>Run Dijkstra <em>once</em> from the last clicked seed. Then the path
+        to any cursor position is just a back-pointer walk — $O(\text{length})$ — so the wire snaps around
+        interactively at every mouse move. This is the single most important implementation observation, and
+        it comes free from the fact that Dijkstra is a <em>single-source, all-destinations</em> algorithm.</td></tr>
+      <tr><td><b>Path cooling</b></td><td>If the wire stays stable over a stretch as the mouse moves, freeze
+        that stretch and plant a new seed automatically. The user gets long boundaries with very few clicks.</td></tr>
+      <tr><td><b>On-the-fly training</b></td><td>Sample the gradient magnitude/orientation along the segment
+        the user has already accepted, build a histogram, and re-weight the cost to favour edges that
+        <em>look like</em> the one being traced. This is what lets the wire ignore a strong but irrelevant
+        edge crossing the one you want.</td></tr>
+      <tr><td><b>Multi-scale / seeded pyramid</b></td><td>Compute the cost map on a coarse level to get the
+        path roughly, refine near it. Cuts the $O(N\log N)$ down when the image is large.</td></tr>
+      <tr><td><b>A\*</b></td><td>Since $B$ is known, replace Dijkstra by A\* with the admissible heuristic
+        $h(p) = W_{\min}\|p-B\|$ ($W_{\min}$ = the smallest possible local cost). Same optimal path, far
+        fewer expansions. Trade-off: you lose the live-wire property, because A\* only solves for one target.</td></tr>
+      <tr><td><b>Continuous alternative</b></td><td>Instead of a graph, solve the Eikonal equation
+        $|\nabla U(\mathbf{x})| = W(\mathbf{x})$, $U(A)=0$ by <b>fast marching</b> (or fast sweeping, as in
+        Chapter 9), then trace the path by gradient descent on $U$ from $B$. Same complexity class, sub-pixel
+        accurate, no 8-connectivity metrication artefacts — but more code.</td></tr>
+    </table>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">What you would say about alternatives</span>
+    <p><strong>Active contours (snakes)</strong> minimise a similar energy but by local gradient descent from
+    an initial curve, so they need a good initialisation, can get stuck in local minima, and cannot guarantee
+    they pass through $A$ and $B$. Dijkstra on the pixel graph is <em>globally optimal</em> for the stated
+    cost, and needs only the two clicks. <strong>Level sets / geodesic active contours</strong> handle
+    topology changes but again solve a PDE to convergence rather than returning the exact minimiser between
+    two prescribed points. For "user clicks two points, draw the boundary between them", the shortest-path
+    formulation is the right tool, which is why it is the one that shipped in Photoshop as the Magnetic
+    Lasso.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Formulation.</strong> Treat the image as a weighted graph $G=(V,E)$: $V$ = pixels, $E$ =
+    8-connected neighbour links, and assign each link a non-negative cost that is <strong>low on
+    edges</strong>. The drawn curve is then the minimum-cost path from $A$ to $B$ — a geodesic under a metric
+    induced by the image, $d(A,B)=\inf_\Gamma\int W(\Gamma(s))ds$ with a cost $W$ that <em>decreases</em>
+    with $|\nabla I|$.</p>
+
+    <p><strong>The cost (Intelligent Scissors / Live Wire, Mortensen &amp; Barrett).</strong> Pre-smooth $I$,
+    compute $I_x,I_y,|\nabla I|,\nabla^2 I$, then set</p>
+    <div class="eq">$$ l(p,q) = \omega_G\underbrace{\Big(1-\tfrac{|\nabla I(q)|}{\max|\nabla I|}\Big)}_{f_G:\ \text{strong edge} \Rightarrow \text{cheap}} + \omega_Z\underbrace{f_Z(q)}_{\substack{0 \text{ on a Laplacian}\\ \text{zero-crossing}}} + \omega_D\underbrace{\tfrac{2}{3\pi}\big[\arccos(\mathbf{D}_p\!\cdot\!\mathbf{L}) + \arccos(\mathbf{L}\!\cdot\!\mathbf{D}_q)\big]}_{f_D:\ \text{step must be tangent to the edge}} $$</div>
+    <p>with $\mathbf{D}(p)=(I_y,-I_x)/|\nabla I|$ the unit edge direction and $\mathbf{L}(p,q)$ the
+    (orientation-corrected) unit link direction; scale the cost by the step length ($1$ or $\sqrt2$) so
+    diagonal links are not free. $f_G$ makes the boundary a cheap corridor, $f_Z$ localises it to one pixel,
+    $f_D$ forces the path to travel <em>along</em> the boundary rather than hop across strong-gradient noise.</p>
+
+    <p><strong>Algorithm.</strong> All weights are $\ge 0$, so run <strong>Dijkstra</strong> from $A$ with a
+    binary heap, $O(N\log N)$ for $N$ pixels, storing a back-pointer per pixel; then walk back-pointers from
+    $B$ to $A$ to obtain the path. Since Dijkstra computes the cost to <em>every</em> pixel, the path from
+    $A$ to any cursor position is available instantly — this is the "live wire" that makes the tool feel
+    interactive. If only the fixed $B$ is needed, A\* with $h(p)=W_{\min}\|p-B\|$ expands far fewer nodes.</p>
+
+    <p><strong>Key point — the sign.</strong> This is the same geodesic-distance machinery as colorization
+    and matting, but with the opposite metric. There, $W=\sqrt{1+\gamma^2(\nabla I\cdot\Gamma')^2}$
+    <em>grows</em> with the gradient so that distance does not leak across boundaries; here $W$ must
+    <em>shrink</em> with the gradient so that the cheapest route <em>is</em> the boundary. Same graph, same
+    Dijkstra, inverted cost.</p>
+
+    <p><strong>Refinements.</strong> Path cooling (auto-seed the stable part of the wire), on-the-fly
+    training (re-weight from the gradient statistics of the already-accepted segment, so the wire ignores
+    irrelevant crossing edges), and a continuous variant: solve the Eikonal equation
+    $|\nabla U|=W,\ U(A)=0$ by fast marching and back-trace by gradient descent on $U$ for sub-pixel
+    accuracy. Compared with snakes, this is globally optimal and needs no initial curve.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why is Dijkstra valid here — what would break it?</summary>
+    <p>Dijkstra requires non-negative edge weights, which (2) guarantees since each $f\in[0,1]$ and each
+    $\omega\ge0$. That is all it needs; the graph may have cycles and any structure. What <em>would</em>
+    break it is a cost that can be negative — e.g. if you tried to express "reward" for being on an edge as a
+    negative weight instead of a small positive one, Dijkstra's greedy invariant fails and you would need
+    Bellman–Ford ($O(NE)$) or, if a negative cycle exists, the problem becomes ill-posed (an infinitely
+    cheap path that loops on the edge forever). Always encode preference as <em>small positive</em>, never as
+    negative.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is a pure "$1/|\nabla I|$" cost a bad idea in practice?</summary>
+    <p>Two reasons. It is unbounded as $|\nabla I|\to0$, so flat regions get astronomically expensive and the
+    algorithm's dynamic range explodes (numerically, and in the heap's key ordering). And it is
+    <em>scale-dependent</em>: doubling the image contrast halves every cost, so the same $\omega$ weights
+    behave completely differently on a different image. Use $1-|\nabla I|/\max|\nabla I|$ (bounded in
+    $[0,1]$, contrast-normalised, which is what the paper does) or $\exp(-|\nabla I|^2/2\sigma^2)$ with
+    $\sigma$ set from the gradient statistics. Also add a small floor $\epsilon>0$ so the strongest edge
+    still costs something — otherwise a zero-cost path can wander along the edge for free and the
+    <em>shortest</em> path is no longer unique or well behaved.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What happens if the hat's edge is broken — a gap where the contrast vanishes?</summary>
+    <p>Nothing catastrophic, and this is the method's best property. The path pays full price to cross the
+    gap, but the gap is short, so the <em>total</em> cost of "run along the edge, pay for the gap, continue
+    along the edge" is still far below any alternative. Shortest paths are a global criterion, so they bridge
+    local failures automatically — unlike an edge-following/tracing algorithm that would simply stop at the
+    gap. This is exactly why the technique is robust on real images, where boundaries are almost never
+    continuous.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The path is 8-connected. Doesn't that distort distances?</summary>
+    <p>Yes — this is <span class="term">metrication error</span>. On an 8-connected grid the reachable
+    directions are quantised to multiples of $45°$, so a "straight" path in a direction of, say, $20°$ must
+    be rendered as a staircase, and its measured length is up to $\approx8\%$ too long ($\sec$ of the angle
+    error). Fixes, in increasing order of effort: multiply diagonal links by $\sqrt2$ (essential, and cheap);
+    use a $16$- or $32$-neighbourhood, which shrinks the worst-case error; or abandon the graph entirely and
+    solve the Eikonal equation with fast marching, which is consistent with the continuous metric by
+    construction. For this application the error is cosmetic, because the path is pinned to a curve by $f_G$
+    anyway.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How would you close the contour — get the whole hat, not just $A$ to $B$?</summary>
+    <p>Let the user keep clicking: each click plants a new seed, Dijkstra is re-run from it, and the segments
+    concatenate. To close the loop, the last segment runs back to the first seed. If you want it fully
+    automatic from two clicks, compute the two <em>disjoint</em> shortest paths from $A$ to $B$ — run
+    Dijkstra, take the best path, delete its interior nodes from the graph, run again — and join them into a
+    closed curve. That is a standard trick, and the second path will typically go around the other side of
+    the hat. Note the risk: without the deletion step you would get the same path twice.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Relate this precisely to the colorization geodesic distance.</summary>
+    <p>Both compute $\inf_\Gamma \int W\,ds$ and both discretise to a shortest path solved by
+    Dijkstra/fast-marching. The colorization cost
+    $W=\sqrt{1+\gamma^2(\nabla I\cdot\Gamma')^2}$ is <em>anisotropic</em>: it depends on the direction of
+    travel through $\nabla I\cdot\Gamma'$, being free along an isophote and expensive across one. The scissors
+    cost also depends on direction (through $f_D$) but with the <b>preference reversed</b>: it wants
+    $\Gamma'$ tangent to the edge <em>while sitting on the edge</em>, whereas colorization wants $\Gamma'$
+    tangent to the isophote <em>in order to avoid the edge</em>. In one sentence: colorization measures
+    distance <b>within</b> a region; scissors measures distance <b>along</b> a boundary. Chapter 9's
+    machinery, one sign apart.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Complexity, and what dominates in practice?</summary>
+    <p>Pre-processing (smoothing + derivatives) is $O(N)$. Graph construction is $O(8N)$ and can be done
+    lazily — compute a link cost when it is first relaxed, never store the graph. Dijkstra with a binary heap
+    is $O(E\log V) = O(8N\log N)$; with a bucket/radix priority queue it is $O(N)$ amortised, which is what a
+    real implementation uses since costs are quantised to a small integer range. Back-tracing is
+    $O(\text{path length})$. In practice the wall-clock cost is dominated by the heap operations, and the
+    reason live wire feels instant is that all of that happens once per <em>click</em>, not once per mouse
+    move.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>model</td><td>pixels = nodes, 8-neighbours = edges, cost = "how tired per step"</td></tr>
+      <tr><td>the sign</td><td>cost <b>low</b> where $|\nabla I|$ is <b>high</b> — the opposite of colorization</td></tr>
+      <tr><td>$f_G$</td><td>$1-|\nabla I|/\max|\nabla I|$ — the edge is a cheap corridor</td></tr>
+      <tr><td>$f_Z$</td><td>$0$ on a Laplacian zero-crossing — snaps to the exact pixel</td></tr>
+      <tr><td>$f_D$</td><td>$\frac{2}{3\pi}[\arccos(\mathbf{D}_p\!\cdot\!\mathbf{L})+\arccos(\mathbf{L}\!\cdot\!\mathbf{D}_q)]$ — travel <em>along</em>, not across</td></tr>
+      <tr><td>diagonal links</td><td>scale by step length $\sqrt2$, else diagonals are free</td></tr>
+      <tr><td>solver</td><td>Dijkstra from $A$, $O(N\log N)$, back-pointers → path; A* if only $B$ matters</td></tr>
+      <tr><td>live wire</td><td>one Dijkstra per click ⇒ path to any cursor is instant</td></tr>
+      <tr><td>extras</td><td>path cooling, on-the-fly training, fast marching for sub-pixel</td></tr>
+      <tr><td>vs snakes</td><td>globally optimal, no initialisation, exactly through $A$ and $B$</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="b5_knn_patchmatch.html"><span class="dir">Previous</span><span class="ttl">Q5 · k-NN PatchMatch</span></a>
+    <a class="next" href="b7_graph_label_propagation.html"><span class="dir">Next question</span><span class="ttl">Q7 · Labels on a social graph ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   Shared synthetic "Lena hat" image + Dijkstra
+   ========================================================================= */
+const W=150, H=112, N=W*H;
+/* the current image the cost functions and drawing read from.
+   Each demo owns its own snapshot and installs it with useImage() before
+   computing or drawing, so the two demos cannot corrupt each other. */
+let IMG, Gx, Gy, GM, LAP, ZC, GMAX=1;
+function useImage(s){ IMG=s.IMG; Gx=s.Gx; Gy=s.Gy; GM=s.GM; LAP=s.LAP; ZC=s.ZC; GMAX=s.GMAX; }
+
+function buildImage(noise, seed){
+  let rs=(seed|0)||12345;
+  const rnd=()=>{ rs=(rs*1103515245+12345)&0x7fffffff; return rs/0x7fffffff; };
+  const IMG=new Float64Array(N), Gx=new Float64Array(N), Gy=new Float64Array(N),
+        GM=new Float64Array(N), LAP=new Float64Array(N), ZC=new Uint8Array(N);
+  let GMAX=1e-9;
+  const raw=new Float64Array(N);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let v=0.30 + 0.05*Math.sin(x*0.13)*Math.cos(y*0.11) + 0.04*Math.sin((x-y)*0.07);
+    // the hat: a big bright ellipse whose upper arc is the brim
+    const ex=(x-75)/62, ey=(y-104)/74;
+    if(ex*ex+ey*ey < 1) v = 0.84 + 0.03*Math.sin(x*0.3);
+    // hair below-left (a distractor region)
+    const hx=(x-40)/26, hy=(y-104)/30;
+    if(hx*hx+hy*hy<1 && ex*ex+ey*ey>=1) v=0.18;
+    // a distractor: a strong vertical bar on the right
+    if(x>124 && x<130) v=0.70;
+    // a distractor: a horizontal band top-left
+    if(y>14 && y<18 && x<52) v=0.62;
+    raw[y*W+x]=v + (rnd()*2-1)*noise;
+  }
+  // gaussian smooth (separable, sigma ~1)
+  const k=[0.06,0.24,0.40,0.24,0.06], tmp=new Float64Array(N);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let s=0; for(let i=-2;i<=2;i++) s+=k[i+2]*raw[y*W+Math.max(0,Math.min(W-1,x+i))];
+    tmp[y*W+x]=s;
+  }
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let s=0; for(let i=-2;i<=2;i++) s+=k[i+2]*tmp[Math.max(0,Math.min(H-1,y+i))*W+x];
+    IMG[y*W+x]=s;
+  }
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x;
+    const xm=Math.max(0,x-1), xp=Math.min(W-1,x+1), ym=Math.max(0,y-1), yp=Math.min(H-1,y+1);
+    Gx[i]=(IMG[y*W+xp]-IMG[y*W+xm])/2;
+    Gy[i]=(IMG[yp*W+x]-IMG[ym*W+x])/2;
+    GM[i]=Math.hypot(Gx[i],Gy[i]);
+    LAP[i]=IMG[y*W+xp]+IMG[y*W+xm]+IMG[yp*W+x]+IMG[ym*W+x]-4*IMG[i];
+    if(GM[i]>GMAX) GMAX=GM[i];
+  }
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x; let z=0;
+    if(LAP[i]*LAP[i+1]<0 || LAP[i]*LAP[i-1]<0 || LAP[i]*LAP[i+W]<0 || LAP[i]*LAP[i-W]<0) z=1;
+    ZC[i]=z;
+  }
+  const snap={IMG,Gx,Gy,GM,LAP,ZC,GMAX};
+  useImage(snap);
+  return snap;
+}
+const NB=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+/* scissors link cost */
+function costScissors(pi,qi,dx,dy,wG,wD,wZ){
+  const len=Math.hypot(dx,dy);
+  const fG=1-GM[qi]/GMAX;
+  const fZ=ZC[qi]?0:1;
+  let fD=0;
+  if(wD>0){
+    const gp=GM[pi], gq=GM[qi];
+    if(gp>1e-6 && gq>1e-6){
+      let Dpx=Gy[pi]/gp, Dpy=-Gx[pi]/gp, Dqx=Gy[qi]/gq, Dqy=-Gx[qi]/gq;
+      let Lx=dx/len, Ly=dy/len;
+      if(Dpx*Lx+Dpy*Ly < 0){ Lx=-Lx; Ly=-Ly; }
+      const a=Math.max(-1,Math.min(1,Dpx*Lx+Dpy*Ly));
+      const b=Math.max(-1,Math.min(1,Lx*Dqx+Ly*Dqy));
+      fD=(2/(3*Math.PI))*(Math.acos(a)+Math.acos(Math.abs(b)));
+    } else fD=1;
+  }
+  return len*(wG*fG + wZ*fZ + wD*fD + 0.02);
+}
+/* colorization / region-growing metric: expensive across edges */
+function costGeodesic(pi,qi,dx,dy,gamma){
+  const len=Math.hypot(dx,dy), Lx=dx/len, Ly=dy/len;
+  const gproj=Gx[pi]*Lx+Gy[pi]*Ly;
+  return len*Math.sqrt(1+gamma*gamma*gproj*gproj);
+}
+/* Dijkstra from a source; costFn(pi,qi,dx,dy) */
+function dijkstra(sx,sy,costFn){
+  const D=new Float64Array(N).fill(Infinity), P=new Int32Array(N).fill(-1);
+  const done=new Uint8Array(N);
+  const hp=[];
+  const push=(d,i)=>{ hp.push([d,i]); let c=hp.length-1;
+    while(c>0){ const p=(c-1)>>1; if(hp[p][0]<=hp[c][0]) break; const t=hp[p];hp[p]=hp[c];hp[c]=t; c=p; } };
+  const pop=()=>{ const top=hp[0], last=hp.pop();
+    if(hp.length){ hp[0]=last; let c=0;
+      for(;;){ const l=2*c+1,r=l+1; let m=c;
+        if(l<hp.length&&hp[l][0]<hp[m][0]) m=l;
+        if(r<hp.length&&hp[r][0]<hp[m][0]) m=r;
+        if(m===c) break; const t=hp[m];hp[m]=hp[c];hp[c]=t; c=m; } }
+    return top; };
+  const s=sy*W+sx; D[s]=0; push(0,s);
+  while(hp.length){
+    const [d,i]=pop();
+    if(done[i]) continue; done[i]=1;
+    const x=i%W, y=(i-x)/W;
+    for(const [dx,dy] of NB){
+      const nx=x+dx, ny=y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const j=ny*W+nx; if(done[j]) continue;
+      const nd=d+costFn(i,j,dx,dy);
+      if(nd<D[j]){ D[j]=nd; P[j]=i; push(nd,j); }
+    }
+  }
+  return {D,P};
+}
+function backtrace(P,tx,ty){
+  const path=[]; let i=ty*W+tx, guard=0;
+  while(i>=0 && guard++<20000){ path.push([i%W,(i-(i%W))/W]); i=P[i]; }
+  return path;
+}
+function drawField(g,arr,px,py,S,mode,mx){
+  const im=g.createImageData(W,H);
+  for(let i=0;i<N;i++){
+    let r,gg,b;
+    if(mode==='gray'){ const v=Math.round(Math.max(0,Math.min(1,arr[i]))*255); r=gg=b=v; }
+    else if(mode==='cost'){ const v=Math.max(0,Math.min(1,arr[i]));
+      r=Math.round(18+v*150); gg=Math.round(24+v*180); b=Math.round(40+v*190); }
+    else { const v=isFinite(arr[i])?Math.min(1,arr[i]/mx):1;
+      const c=hsv(0.72-0.72*v, 0.75, 0.25+0.65*v); r=c[0];gg=c[1];b=c[2]; }
+    im.data[i*4]=r; im.data[i*4+1]=gg; im.data[i*4+2]=b; im.data[i*4+3]=255;
+  }
+  const t=document.createElement('canvas'); t.width=W; t.height=H;
+  t.getContext('2d').putImageData(im,0,0);
+  g.imageSmoothingEnabled=false; g.drawImage(t,px,py,S,S*H/W);
+  g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(px+.5,py+.5,S,S*H/W);
+}
+function hsv(h,s,v){
+  const i=Math.floor(h*6), f=h*6-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  let r,g,b;
+  switch(i%6){case 0:r=v;g=t;b=p;break; case 1:r=q;g=v;b=p;break; case 2:r=p;g=v;b=t;break;
+    case 3:r=p;g=q;b=v;break; case 4:r=t;g=p;b=v;break; default:r=v;g=p;b=q;}
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+
+/* =========================================================================
+   DEMO 1 — the live wire
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d'), ro=document.getElementById('r1');
+  const sG=document.getElementById('s1g'), sD=document.getElementById('s1d'),
+        sZ=document.getElementById('s1z'), sN=document.getElementById('s1n');
+  const vG=document.getElementById('v1g'), vD=document.getElementById('v1d'),
+        vZ=document.getElementById('v1z'), vN=document.getElementById('v1n');
+
+  const A=[17,55];
+  let B=[131,52], hover=null, RES=null, COSTMAP=new Float64Array(N), SNAP=null;
+  const S=280, PX=[16, 310, 604], PY=34;
+
+  function recompute(){
+    const wG=+sG.value/100, wD=+sD.value/100, wZ=+sZ.value/100, nz=+sN.value/100;
+    vG.textContent=wG.toFixed(2); vD.textContent=wD.toFixed(2);
+    vZ.textContent=wZ.toFixed(2); vN.textContent=nz.toFixed(2);
+    SNAP=buildImage(nz, 7717);
+    const fn=(pi,qi,dx,dy)=>costScissors(pi,qi,dx,dy,wG,wD,wZ);
+    RES=dijkstra(A[0],A[1],fn);
+    // node-cost map for display (average over the 4 axis neighbours)
+    for(let i=0;i<N;i++){
+      const x=i%W, y=(i-x)/W;
+      let s=0,c=0;
+      for(const [dx,dy] of [[1,0],[0,1]]){
+        const nx=x+dx, ny=y+dy; if(nx>=W||ny>=H) continue;
+        s+=fn(i,ny*W+nx,dx,dy); c++;
+      }
+      COSTMAP[i]= c? s/c : 1;
+    }
+    let cm=0; for(let i=0;i<N;i++) cm=Math.max(cm,COSTMAP[i]);
+    for(let i=0;i<N;i++) COSTMAP[i]/=cm;
+    draw();
+  }
+  function draw(){
+    useImage(SNAP);                       // this demo's own image, not demo 2's
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    drawField(g,IMG,PX[0],PY,S,'gray');
+    drawField(g,COSTMAP,PX[1],PY,S,'cost');
+    let mx=0; for(let i=0;i<N;i++) if(isFinite(RES.D[i])) mx=Math.max(mx,RES.D[i]);
+    drawField(g,RES.D,PX[2],PY,S,'dist',mx);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText('image  (move the mouse here)',PX[0],PY-8);
+    g.fillText('local cost W   dark = cheap',PX[1],PY-8);
+    g.fillText('accumulated cost from A  (the geodesic distance map)',PX[2],PY-8);
+
+    const tgt = hover || B;
+    const path = backtrace(RES.P, tgt[0], tgt[1]);
+    const sc=S/W;
+    for(const k of [0,1,2]){
+      g.strokeStyle = k===0?'#000':'#ffffff'; g.lineWidth = k===0?3.5:2;
+      g.beginPath();
+      path.forEach((p,i)=>{ const X=PX[k]+(p[0]+.5)*sc, Y=PY+(p[1]+.5)*sc;
+        i?g.lineTo(X,Y):g.moveTo(X,Y); });
+      g.stroke();
+      if(k===0){ g.strokeStyle='#7ee787'; g.lineWidth=1.6; g.stroke(); }
+      // endpoints
+      g.fillStyle='#ffb454';
+      g.beginPath(); g.arc(PX[k]+(A[0]+.5)*sc,PY+(A[1]+.5)*sc,5,0,7); g.fill();
+      g.fillStyle='#6ea8ff';
+      g.beginPath(); g.arc(PX[k]+(tgt[0]+.5)*sc,PY+(tgt[1]+.5)*sc,5,0,7); g.fill();
+      if(k===0){ g.fillStyle='#ffb454'; g.font='bold 13px system-ui';
+        g.fillText('A',PX[0]+(A[0]+.5)*sc-4,PY+(A[1]+.5)*sc-9);
+        g.fillStyle='#6ea8ff';
+        g.fillText('B',PX[0]+(tgt[0]+.5)*sc-4,PY+(tgt[1]+.5)*sc-9); }
+    }
+    // stats: mean gradient along the path vs a straight line
+    let gp=0; path.forEach(p=>gp+=GM[p[1]*W+p[0]]); gp/=Math.max(1,path.length);
+    let gs=0; const n=200;
+    for(let i=0;i<n;i++){
+      const x=Math.round(A[0]+(tgt[0]-A[0])*i/(n-1)), y=Math.round(A[1]+(tgt[1]-A[1])*i/(n-1));
+      gs+=GM[y*W+x];
+    }
+    gs/=n;
+    ro.innerHTML='path length <b>'+path.length+'</b> px (straight line would be <b>'+
+      Math.round(Math.hypot(tgt[0]-A[0],tgt[1]-A[1]))+'</b>) &nbsp;·&nbsp; total cost <b>'+
+      RES.D[tgt[1]*W+tgt[0]].toFixed(2)+'</b><br>mean |∇I| <b>along the chosen path</b>: <b>'+gp.toFixed(4)+
+      '</b> &nbsp;vs&nbsp; along the straight line: <b>'+gs.toFixed(4)+'</b>'+
+      (gp>gs*1.25? ' &nbsp;·&nbsp; <span style="color:#7ee787">the path is riding the edge — that is the whole idea</span>'
+                 : ' &nbsp;·&nbsp; <span style="color:#ff6b81">the path is NOT following an edge (is ω_G too small?)</span>');
+  }
+  function pix(e){
+    const r=cv.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*cv.width/r.width, my=(e.clientY-r.top)*cv.height/r.height;
+    const sc=S/W;
+    if(mx<PX[0]||mx>PX[0]+S||my<PY||my>PY+S*H/W) return null;
+    return [Math.max(0,Math.min(W-1,Math.floor((mx-PX[0])/sc))),
+            Math.max(0,Math.min(H-1,Math.floor((my-PY)/sc)))];
+  }
+  cv.addEventListener('mousemove',e=>{ const p=pix(e); if(p){ hover=p; draw(); } });
+  cv.addEventListener('mouseleave',()=>{ hover=null; draw(); });
+  cv.addEventListener('click',e=>{ const p=pix(e); if(p){ B=p; hover=null; draw(); } });
+  cv.style.cursor='crosshair';
+  [sG,sD,sZ,sN].forEach(s=>s.addEventListener('input',recompute));
+  recompute();
+})();
+
+/* =========================================================================
+   DEMO 2 — sign flip: scissors metric vs colorization metric
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d'), ro=document.getElementById('r2');
+  const sG=document.getElementById('s2g'), vG=document.getElementById('v2g');
+  const A=[17,55], B=[131,52];
+  const S=400, PX=[24, 466], PY=36;
+
+  function render(){
+    const gamma=+sG.value/10; vG.textContent=gamma.toFixed(1);
+    buildImage(0.03, 4242);               // this demo's own image
+    const r1=dijkstra(A[0],A[1],(pi,qi,dx,dy)=>costScissors(pi,qi,dx,dy,0.6,0.3,0.1));
+    const r2=dijkstra(A[0],A[1],(pi,qi,dx,dy)=>costGeodesic(pi,qi,dx,dy,gamma));
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    const sc=S/W;
+    [[r1,'#7ee787','W DECREASES with |∇I|  →  the path FOLLOWS the brim   (this question)'],
+     [r2,'#ff6b81','W INCREASES with |∇I|  →  the path AVOIDS the brim   (colorization / Moed A Q6)']]
+    .forEach(([r,col,lbl],k)=>{
+      drawField(g,IMG,PX[k],PY,S,'gray');
+      g.fillStyle=col; g.font='12px system-ui,sans-serif'; g.fillText(lbl,PX[k],PY-8);
+      const path=backtrace(r.P,B[0],B[1]);
+      g.strokeStyle='#000'; g.lineWidth=4; g.beginPath();
+      path.forEach((p,i)=>{ const X=PX[k]+(p[0]+.5)*sc, Y=PY+(p[1]+.5)*sc; i?g.lineTo(X,Y):g.moveTo(X,Y); });
+      g.stroke();
+      g.strokeStyle=col; g.lineWidth=2; g.stroke();
+      g.fillStyle='#ffb454'; g.beginPath(); g.arc(PX[k]+(A[0]+.5)*sc,PY+(A[1]+.5)*sc,5,0,7); g.fill();
+      g.fillStyle='#6ea8ff'; g.beginPath(); g.arc(PX[k]+(B[0]+.5)*sc,PY+(B[1]+.5)*sc,5,0,7); g.fill();
+      g.fillStyle='#ffb454'; g.font='bold 13px system-ui';
+      g.fillText('A',PX[k]+(A[0]+.5)*sc-4,PY+(A[1]+.5)*sc-9);
+      g.fillStyle='#6ea8ff'; g.fillText('B',PX[k]+(B[0]+.5)*sc-4,PY+(B[1]+.5)*sc-9);
+      r.__path=path;
+    });
+    const mg=p=>{ let s=0; p.forEach(q=>s+=GM[q[1]*W+q[0]]); return s/Math.max(1,p.length); };
+    const g1=mg(r1.__path), g2=mg(r2.__path);
+    ro.innerHTML='mean |∇I| along the left (edge-seeking) path: <b>'+g1.toFixed(4)+
+      '</b> &nbsp;·&nbsp; along the right (edge-avoiding) path: <b style="color:#ff6b81">'+g2.toFixed(4)+
+      '</b> &nbsp;·&nbsp; ratio <b>'+(g1/Math.max(1e-9,g2)).toFixed(2)+'×</b><br>'+
+      'Same image, same endpoints, same Dijkstra. <b>Only the sign of the dependence on |∇I| changed</b> — '+
+      'and it is the difference between tracing a boundary and staying inside a region.';
+  }
+  sG.addEventListener('input',render);
+  render();
+})();
+</script>
+</body>
+</html>

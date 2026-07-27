@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moed B · Q3 — Synthesising text with Word2Vec, as a dynamic texture</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Moed B · Q3</b> · Text synthesis as dynamic texture</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="b2_tracking_markov.html">‹ Q2</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="b4_light_fields_concentric.html">Q4 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 5 · Moed B 2022, question 3 · 13 points</div>
+    <h1>A sentence is a video. Words are frames.</h1>
+    <p class="lede">This question looks like it is about NLP. It is not. It is checking whether you noticed
+    that the texture-synthesis chapter never actually cared that its input was pixels — it only ever needed
+    <em>a sequence of vectors in a Euclidean space</em>. Word2Vec hands you exactly that. So: state the
+    analogy, then port both algorithms — Video Textures (jump around the original) and the linear
+    state-space Dynamic Texture (learn $A$, drive it with noise) — and say what the decode step is.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Moed B · 1/8/2022 · Question 3 · 13 points · DYNAMIC TEXTURE</span>
+    <p style="margin-bottom:0"><em>Word2Vec</em> is a neural network that maps English words to vectors in
+    some Euclidean space. Use <em>Word2Vec</em> to synthesize text. That is, your algorithm should take as
+    input a short text (i.e., a sentence or a paragraph) and generate as output a long text (i.e., a page of
+    text).</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story</h2>
+
+  <div class="story">
+    <span class="story-label">The kid with one short song and a very long car ride</span>
+    <p>You have a 10-second video of a candle flame and you need 10 minutes of candle flame for a movie.
+    You can't film more. What do you do?</p>
+    <p>You <strong>loop</strong> it — but a plain loop has a visible jolt at the seam, where the last frame
+    doesn't match the first. So instead you play the clip, and every so often you <em>secretly jump</em> to a
+    different moment in the same clip — but only to a moment that <strong>looks almost exactly like where
+    you are now</strong>. Nobody sees the jump, because the two frames were nearly identical. Do that
+    forever and you get infinite candle. That is <span class="term">Video Textures</span>.</p>
+    <p>Now the same trick with a song. You know one verse. You sing it, and when you reach a word — say
+    "<em>and</em>" — you notice the verse has another "<em>and</em>" later on. You silently jump there and
+    keep singing from that point. The listener hears a new, longer song made only of pieces of the old one,
+    and never hears a break, because you only ever jumped between places that <em>sounded the same</em>.</p>
+    <p>The only thing you needed was a way to say <strong>"these two moments look alike"</strong> — a
+    distance. For frames it was pixel difference. For words, Word2Vec gives you one: similar words sit close
+    together in its space, so $\|\mathbf{w}_{\rm cat} - \mathbf{w}_{\rm dog}\|$ is small and
+    $\|\mathbf{w}_{\rm cat} - \mathbf{w}_{\rm bureaucracy}\|$ is big. <strong>That single fact is what makes
+    the whole texture-synthesis chapter apply to text.</strong></p>
+    <p>There is also a second, cleverer trick in the chapter. Instead of jumping around the original, you
+    <em>watch how the flame moves</em> and learn a little rule — "whatever it is doing now, next moment it
+    will do roughly <em>this</em>, plus a bit of randomness". Then you can turn the crank forever and
+    generate flame that was never filmed. That is the <span class="term">linear dynamic texture</span>, and
+    it also works on words: learn how meaning drifts from one word to the next, drift some more, and read
+    off the nearest real word at each step.</p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The dictionary between the two problems</span>
+    <table class="kv" style="margin-top:6px">
+      <tr><th>Video</th><th>Text</th></tr>
+      <tr><td>frame $I_t$ (a $H{\times}W$ vector of pixels)</td><td>token $t$ → its Word2Vec vector $\mathbf{y}_t \in \mathbb{R}^d$</td></tr>
+      <tr><td>the input video clip</td><td>the input short text (the "training sequence")</td></tr>
+      <tr><td>frame distance $\|I_i - I_j\|^2$</td><td>embedding distance $\|\mathbf{y}_i - \mathbf{y}_j\|^2$ (or $1-\cos$)</td></tr>
+      <tr><td>a jump $i \to j$ that is invisible</td><td>a jump to another place in the text where the next word means the same</td></tr>
+      <tr><td>output = an endless video</td><td>output = an endless page of text</td></tr>
+      <tr><td>rendering a frame = just show it</td><td><b>decode</b>: $\arg\min_{w\in V}\|\mathbf{y}-\mathbf{e}(w)\|$ — the extra step text needs</td></tr>
+    </table>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The material this question is built on</h2>
+
+  <div class="explain">
+    <span class="explain-label">Route 1 — Video Textures (Schödl et al.): re-order the original</span>
+    <p>Compute the all-pairs distance matrix between frames, $D_{ij} = \|I_i - I_j\|^2$. To decide whether,
+    after showing frame $i$, you may continue at frame $j$, you must compare <em>what would have come next</em>
+    with <em>what you are about to show</em>: the successor of $i$ is $i{+}1$, so the cost of the jump
+    $i \to j$ is $D_{i+1,\,j}$. Turn costs into probabilities with a Boltzmann law,</p>
+  </div>
+
+  <div class="eq">$$ P_{ij} \;\propto\; \exp\!\left(-\frac{D_{i+1,\,j}}{\sigma^2}\right), \qquad \sum_j P_{ij} = 1 \tag{1} $$</div>
+
+  <div class="explain">
+    <p>and then simply take a random walk on this Markov chain. Three refinements from the chapter:</p>
+    <ul>
+      <li><strong>Preserve dynamics with a temporal filter.</strong> Matching single frames is not enough —
+      a ball at the top of its arc going up looks like a ball at the top going down. Filter the matrix with
+      binomial weights $a_k$ over a window,
+      $D'_{ij} = \sum_{k=-m}^{m-1} a_k D_{i+k,\,j+k}$, so that a jump requires the whole
+      <em>neighbourhood in time</em> to match, not just one frame.</li>
+      <li><strong>Prune</strong> all but the best few transitions (and drop those below a threshold) so the
+      walk never takes a visibly bad jump.</li>
+      <li><strong>Avoid dead ends</strong> with a future cost, computed by value iteration
+      ($Q$-learning): $D''_{ij} = (D'_{ij})^p + \beta \min_k D''_{jk}$ — don't jump into a corner you cannot
+      get out of.</li>
+    </ul>
+    <h4 class="mini">Porting it to text, term by term</h4>
+    <p>$I_t \mapsto \mathbf{y}_t$ (the Word2Vec vector of token $t$). The temporal filter becomes an
+    <strong>$n$-gram context window</strong>: requiring $D'_{ij}$ small means "the few words before and after
+    match too", which is precisely what keeps the generated text locally grammatical. Everything else is
+    unchanged.</p>
+  </div>
+
+  <div class="explain">
+    <span class="explain-label">Route 2 — the linear dynamic texture (Doretto/Soatto, the chapter's state space)</span>
+    <p>Model the sequence as the output of a linear dynamical system driven by noise:</p>
+  </div>
+
+  <div class="eq">$$ \mathbf{x}_{t+1} = A\,\mathbf{x}_t + B\,\mathbf{v}_t, \qquad \mathbf{y}_t = C\,\mathbf{x}_t \;(+\,\mathbf{w}_t), \qquad \mathbf{v}_t \sim \mathcal{N}(0,\mathbb{I}) \tag{2} $$</div>
+
+  <div class="explain">
+    <p>Identification is the SVD recipe from the chapter. Stack the observations as columns,
+    $Y = [\mathbf{y}_1 \cdots \mathbf{y}_N] \in \mathbb{R}^{d\times N}$, take the rank-$n$ SVD
+    $Y \approx U_n \Sigma_n V_n^{\!\top}$, and read off</p>
+  </div>
+
+  <div class="eq">$$ \hat C = U_n, \qquad \hat X = [\mathbf{x}_1\cdots\mathbf{x}_N] = \Sigma_n V_n^{\!\top}, \qquad \hat A = X_{2:N}\,X_{1:N-1}^{+} \tag{3} $$</div>
+
+  <div class="eq">$$ \hat B: \quad V \;=\; X_{2:N} - \hat A X_{1:N-1}, \qquad \tfrac{1}{N-1}VV^{\!\top} = \hat B\hat B^{\!\top} \;\;(\text{by SVD/Cholesky}) \tag{4} $$</div>
+
+  <div class="explain">
+    <p>Then synthesise as long a sequence as you like by iterating (2) from a seed state. Note the pleasing
+    symmetry with Chapter 4: <em>the Kalman filter infers $\mathbf{x}$ from $\mathbf{y}$; the dynamic texture
+    runs the same model forwards to invent $\mathbf{y}$.</em></p>
+    <h4 class="mini">The one genuinely new step that text needs</h4>
+    <p>A synthesised $\mathbf{y}_t$ is an arbitrary point of $\mathbb{R}^d$. A video can display an arbitrary
+    pixel vector — but you cannot <em>print</em> an arbitrary word vector. So you must
+    <strong>decode / quantise</strong> back to the vocabulary $V$:</p>
+  </div>
+
+  <div class="eq">$$ \hat w_t \;=\; \arg\max_{w\in V}\; \frac{\mathbf{y}_t \cdot \mathbf{e}(w)}{\|\mathbf{y}_t\|\,\|\mathbf{e}(w)\|} \qquad\text{(cosine nearest neighbour, ANN/kd-tree for speed)} \tag{5} $$</div>
+
+  <div class="callout warn"><span class="lbl">And immediately re-project — otherwise it drifts off the manifold</span>
+    Word vectors occupy a thin, curved sliver of $\mathbb{R}^d$. A linear system driven by Gaussian noise
+    wanders <em>off</em> that sliver, and after a few dozen steps you are decoding points that are far from
+    every real word — the nearest neighbour becomes arbitrary and the output turns to mush (exactly the
+    "blurring / dying out" failure of a badly identified dynamic texture). Fix it by feeding the
+    <em>quantised</em> vector back into the state instead of the raw one:
+    $\mathbf{x}_t \leftarrow \hat C^{\!\top}\mathbf{e}(\hat w_t)$ before the next step. This is
+    <span class="term">snap-back</span>, and it is the text analogue of clamping pixel values to $[0,255]$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Watch both routes run</h2>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — Route 1: the transition matrix and a random walk</h4><span class="tag">σ · window · generate</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The input text is 30 tokens; each token has a (toy, 2-D)
+      Word2Vec vector. Left: the successor-cost matrix — cell $(i,j)$ is the cost of jumping from position
+      $i$ to position $j$, <b>dark = cheap = a jump you can get away with</b>. The bright diagonal band is
+      "just carry on", always free. Every other dark cell is a legal shortcut. Right: the walk, with jumps
+      drawn as arcs. Below, the generated text, with jumped-to words highlighted.</p>
+      <canvas id="c1" width="900" height="380"></canvas>
+      <div class="controls">
+        <div class="control"><label>$\sigma$ — jump temperature (small = timid, large = wild) <span class="val" id="v1s">0.10</span></label><input type="range" id="s1s" min="4" max="120" step="1" value="10"></div>
+        <div class="control"><label>context window $m$ (0 = single word, higher = n-gram-ish) <span class="val" id="v1m">2</span></label><input type="range" id="s1m" min="0" max="4" step="1" value="2"></div>
+        <div class="control"><label>output length (tokens) <span class="val" id="v1n">60</span></label><input type="range" id="s1n" min="20" max="160" step="5" value="60"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b1g">🎲 generate</button>
+        <label class="chk"><input type="checkbox" id="k1p" checked> prune: keep only the best 4 jumps per row</label>
+      </div>
+      <div class="readout" id="r1"></div>
+      <div id="o1" style="margin-top:12px;padding:14px 16px;background:#0c1322;border:1px solid #2c3650;border-radius:9px;line-height:1.9;font-size:15px"></div>
+    </div>
+  </div>
+
+  <div class="callout note"><span class="lbl">What to notice</span>
+    Push $\sigma$ to its minimum: the walk stops jumping and simply replays the input, then stops — a plain
+    loop. Push it to maximum: it jumps constantly and the output is word salad, because a "cheap" jump is no
+    longer actually cheap. The useful range is in between — <strong>exactly the same trade-off as the
+    $\sigma$ in Video Textures.</strong> Raising the context window $m$ makes jumps far rarer but much better,
+    because now a jump has to match the surrounding words too.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — Route 2: learn $A$, drive it with noise, decode</h4><span class="tag">watch the trajectory</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The same toy embedding, plotted. Grey dots = the vocabulary.
+      Teal path = the input text's trajectory through embedding space (this is the training data). Green path
+      = a <em>synthesised</em> trajectory from $\mathbf{x}_{t+1} = A\mathbf{x}_t + B\mathbf{v}_t$, with each
+      point snapped to its nearest word (orange rings). Turn snap-back off and watch the trajectory drift
+      away from the word cloud and the text collapse into one repeated word.</p>
+      <canvas id="c2" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>noise gain (the $B$ in $B\mathbf{v}_t$) <span class="val" id="v2b">1.00</span></label><input type="range" id="s2b" min="0" max="250" step="5" value="100"></div>
+        <div class="control"><label>steps to synthesise <span class="val" id="v2n">45</span></label><input type="range" id="s2n" min="10" max="120" step="5" value="45"></div>
+      </div>
+      <div class="btnrow">
+        <button class="act primary" id="b2g">🎲 synthesise</button>
+        <label class="chk"><input type="checkbox" id="k2s" checked> snap-back (re-project onto the word manifold each step)</label>
+      </div>
+      <div class="readout" id="r2"></div>
+      <div id="o2" style="margin-top:12px;padding:14px 16px;background:#0c1322;border:1px solid #2c3650;border-radius:9px;line-height:1.9;font-size:15px"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The algorithm, written out</h2>
+
+  <ol class="steps">
+    <li><b>Tokenise and embed.</b> Split the input text into tokens $w_1,\dots,w_N$ (keep punctuation as
+    tokens — it carries the rhythm, like a scene cut in a video). Map each to
+    $\mathbf{y}_t = \mathbf{e}(w_t) \in \mathbb{R}^d$ with Word2Vec ($d\approx300$). Optionally $\ell_2$
+    normalise, so Euclidean distance and cosine distance agree.</li>
+    <li><b>Build the distance matrix.</b> $D_{ij} = \|\mathbf{y}_i - \mathbf{y}_j\|^2$, $N\times N$.</li>
+    <li><b>Preserve dynamics.</b> Filter over a context window with binomial weights:
+    $D'_{ij} = \sum_{k=-m}^{m-1} a_k\, D_{i+k,\,j+k}$. This is the $n$-gram constraint in disguise.</li>
+    <li><b>Add future cost (optional but recommended).</b> Value-iterate
+    $D''_{ij} \leftarrow (D'_{ij})^p + \beta\min_k D''_{jk}$ until convergence, so the walk never enters a
+    region of the text it cannot leave.</li>
+    <li><b>Probabilities.</b> $P_{ij} \propto \exp(-D''_{i+1,j}/\sigma^2)$; prune to the best few $j$ per row,
+    zero out anything above a threshold, renormalise each row.</li>
+    <li><b>Synthesise.</b> Start at the position given by the input's last token (or a random one). Emit
+    $w_i$; sample $j \sim P_{i,\cdot}$; set $i \leftarrow j$; repeat until you have a page.</li>
+    <li><b>(Route 2, in place of 2–6.)</b> Identify $(\hat A,\hat B,\hat C)$ by the SVD recipe (3)–(4), seed
+    $\mathbf{x}_1$ from the input's last state, iterate $\mathbf{x}_{t+1} = \hat A\mathbf{x}_t + \hat B\mathbf{v}_t$,
+    output $\mathbf{y}_t = \hat C\mathbf{x}_t$, decode with (5), and snap back
+    $\mathbf{x}_t \leftarrow \hat C^{\!\top}\mathbf{e}(\hat w_t)$.</li>
+    <li><b>Detokenise.</b> Join with spaces, capitalise after sentence-final punctuation. Done — a page of
+    text built entirely from a paragraph.</li>
+  </ol>
+
+  <div class="summary">
+    <span class="summary-label">Which route to hand in</span>
+    <table>
+      <tr><th></th><th>Route 1 — video textures</th><th>Route 2 — linear dynamic texture</th></tr>
+      <tr><td>output words</td><td>always real words, in orders that existed locally in the input</td><td>whatever the nearest neighbour says — can produce words <em>not in the input</em> (from the whole vocabulary)</td></tr>
+      <tr><td>novelty</td><td>recombination only</td><td>genuinely new sequences, but often incoherent</td></tr>
+      <tr><td>failure mode</td><td>a short input has few legal jumps → it just loops</td><td>drift off the word manifold → mush (needs snap-back); or $\rho(A)<1$ → it decays to a fixed point and repeats one word forever</td></tr>
+      <tr><td>cost</td><td>$O(N^2 d)$ once, then $O(1)$ per emitted word</td><td>one SVD, then $O(n^2 + d\log|V|)$ per word</td></tr>
+      <tr><td>verdict</td><td><b>the one to lead with</b> — it is the closest structural match, and its output is readable</td><td>the one that literally instantiates the chapter's state-space model — present it as the second half</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn"><span class="lbl">State the honest limitation — it earns marks</span>
+    Word2Vec is a <em>context-free</em> lookup: one fixed vector per word type, with no notion of syntax,
+    agreement or long-range structure. Both routes therefore produce text that is locally plausible and
+    globally meaningless — precisely like a synthesised video texture, which is locally convincing flame and
+    globally has no plot. The context window ($m$) is what buys local grammar, and it is the direct analogue
+    of the temporal filter that Video Textures needed for exactly the same reason. If real coherence is
+    wanted, the honest answer is that you need contextual embeddings / a sequence model (an RNN or a
+    transformer), i.e. replace the <em>linear</em> $A$ with a learned nonlinear map — the same upgrade path
+    that takes you from linear dynamic textures to modern video generation.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">One page, as the exam asks</span>
+    <p><strong>Observation.</strong> The texture-synthesis machinery never uses the fact that a frame is an
+    image — it only needs a sequence of vectors in a metric space and a distance between them. Word2Vec turns
+    a text into exactly that: token $t \mapsto \mathbf{y}_t = \mathbf{e}(w_t)\in\mathbb{R}^d$, with
+    semantically similar words close. So <em>a sentence is a video whose frames are word vectors</em>, and
+    both synthesis algorithms port directly.</p>
+
+    <p><strong>Method A — Video Textures on words (main answer).</strong>
+    (1) Tokenise the input and embed: $\mathbf{y}_1..\mathbf{y}_N$.
+    (2) $D_{ij} = \|\mathbf{y}_i-\mathbf{y}_j\|^2$.
+    (3) Preserve dynamics with a windowed filter $D'_{ij}=\sum_k a_k D_{i+k,j+k}$ (the $n$-gram/context
+    constraint; without it, jumps are locally right and grammatically wrong).
+    (4) Transition probabilities $P_{ij}\propto\exp(-D'_{i+1,j}/\sigma^2)$ — the cost of jumping from $i$ to
+    $j$ is how well $j$ substitutes for the actual successor $i{+}1$. Prune to the best few per row and
+    renormalise; optionally add the $Q$-learning future cost
+    $D''_{ij}=(D'_{ij})^p+\beta\min_k D''_{jk}$ to avoid dead ends.
+    (5) Random-walk the chain, emitting $w_i$ at each visit, until a page is produced. The output is made of
+    real words in locally-attested orders, with invisible seams, and is unbounded in length.</p>
+
+    <p><strong>Method B — linear dynamic texture on words.</strong> Fit the state-space model
+    $\mathbf{x}_{t+1}=A\mathbf{x}_t+B\mathbf{v}_t,\ \mathbf{y}_t=C\mathbf{x}_t$ to the embedded sequence by
+    the SVD identification of the chapter: $Y \approx U_n\Sigma_nV_n^{\!\top}$, $\hat C=U_n$,
+    $\hat X=\Sigma_nV_n^{\!\top}$, $\hat A = X_{2:N}X_{1:N-1}^{+}$, and $\hat B$ from the covariance of the
+    residual $V = X_{2:N}-\hat AX_{1:N-1}$. Seed $\mathbf{x}_1$ from the input's final state and iterate the
+    model as long as you like. Because a synthesised $\mathbf{y}_t$ is not a word, add a <strong>decoding
+    step</strong>: $\hat w_t=\arg\min_{w\in V}\|\mathbf{y}_t-\mathbf{e}(w)\|$ (cosine NN, kd-tree/ANN), and
+    re-project $\mathbf{x}_t \leftarrow \hat C^{\!\top}\mathbf{e}(\hat w_t)$ each step so the trajectory
+    stays on the word manifold. Scale $\hat A$'s spectral radius to just under 1 for a stationary,
+    non-decaying texture.</p>
+
+    <p><strong>Trade-off and limitation.</strong> A produces readable text but only recombines the input; B
+    can emit words outside the input but drifts. Both are locally plausible and globally meaningless, exactly
+    as a synthesised video texture is locally convincing and has no plot — because Word2Vec is context-free
+    and $A$ is linear. The context window in A (and the state dimension $n$ in B) controls how much local
+    structure survives.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why is the jump cost $D_{i+1,j}$ and not $D_{i,j}$?</summary>
+    <p>Because you are choosing what to show <em>next</em>. Having just shown $i$, the viewer expects $i{+}1$.
+    If you show $j$ instead, the discontinuity they perceive is the difference between what they expected
+    ($i{+}1$) and what they got ($j$). So the seam is $\|\mathbf{y}_{i+1}-\mathbf{y}_j\|^2 = D_{i+1,j}$. Using
+    $D_{ij}$ would compare the current frame with the next one, which measures nothing useful — the trivial
+    "jump" $j = i$ would look free while actually freezing the video.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why does single-word matching fail, and what exactly does the window fix?</summary>
+    <p>Same reason a ball at the apex of its arc is ambiguous in Video Textures: identical appearance,
+    opposite dynamics. In text, "<em>the</em>" appears in dozens of positions with identical embedding, so a
+    single-word match makes all of them equally legal jump targets, and you can leap from "the <b>cat</b>
+    sat" into "the <b>bureaucracy</b> of". The window forces $\mathbf{y}_{i+k}\approx\mathbf{y}_{j+k}$ for
+    several $k$ at once, which means the jump is only allowed where a whole phrase matches. That is literally
+    an $n$-gram model, obtained from a video-processing filter.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Euclidean or cosine distance on the embeddings?</summary>
+    <p>Cosine, essentially always — Word2Vec's semantics live in the <em>directions</em>, while the norm
+    mostly encodes word frequency (rare words get long vectors). Using raw Euclidean distance makes frequent
+    function words look artificially close to each other and far from everything, which corrupts the whole
+    matrix. The standard fix is to $\ell_2$-normalise every vector first; then
+    $\|\mathbf{a}-\mathbf{b}\|^2 = 2(1-\cos\theta)$, so Euclidean and cosine order pairs identically and you
+    can keep every formula in the chapter unchanged.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What is $\sigma$ doing, and how should you set it?</summary>
+    <p>$\sigma$ converts costs to probabilities and is a temperature. $\sigma \to 0$: only the zero-cost
+    transition survives, i.e. $i \to i{+}1$ — you replay the input verbatim and stop at the end. $\sigma \to
+    \infty$: all transitions equally likely — uniform random word salad. Set it relative to the typical
+    non-trivial cost, e.g. $\sigma$ = a small multiple of the average of the smallest few off-diagonal
+    entries per row. Identical role, identical tuning heuristic, as in Video Textures.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. In route 2, what does the spectral radius of $A$ control?</summary>
+    <p>Everything about the long-run behaviour. If $\rho(A)<1$ the deterministic part decays and the process
+    is driven purely by noise around a fixed point — the decoded output collapses to one word repeated (the
+    text version of a video texture that fades to a still frame). If $\rho(A)>1$ the state blows up and the
+    decoded word is whichever vocabulary vector happens to lie furthest out in that direction — again, one
+    word forever. You want $\rho(A)$ just below 1, so the system is marginally stable and the noise keeps
+    exciting it. In practice you identify $\hat A$ and then rescale its eigenvalues to
+    $\min(|\lambda|, 0.98)$ — the same stabilisation done for video dynamic textures.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How do you seed the generator from the given short text?</summary>
+    <p>Route 1: start the walk at the index of the input's last token, so the generated page continues the
+    input rather than restarting it (and the input itself is your entire "video", so it doubles as the
+    training set). Route 2: run the identified system's state estimate over the input — i.e. project,
+    $\mathbf{x}_t = \hat C^{\!\top}\mathbf{y}_t$ — and take $\mathbf{x}_N$ as the seed. Both are the analogue
+    of starting a video texture at the last frame of the clip.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Can you combine the two routes?</summary>
+    <p>Yes, and it is the best answer if you have room. Use route 2's linear system to propose a
+    <em>direction</em> in embedding space (where the meaning is drifting), but restrict the actual choice of
+    the next token to positions in the input text, scored by route 1's transition probability — i.e. sample
+    $j$ from $P_{ij}\cdot\exp(-\|\mathbf{y}_j - \hat A\mathbf{x}_t\|^2/\tau)$. You get route 1's readability
+    with route 2's ability to keep moving somewhere new instead of orbiting the input. This is the same
+    hybrid idea as constraining a video texture's random walk with a user-specified motion target.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Complexity and scaling?</summary>
+    <p>Route 1: $O(N^2 d)$ to build $D$ and $O(N^2 m)$ to filter it, where $N$ is the length of the
+    <em>input</em> text, not the output — so for a paragraph ($N\sim100$) it is trivial, and generation is
+    $O(1)$ per emitted word. Route 2: one thin SVD of a $d\times N$ matrix, $O(dN\min(d,N))$, then per word
+    $O(n^2)$ for the state update plus a nearest-neighbour query over the vocabulary — do that with a kd-tree
+    or approximate NN in $O(\log|V|)$ rather than $O(|V|d)$, since $|V|$ can be millions.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>the key insight</td><td>the chapter needs vectors + a distance, not pixels — Word2Vec supplies both</td></tr>
+      <tr><td>frame → word</td><td>$I_t \mapsto \mathbf{e}(w_t)$, $\ell_2$-normalised</td></tr>
+      <tr><td>jump cost</td><td>$D_{i+1,j}$ — how well $j$ substitutes for the real successor</td></tr>
+      <tr><td>$P_{ij}$</td><td>$\propto e^{-D_{i+1,j}/\sigma^2}$, pruned, row-normalised; random walk = generation</td></tr>
+      <tr><td>temporal filter</td><td>$\sum_k a_k D_{i+k,j+k}$ — becomes the $n$-gram context window</td></tr>
+      <tr><td>dead ends</td><td>$Q$-learning future cost $D''=(D')^p+\beta\min_k D''_{jk}$</td></tr>
+      <tr><td>route 2</td><td>$\mathbf{x}_{t+1}=A\mathbf{x}_t+B\mathbf{v}_t$, $\mathbf{y}=C\mathbf{x}$; $A,B,C$ by SVD</td></tr>
+      <tr><td>the extra step</td><td><b>decode</b> $\arg\min_w\|\mathbf{y}-\mathbf{e}(w)\|$ + snap back onto the manifold</td></tr>
+      <tr><td>limitation</td><td>locally fine, globally meaningless — same as any texture synthesis</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="b2_tracking_markov.html"><span class="dir">Previous</span><span class="ttl">Q2 · Tracking recursion</span></a>
+    <a class="next" href="b4_light_fields_concentric.html"><span class="dir">Next question</span><span class="ttl">Q4 · Light fields on an arm ›</span></a>
+  </div>
+</div>
+
+<script>
+/* ===================== shared toy "Word2Vec" ============================= */
+const VOC = {
+  the:[0.10,0.50], a:[0.14,0.56], and:[0.18,0.40], on:[0.22,0.62],
+  near:[0.26,0.66], across:[0.24,0.72], while:[0.20,0.34],
+  cat:[0.72,0.82], dog:[0.80,0.84], fox:[0.76,0.90],
+  sat:[0.52,0.20], slept:[0.56,0.14], ran:[0.60,0.24], jumped:[0.58,0.30],
+  warm:[0.86,0.42], cold:[0.92,0.38], green:[0.88,0.48], quiet:[0.84,0.34],
+  mat:[0.42,0.78], floor:[0.48,0.84], fire:[0.38,0.86], field:[0.46,0.90], roof:[0.40,0.74]
+};
+const VOCK = Object.keys(VOC);
+const TEXT = ("the cat sat on the warm mat and the dog slept near the cold floor "+
+              "while the fox ran across the green field and the quiet cat jumped on the roof").split(/\s+/);
+const EMB = TEXT.map(w=>VOC[w]);
+const NT  = TEXT.length;
+function d2(a,b){ const dx=a[0]-b[0], dy=a[1]-b[1]; return dx*dx+dy*dy; }
+
+/* =========================================================================
+   DEMO 1 — video-textures random walk over the tokens
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c1'), g=cv.getContext('2d');
+  const ro=document.getElementById('r1'), out=document.getElementById('o1');
+  const sS=document.getElementById('s1s'), sM=document.getElementById('s1m'), sN=document.getElementById('s1n');
+  const vS=document.getElementById('v1s'), vM=document.getElementById('v1m'), vN=document.getElementById('v1n');
+  const bG=document.getElementById('b1g'), kP=document.getElementById('k1p');
+  let walk=[];
+
+  function costMatrix(m){
+    // D'[i][j] = windowed distance between successor-of-i and j
+    const D=[];
+    for(let i=0;i<NT;i++){
+      D.push(new Float64Array(NT));
+      for(let j=0;j<NT;j++){
+        let s=0, wsum=0;
+        for(let k=-m;k<=m;k++){
+          const ii=i+1+k, jj=j+k;
+          if(ii<0||ii>=NT||jj<0||jj>=NT) continue;
+          const wk = m?Math.exp(-0.5*(k/m)*(k/m)*2):1;
+          s+=wk*d2(EMB[ii],EMB[jj]); wsum+=wk;
+        }
+        D[i][j] = wsum? s/wsum : 9;
+      }
+    }
+    return D;
+  }
+  function probs(D,sig,prune){
+    const P=[];
+    for(let i=0;i<NT;i++){
+      let row=new Float64Array(NT);
+      for(let j=0;j<NT;j++) row[j]=Math.exp(-D[i][j]/(sig*sig));
+      if(prune){
+        // keep best 4 (by cost) plus the natural successor
+        const idx=[...Array(NT).keys()].sort((a,b)=>D[i][a]-D[i][b]).slice(0,4);
+        const keep=new Set(idx); if(i+1<NT) keep.add(i+1);
+        for(let j=0;j<NT;j++) if(!keep.has(j)) row[j]=0;
+      }
+      if(i===NT-1) row[NT-1]=0;                    // last token has no successor of its own
+      let s=0; for(const v of row) s+=v;
+      if(s<=0){ row=new Float64Array(NT); row[0]=1; s=1; }
+      for(let j=0;j<NT;j++) row[j]/=s;
+      P.push(row);
+    }
+    return P;
+  }
+  function generate(){
+    const sig=+sS.value/100, m=+sM.value, n=+sN.value;
+    const D=costMatrix(m), P=probs(D,sig,kP.checked);
+    let i=0; walk=[{idx:0,jump:false}];
+    for(let k=1;k<n;k++){
+      const r=Math.random(); let acc=0, j=i;
+      for(let q=0;q<NT;q++){ acc+=P[i][q]; if(r<=acc){ j=q; break; } }
+      walk.push({idx:j, jump:(j!==i+1)});
+      i=j;
+    }
+    render(D,P);
+  }
+  function render(D,P){
+    const sig=+sS.value/100, m=+sM.value;
+    vS.textContent=sig.toFixed(2); vM.textContent=m; vN.textContent=sN.value;
+    if(!D){ D=costMatrix(m); P=probs(D,sig,kP.checked); }
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+
+    /* --- left: cost matrix heat map --- */
+    const S=10.4, x0=40, y0=40;
+    let mx=0; for(let i=0;i<NT;i++) for(let j=0;j<NT;j++) mx=Math.max(mx,D[i][j]);
+    for(let i=0;i<NT;i++) for(let j=0;j<NT;j++){
+      const v=Math.pow(D[i][j]/mx,0.45);
+      const r=Math.round(20+v*120), gg=Math.round(30+v*175), b=Math.round(55+v*180);
+      g.fillStyle='rgb('+r+','+gg+','+b+')';
+      g.fillRect(x0+j*S, y0+i*S, S-0.6, S-0.6);
+    }
+    g.strokeStyle='#2c3650'; g.strokeRect(x0-.5,y0-.5,NT*S+1,NT*S+1);
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui,sans-serif';
+    g.fillText("successor-cost matrix  D'[i][j]   (dark = cheap jump)", x0-8, y0-14);
+    g.save(); g.translate(x0-14, y0+NT*S/2); g.rotate(-Math.PI/2);
+    g.textAlign='center'; g.fillText('from position i',0,0); g.restore(); g.textAlign='left';
+    g.fillText('to position j', x0+NT*S/2-34, y0+NT*S+18);
+
+    /* --- right: the token ring + the walk --- */
+    const CX=660, CY=190, R=140;
+    const pt=i=>[CX+Math.cos(-Math.PI/2+2*Math.PI*i/NT)*R, CY+Math.sin(-Math.PI/2+2*Math.PI*i/NT)*R];
+    g.fillStyle='#9fb0cc'; g.fillText('the walk (arcs = jumps)', CX-70, 26);
+    // jump arcs actually taken
+    const seen={};
+    for(let k=1;k<walk.length;k++){
+      if(!walk[k].jump) continue;
+      const a=pt(walk[k-1].idx), b=pt(walk[k].idx);
+      const key=walk[k-1].idx+'>'+walk[k].idx; seen[key]=(seen[key]||0)+1;
+      g.strokeStyle='rgba(255,180,84,'+Math.min(.85,.22+seen[key]*0.16)+')'; g.lineWidth=1.4;
+      g.beginPath(); g.moveTo(a[0],a[1]);
+      g.quadraticCurveTo(CX,CY,b[0],b[1]); g.stroke();
+    }
+    // ring
+    for(let i=0;i<NT;i++){
+      const p=pt(i);
+      const visits=walk.filter(w=>w.idx===i).length;
+      g.fillStyle= visits? '#41d8c9' : '#2c3650';
+      g.beginPath(); g.arc(p[0],p[1], visits?3.5+Math.min(4,visits*0.5):2.5, 0,7); g.fill();
+      const ang=-Math.PI/2+2*Math.PI*i/NT;
+      g.fillStyle= visits? '#e6ecf7':'#4b5878'; g.font='10px system-ui,sans-serif';
+      g.textAlign = Math.cos(ang)<-0.15?'right':(Math.cos(ang)>0.15?'left':'center');
+      g.fillText(TEXT[i], p[0]+Math.cos(ang)*10, p[1]+Math.sin(ang)*10+3);
+    }
+    g.textAlign='left';
+
+    /* --- output text --- */
+    let html='', jumps=0;
+    walk.forEach((w,k)=>{
+      if(w.jump && k){ jumps++; html+='<span style="color:#ffb454">↷</span> '; }
+      html+='<span style="'+(w.jump&&k?'color:#ffb454;font-weight:600':'color:#e6ecf7')+'">'+TEXT[w.idx]+'</span> ';
+    });
+    out.innerHTML=html||'<span class="muted">press generate</span>';
+    // stats
+    let nnz=0, tot=0;
+    for(let i=0;i<NT;i++) for(let j=0;j<NT;j++){ if(P[i][j]>1e-4){nnz++;} tot++; }
+    ro.innerHTML='input <b>'+NT+'</b> tokens → output <b>'+walk.length+'</b> tokens &nbsp;·&nbsp; jumps taken: <b>'+jumps+
+      '</b> &nbsp;·&nbsp; distinct positions visited: <b>'+new Set(walk.map(w=>w.idx)).size+'/'+NT+
+      '</b> &nbsp;·&nbsp; legal transitions in P: <b>'+nnz+'</b> of '+tot+
+      (jumps===0?' &nbsp;·&nbsp; <span style="color:#ff6b81">no jumps — σ too small, this is a plain replay</span>':'');
+  }
+  [sS,sM,sN].forEach(s=>s.addEventListener('input',generate));
+  kP.addEventListener('change',generate);
+  bG.onclick=generate;
+  generate();
+})();
+
+/* =========================================================================
+   DEMO 2 — linear dynamic texture in embedding space
+   ========================================================================= */
+(function(){
+  const cv=document.getElementById('c2'), g=cv.getContext('2d');
+  const ro=document.getElementById('r2'), out=document.getElementById('o2');
+  const sB=document.getElementById('s2b'), sN=document.getElementById('s2n');
+  const vB=document.getElementById('v2b'), vN=document.getElementById('v2n');
+  const bG=document.getElementById('b2g'), kS=document.getElementById('k2s');
+
+  /* identify y_{t+1} = A y_t + b  (least squares, per output dim) */
+  function solve3(M,r){                       // 3x3 gaussian elimination
+    const A=M.map((row,i)=>[...row, r[i]]);
+    for(let c=0;c<3;c++){
+      let p=c; for(let i=c+1;i<3;i++) if(Math.abs(A[i][c])>Math.abs(A[p][c])) p=i;
+      [A[c],A[p]]=[A[p],A[c]];
+      if(Math.abs(A[c][c])<1e-12) A[c][c]=1e-12;
+      for(let i=0;i<3;i++){ if(i===c) continue;
+        const f=A[i][c]/A[c][c]; for(let j=c;j<4;j++) A[i][j]-=f*A[c][j]; }
+    }
+    return [A[0][3]/A[0][0], A[1][3]/A[1][1], A[2][3]/A[2][2]];
+  }
+  function fit(){
+    // features phi = [y0, y1, 1];  target = y_{t+1}
+    const M=[[0,0,0],[0,0,0],[0,0,0]], r0=[0,0,0], r1=[0,0,0];
+    for(let t=0;t<NT-1;t++){
+      const p=[EMB[t][0],EMB[t][1],1], q=EMB[t+1];
+      for(let i=0;i<3;i++){ for(let j=0;j<3;j++) M[i][j]+=p[i]*p[j];
+        r0[i]+=p[i]*q[0]; r1[i]+=p[i]*q[1]; }
+    }
+    const a=solve3(M,r0), b=solve3(M,r1);
+    const A=[[a[0],a[1]],[b[0],b[1]]], off=[a[2],b[2]];
+    // residual covariance -> noise scale
+    let s=0;
+    for(let t=0;t<NT-1;t++){
+      const px=A[0][0]*EMB[t][0]+A[0][1]*EMB[t][1]+off[0];
+      const py=A[1][0]*EMB[t][0]+A[1][1]*EMB[t][1]+off[1];
+      s+=d2([px,py],EMB[t+1]);
+    }
+    const sig=Math.sqrt(s/(2*(NT-1)));
+    // spectral radius of A
+    const tr=A[0][0]+A[1][1], det=A[0][0]*A[1][1]-A[0][1]*A[1][0];
+    const disc=tr*tr/4-det;
+    const rho = disc>=0 ? Math.max(Math.abs(tr/2+Math.sqrt(disc)),Math.abs(tr/2-Math.sqrt(disc)))
+                        : Math.sqrt(Math.abs(det));
+    return {A,off,sig,rho};
+  }
+  const MOD=fit();
+  let traj=[], words=[];
+
+  function nearest(p){
+    let best=null, bd=1e9;
+    for(const k of VOCK){ const dd=d2(p,VOC[k]); if(dd<bd){bd=dd;best=k;} }
+    return [best,Math.sqrt(bd)];
+  }
+  function randn(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+  function synth(){
+    const gain=+sB.value/100, n=+sN.value;
+    vB.textContent=gain.toFixed(2); vN.textContent=n;
+    let p=[EMB[NT-1][0],EMB[NT-1][1]];
+    traj=[p.slice()]; words=[];
+    for(let t=0;t<n;t++){
+      const nx=MOD.A[0][0]*p[0]+MOD.A[0][1]*p[1]+MOD.off[0]+MOD.sig*gain*randn();
+      const ny=MOD.A[1][0]*p[0]+MOD.A[1][1]*p[1]+MOD.off[1]+MOD.sig*gain*randn();
+      p=[nx,ny];
+      const [w,dist]=nearest(p);
+      words.push({w,dist,raw:[nx,ny]});
+      if(kS.checked) p=[VOC[w][0],VOC[w][1]];       // snap-back
+      traj.push(p.slice());
+    }
+    render();
+  }
+  function render(){
+    const PX=x=>60+x*(cv.width-140), PY=y=>cv.height-50-y*(cv.height-100);
+    g.fillStyle='#0e1320'; g.fillRect(0,0,cv.width,cv.height);
+    g.strokeStyle='#1c2438'; g.lineWidth=1;
+    for(let k=0;k<=10;k++){ g.beginPath(); g.moveTo(PX(k/10),PY(0)); g.lineTo(PX(k/10),PY(1)); g.stroke();
+      g.beginPath(); g.moveTo(PX(0),PY(k/10)); g.lineTo(PX(1),PY(k/10)); g.stroke(); }
+
+    // vocabulary
+    for(const k of VOCK){
+      const p=VOC[k];
+      g.fillStyle='#3a4767'; g.beginPath(); g.arc(PX(p[0]),PY(p[1]),4,0,7); g.fill();
+      g.fillStyle='#6b7a99'; g.font='11px system-ui,sans-serif'; g.fillText(k,PX(p[0])+7,PY(p[1])+4);
+    }
+    // input trajectory
+    g.strokeStyle='rgba(65,216,201,.55)'; g.lineWidth=1.6; g.beginPath();
+    EMB.forEach((p,i)=> i?g.lineTo(PX(p[0]),PY(p[1])):g.moveTo(PX(p[0]),PY(p[1])));
+    g.stroke();
+    // synthesised trajectory
+    g.strokeStyle='#7ee787'; g.lineWidth=2; g.beginPath();
+    traj.forEach((p,i)=> i?g.lineTo(PX(p[0]),PY(p[1])):g.moveTo(PX(p[0]),PY(p[1])));
+    g.stroke();
+    words.forEach(w=>{
+      g.strokeStyle='rgba(255,180,84,.75)'; g.lineWidth=1;
+      g.beginPath(); g.arc(PX(w.raw[0]),PY(w.raw[1]),4.5,0,7); g.stroke();
+    });
+    // legend
+    g.font='12px system-ui,sans-serif';
+    g.fillStyle='#41d8c9'; g.fillText('— input text trajectory (training data)',60,24);
+    g.fillStyle='#7ee787'; g.fillText('— synthesised  x_{t+1} = A x_t + B v_t',60,42);
+    g.fillStyle='#ffb454'; g.fillText('○ raw synthesised vector, before decoding',60,60);
+
+    let html='';
+    words.forEach(w=>{
+      const far=w.dist>0.12;
+      html+='<span style="color:'+(far?'#ff6b81':'#e6ecf7')+'" title="distance to nearest word '+
+        w.dist.toFixed(3)+'">'+w.w+'</span> ';
+    });
+    out.innerHTML=html||'<span class="muted">press synthesise</span>';
+    const md=words.length?words.reduce((a,b)=>a+b.dist,0)/words.length:0;
+    const uniq=new Set(words.map(w=>w.w)).size;
+    ro.innerHTML='identified $\\rho(A)$ = <b>'+MOD.rho.toFixed(3)+'</b> &nbsp;·&nbsp; residual σ = <b>'+
+      MOD.sig.toFixed(3)+'</b> &nbsp;·&nbsp; mean distance of the raw vector from the nearest real word: <b>'+
+      md.toFixed(3)+'</b> &nbsp;·&nbsp; distinct words emitted: <b>'+uniq+'/'+VOCK.length+'</b>'+
+      (!kS.checked && md>0.13
+        ? ' &nbsp;·&nbsp; <span style="color:#ff6b81">drifting off the word manifold — turn snap-back on</span>'
+        : (kS.checked ? ' &nbsp;·&nbsp; <span style="color:#7ee787">snap-back on — the state is re-projected onto a real word each step</span>' : ''))+
+      (uniq<=2?' &nbsp;·&nbsp; <span style="color:#ff6b81">collapsed to a fixed point — raise the noise gain</span>':'');
+  }
+  [sB,sN].forEach(s=>s.addEventListener('input',synth));
+  kS.addEventListener('change',synth);
+  bG.onclick=synth;
+  synth();
+})();
+</script>
+</body>
+</html>
