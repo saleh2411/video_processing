@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geodesic Distance — explained like you're 5</title>
+<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$']]},chtml:{displayOverflow:'scale'},svg:{fontCache:'global'}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c232d; --line:#2b3543;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff;
+  --kid:#f0b429; --math:#a78bfa; --good:#3fb950; --bad:#f85149; --warn:#f59e0b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;padding:0 18px 90px}
+.wrap{max-width:1080px;margin:0 auto}
+
+header.hero{padding:46px 0 22px;border-bottom:1px solid var(--line);margin-bottom:26px}
+.eyebrow{color:var(--accent);font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+h1{font-size:32px;margin:8px 0 10px;line-height:1.2}
+.lede{color:var(--muted);font-size:15.5px;margin:0;max-width:760px}
+
+h2{font-size:21px;margin:44px 0 12px;padding-top:10px;border-top:1px solid var(--line)}
+h2 .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
+h3{font-size:16px;margin:22px 0 8px}
+h4{font-size:13.5px;margin:16px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+p{margin:9px 0}
+ul,ol{margin:8px 0;padding-inline-start:24px}
+li{margin:5px 0}
+code{background:#0b0f16;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+b,strong{color:#fff}
+.muted{color:var(--muted)}
+
+/* boxes */
+.kid{background:linear-gradient(180deg,#241d0c,#1a160c);border:1px solid #4a3a10;border-left:4px solid var(--kid);
+  border-radius:10px;padding:14px 16px;margin:16px 0}
+.kid .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--kid);margin-bottom:4px}
+.math{background:#171429;border:1px solid #35306b;border-left:4px solid var(--math);border-radius:10px;
+  padding:14px 16px;margin:16px 0;overflow-x:auto}
+.math .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--math);margin-bottom:4px}
+.warnbox{background:#2a1a0c;border:1px solid #5a3a12;border-left:4px solid var(--warn);border-radius:10px;
+  padding:14px 16px;margin:16px 0}
+.warnbox .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--warn);margin-bottom:4px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0}
+
+/* demo shell */
+.demo{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:20px 0;overflow:hidden}
+.demo-head{display:flex;align-items:center;gap:10px;padding:11px 15px;background:var(--panel2);
+  border-bottom:1px solid var(--line)}
+.demo-head .dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:none}
+.demo-head h4{margin:0;font-size:14px;color:var(--text);text-transform:none;letter-spacing:0}
+.demo-head .hint{margin-left:auto;font-size:11.5px;color:var(--accent);border:1px solid #234; padding:2px 9px;
+  border-radius:20px;background:#0e1b2c}
+.demo-body{padding:15px}
+canvas{width:100%;height:auto;display:block;border-radius:8px;background:#0b0f16;border:1px solid var(--line);
+  touch-action:none}
+.controls{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+.ctrl{flex:1 1 240px;min-width:200px}
+.ctrl label{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-bottom:5px}
+.ctrl .val{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;
+  padding:7px 13px;font-size:12.5px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.on{background:#12324f;border-color:var(--accent);color:#cfe6ff}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.readout{font-size:13px;margin-top:10px;padding:9px 12px;background:#0b0f16;border:1px solid var(--line);
+  border-radius:8px;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+
+/* symbol picker */
+.symrow{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.sym{background:#0b0f16;border:1px solid var(--line);border-radius:8px;padding:7px 14px;cursor:pointer;
+  font-size:16px;transition:.15s}
+.sym:hover{border-color:var(--accent)}
+.sym.on{background:#12324f;border-color:var(--accent)}
+#symout{min-height:56px;background:#0b0f16;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13.5px}
+
+/* flashcards */
+.fc{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin:10px 0;cursor:pointer}
+.fc .q{font-weight:700}
+.fc .a{display:none;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);color:#cfe6ff;font-size:13.5px}
+.fc.open .a{display:block}
+.fc:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Video Processing · Ch. 9–10 companion</div>
+  <h1>Geodesic Distance — explained like you're five 🐜</h1>
+  <p class="lede">Every demo on this page is live. Click, drag the sliders, watch what changes.
+  By the end you will know exactly what the exam is asking when it says
+  <em>"geodesic distance", "distance map", "$W(D)=1/D^b$", "trimap"</em> — and why.</p>
+</header>
+
+<!-- ===================== 1 ===================== -->
+<h2><span class="num">1</span>The whole idea in one story</h2>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version</span>
+  <p>Imagine a <b>tiny ant</b> 🐜 standing on a photograph.</p>
+  <p>The ant wants to walk to a candy on the other side. But the ant has a rule:</p>
+  <p style="font-size:15px"><b>"Walking on the same colour is easy. Stepping over a colour change is like climbing a wall."</b></p>
+  <p>So the ant's "how far is it?" is <b>not</b> how far your ruler says.
+  It's <b>how tired the ant gets</b>. That tiredness is called the <b>geodesic distance</b>.</p>
+</div>
+
+<p>Two points can be 5&nbsp;cm apart on paper but "very far" for the ant, because a black line sits between them.
+And two points 30&nbsp;cm apart can be "very close", because the whole road between them is one flat grey.</p>
+
+<div class="math">
+  <span class="tag">🎓 Grown-up version</span>
+  <p>Geodesic distance = shortest path length, where "length" is measured with a
+  <b>metric that the image itself defines</b>. Flat regions are cheap, edges are expensive.
+  Hence: distance follows <b>image structure</b>, not the page.</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the ant, the wall, and the door</h4>
+    <span class="hint">click anywhere to move the candy</span></div>
+  <div class="demo-body">
+    <canvas id="c1" width="880" height="380"></canvas>
+    <div class="controls">
+      <div class="ctrl">
+        <label>how much the wall hurts &nbsp;<span class="val" id="v1">high</span></label>
+        <input type="range" id="s1" min="0" max="100" value="100">
+      </div>
+    </div>
+    <div class="readout" id="r1"></div>
+    <div class="legend">
+      <span><i style="background:#f85149"></i>ruler distance (straight, ignores the wall)</span>
+      <span><i style="background:#3fb950"></i>geodesic distance (what the ant really pays)</span>
+      <span><i style="background:#3b4453"></i>wall</span>
+    </div>
+  </div>
+</div>
+
+<p class="muted">Slide the wall cost to 0 and the green path snaps onto the red one — with no walls,
+geodesic distance <b>becomes</b> ordinary Euclidean distance. That is the single most important sentence on this page.</p>
+
+<!-- ===================== 2 ===================== -->
+<h2><span class="num">2</span>What is a "wall" inside a picture?</h2>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version</span>
+  <p>A wall is <b>where the picture suddenly changes brightness</b>.</p>
+  <p>Inside the apple: red, red, red, red — no wall. At the apple's rim: red → white — <b>WALL!</b></p>
+</div>
+
+<div class="math">
+  <span class="tag">🎓 Grown-up version</span>
+  <p>The wall detector is the <b>gradient</b> $\nabla Y$ of the luminance channel:</p>
+  <div>$$\nabla Y=\Big(\tfrac{\partial Y}{\partial x},\ \tfrac{\partial Y}{\partial y}\Big),\qquad
+  \|\nabla Y\|\ \text{large}\iff\text{edge}$$</div>
+  <p>Two facts to memorise:</p>
+  <ul>
+    <li>$\nabla Y$ <b>points across</b> the edge (from dark side to bright side).</li>
+    <li>Inside a flat region $\nabla Y\approx 0$ → walking there is <b>free</b>.</li>
+  </ul>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the picture and its walls</h4>
+    <span class="hint">move the mouse over the image</span></div>
+  <div class="demo-body">
+    <canvas id="c2" width="880" height="300"></canvas>
+    <div class="readout" id="r2">Left: the picture $Y$. Right: $\|\nabla Y\|$ — bright = wall. Hover to probe.</div>
+  </div>
+</div>
+
+<!-- ===================== 3 ===================== -->
+<h2><span class="num">3</span>The formula, one symbol at a time</h2>
+
+<p>This is the exact line from the course notes. Do not be scared — click each symbol.</p>
+
+<div class="math" style="text-align:center">
+  <div>$$L(p)=\int_p \big|\langle \dot p(s),\ \nabla Y\rangle\big|\ dl(s)
+  \qquad\qquad d_L(x,y)=\min_{p:\,x\to y} L(p)$$</div>
+</div>
+
+<div class="symrow" id="symrow">
+  <span class="sym" data-k="p">$p$</span>
+  <span class="sym" data-k="pdot">$\dot p(s)$</span>
+  <span class="sym" data-k="grad">$\nabla Y$</span>
+  <span class="sym" data-k="dot">$\langle\ ,\ \rangle$</span>
+  <span class="sym" data-k="abs">$|\ \cdot\ |$</span>
+  <span class="sym" data-k="int">$\int dl$</span>
+  <span class="sym" data-k="min">$\min$</span>
+</div>
+<div id="symout" class="muted">👆 Click a symbol.</div>
+
+<div class="kid" style="margin-top:16px">
+  <span class="tag">🍼 The whole formula in baby words</span>
+  <p><b>"Walk from A to B. At every tiny step, ask: did I just step <u>across</u> a colour change?
+  If yes, pay. Add up all the payments. Now try every possible road and keep the cheapest bill."</b></p>
+</div>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #1</span>
+  <p>$L(p)$ is <b>not a geometric length</b>. The notes say it explicitly. A path that wanders 500 pixels
+  through one flat grey region has $L(p)=0$. Length in metres ≠ length in this metric.</p>
+</div>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #2 — why the dot product, not just $\|\nabla Y\|$?</span>
+  <p>$\langle \dot p,\nabla Y\rangle$ only charges you for the part of your step that goes <b>across</b> the edge.
+  Walking <b>along</b> the edge (tangent direction) is perpendicular to $\nabla Y$ → dot product $=0$ → free.
+  That is exactly what we want: you may travel along an object's rim for free, but you pay to jump off it.</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 3 — across the edge vs. along the edge</h4>
+    <span class="hint">drag the arrow</span></div>
+  <div class="demo-body">
+    <canvas id="c3" width="880" height="300"></canvas>
+    <div class="readout" id="r3"></div>
+  </div>
+</div>
+
+<!-- ===================== 4 ===================== -->
+<h2><span class="num">4</span>The practical metric with $\gamma$ (the one you compute with)</h2>
+
+<p>The pure formula above lets you walk forever for free inside a flat region. In practice we mix
+<b>real walking</b> and <b>edge pain</b>, with a knob $\gamma$:</p>
+
+<div class="math" style="text-align:center">
+  <div>$$L_\gamma(p)=\int_p \sqrt{\ \underbrace{1}_{\text{cost of moving}}\ +\ \gamma^2\,
+  \underbrace{\langle \dot p(s),\nabla Y\rangle^2}_{\text{cost of crossing edges}}}\ \ ds$$</div>
+</div>
+
+<table>
+<tr><th>$\gamma$</th><th>What the metric becomes</th><th>Behaviour</th></tr>
+<tr><td>$\gamma=0$</td><td>$L=\int ds$ = plain arc length</td><td><b>Euclidean.</b> Distance rings are perfect circles. Image ignored.</td></tr>
+<tr><td>small $\gamma$</td><td>mostly spatial, slight edge awareness</td><td>Rings bend a little near objects; colour leaks across weak edges.</td></tr>
+<tr><td>large $\gamma$</td><td>mostly image-driven</td><td>Rings stop dead at object boundaries. Texture "prints through". Fragile to noise.</td></tr>
+</table>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version of $\gamma$</span>
+  <p>$\gamma$ is <b>"how tall are the walls?"</b> &nbsp; $\gamma=0$: no walls at all, the world is an empty field.
+  Big $\gamma$: walls up to the sky.</p>
+</div>
+
+<!-- ===================== 5 ===================== -->
+<h2><span class="num">5</span>🔬 The big playground — the distance map $D_k(x)$</h2>
+
+<div class="math">
+  <span class="tag">🎓 Definitions you must be able to write</span>
+  <div>$$d_L(x,\Omega_k)=\min_{y\in\Omega_k} d_L(x,y)\qquad\text{(point-to-set distance)}$$</div>
+  <div>$$\boxed{\,D_k(x)=d_L(x,\Omega_k)\,}\qquad\text{(the distance map: one number per pixel)}$$</div>
+  <p>$D_k(x)=0$ on the scribble itself, and grows as you move away <b>through the image</b>.</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 4 — click to drop a scribble, watch distance flood the image</h4>
+    <span class="hint">click / drag on the picture</span></div>
+  <div class="demo-body">
+    <canvas id="c4" width="880" height="330"></canvas>
+    <div class="controls">
+      <div class="ctrl">
+        <label>$\gamma$ — wall height <span class="val" id="v4g">6.0</span></label>
+        <input type="range" id="s4g" min="0" max="200" value="60">
+      </div>
+      <div class="ctrl">
+        <label>iso-distance ring spacing <span class="val" id="v4r">8</span></label>
+        <input type="range" id="s4r" min="2" max="30" value="8">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn on" id="b4rings">rings ON</button>
+      <button class="btn on" id="b4path">show shortest path to cursor</button>
+      <button class="btn" id="b4reset">reset seed</button>
+    </div>
+    <div class="readout" id="r4"></div>
+    <div class="legend">
+      <span><i style="background:#f0f9ff"></i>D = 0 (the scribble)</span>
+      <span><i style="background:#f59e0b"></i>medium</span>
+      <span><i style="background:#3b0764"></i>far</span>
+      <span>black rings = points at equal distance (iso-contours)</span>
+    </div>
+  </div>
+</div>
+
+<div class="kid">
+  <span class="tag">🍼 What you should SEE</span>
+  <ul>
+    <li>Set $\gamma=0$: the rings are <b>perfect circles</b> — the picture is invisible to the distance.</li>
+    <li>Turn $\gamma$ up: the rings <b>squeeze through the doorway</b> in the wall, like water flooding a room.</li>
+    <li>The bright disc becomes an <b>island</b>: colours inside it are far away even though they are close on paper.</li>
+  </ul>
+</div>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #3</span>
+  <p>Iso-contours of a geodesic distance map are <b>not</b> circles and are <b>not</b> necessarily connected-looking
+  around obstacles — they are wavefronts. This is literally the Eikonal equation $\|\nabla D\|=1/\text{speed}$
+  being solved. "Fast marching / fast sweeping" solve exactly this.</p>
+</div>
+
+<!-- ===================== 6 ===================== -->
+<h2><span class="num">6</span>Use #1 — Colorization (Ch. 9)</h2>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version</span>
+  <p>You have a grey photo. You scribble <span style="color:#ff5b5b">red</span> on the apple and
+  <span style="color:#5b9bff">blue</span> on the sky. Every other pixel asks:
+  <b>"which scribble is closest — for an ant?"</b> and takes mostly that colour.</p>
+</div>
+
+<div class="math">
+  <span class="tag">🎓 The blending formula</span>
+  <div>$$c(x)=\frac{\sum_k W\!\big(D_k(x)\big)\,c_k}{\sum_k W\!\big(D_k(x)\big)},
+  \qquad W(D)=\frac{1}{D^{\,b}},\quad b\in[1,6]$$</div>
+  <p>It is a <b>convex combination</b> (weights are positive and sum to 1) — so the result always lands
+  inside the set of scribble colours. Never a colour nobody scribbled.</p>
+  <p><b>Why $1/D^b$?</b> Because we need $\dfrac{W(D+\varepsilon)}{W(D)}\to 0$ behaviour at the right places:
+  a far scribble's vote must die out. Bigger $b$ = faster death = <b>sharper</b> boundary.
+  Smaller $b$ = <b>smoother</b>, mushier transition.</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 5 — scribble colorization, live</h4>
+    <span class="hint">click to move the selected scribble</span></div>
+  <div class="demo-body">
+    <canvas id="c5" width="880" height="330"></canvas>
+    <div class="controls">
+      <div class="ctrl">
+        <label>$b$ — sharpness exponent <span class="val" id="v5b">2.0</span></label>
+        <input type="range" id="s5b" min="2" max="60" value="20">
+      </div>
+      <div class="ctrl">
+        <label>$\gamma$ — wall height <span class="val" id="v5g">6.0</span></label>
+        <input type="range" id="s5g" min="0" max="200" value="60">
+      </div>
+    </div>
+    <div class="btnrow">
+      <span class="muted" style="font-size:12.5px">move scribble:</span>
+      <button class="btn on" data-sc="0" style="border-color:#e5484d">① red</button>
+      <button class="btn" data-sc="1" style="border-color:#3b82f6">② blue</button>
+      <button class="btn" data-sc="2" style="border-color:#22c55e">③ green</button>
+    </div>
+    <div class="readout" id="r5"></div>
+  </div>
+</div>
+
+<div class="kid">
+  <span class="tag">🍼 What you should SEE</span>
+  <ul>
+    <li>Big $b$ → hard colour borders that snap onto the object edges.</li>
+    <li>Small $b$ → colours bleed into each other like watercolour.</li>
+    <li>$\gamma=0$ → colours ignore the objects completely (just nearest-scribble Voronoi cells). This is
+    <b>exactly why the course uses geodesic and not Euclidean</b>.</li>
+  </ul>
+</div>
+
+<!-- ===================== 7 ===================== -->
+<h2><span class="num">7</span>Use #2 — Matting / trimap (Ch. 10)</h2>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version</span>
+  <p>Two scribbles now: one means <b>"this is the thing I want"</b> (FG), one means <b>"this is junk"</b> (BG).
+  Every pixel asks the ant: <b>"am I closer to the thing, or to the junk?"</b>
+  If it's a close call, we mark it <b>"don't know"</b> and deal with it later.</p>
+</div>
+
+<div class="math">
+  <span class="tag">🎓 Exactly as in the notes</span>
+  <div>$$V_F=\{x:D_F(x)<D_B(x)\},\qquad V_B=\{x:D_F(x)>D_B(x)\},\qquad \Delta=\{x:D_F(x)=D_B(x)\}$$</div>
+  <div>$$B_\rho(\Delta)=\bigcup_{x\in\Delta}B_\rho(x)\;\Longleftrightarrow\;
+  x\in B_\rho(\Delta)\iff \exists y\in\Delta:\ \|x-y\|\le\rho$$</div>
+  <div>$$\alpha_T(x)=\begin{cases}
+  1 & x\in V_F\setminus B_\rho(\Delta)\\
+  0 & x\in V_B\setminus B_\rho(\Delta)\\
+  \varphi & x\in B_\rho(\Delta)\ \text{(unknown)}\end{cases}$$</div>
+  <p><b>Note:</b> here the underlying field driving the geodesic distance is <b>not</b> luminance — it is the
+  posterior $P(F|c)$ from the KDE step. Same machinery, different "image".</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 6 — trimap from two distance maps</h4>
+    <span class="hint">drag FG / BG seeds, slide ρ</span></div>
+  <div class="demo-body">
+    <canvas id="c6" width="880" height="330"></canvas>
+    <div class="controls">
+      <div class="ctrl">
+        <label>$\rho$ — unknown-band radius <span class="val" id="v6r">10</span></label>
+        <input type="range" id="s6r" min="0" max="40" value="10">
+      </div>
+      <div class="ctrl">
+        <label>$\gamma$ — wall height <span class="val" id="v6g">6.0</span></label>
+        <input type="range" id="s6g" min="0" max="200" value="60">
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn on" data-mt="0" style="border-color:#3fb950">move FG seed</button>
+      <button class="btn" data-mt="1" style="border-color:#9aa7b4">move BG seed</button>
+    </div>
+    <div class="readout" id="r6"></div>
+    <div class="legend">
+      <span><i style="background:#3fb950"></i>$\alpha_T=1$ sure foreground</span>
+      <span><i style="background:#4a5261"></i>$\alpha_T=0$ sure background</span>
+      <span><i style="background:#f59e0b"></i>$\alpha_T=\varphi$ unknown band $B_\rho(\Delta)$</span>
+    </div>
+  </div>
+</div>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #4 — why is $\Delta$ "usually empty"?</span>
+  <p>Because $D_F(x)=D_B(x)$ <b>exactly</b> is a measure-zero event on a discrete grid — floating point ties
+  essentially never happen. So in practice you find $\Delta$ by <b>interpolation</b> (sign change of
+  $D_F-D_B$ between neighbouring pixels), not by testing equality. Say this sentence and you get the point.</p>
+</div>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #5 — choosing $\rho$</span>
+  <p>Too small → band is 1 px wide, the opacity map cannot represent soft hair/motion blur.
+  Too large → most of the image is "unknown" and you gave the hard problem back to yourself.
+  Typical $\rho\approx 5\!-\!15$ px.</p>
+</div>
+
+<!-- ===================== 8 ===================== -->
+<h2><span class="num">8</span>How is $D_k$ actually computed? Bellman → Dijkstra</h2>
+
+<div class="kid">
+  <span class="tag">🍼 Baby version of Bellman</span>
+  <p>If the cheapest road from your house to school goes past the bakery, then the piece
+  <b>house → bakery</b> must itself be the cheapest way to the bakery.
+  Otherwise you'd swap it for a cheaper one and get a cheaper total — which contradicts "cheapest".</p>
+</div>
+
+<div class="math">
+  <span class="tag">🎓 Bellman's principle of optimality</span>
+  <p>If $P^*$ is optimal $x\to y$ and $z\in P^*$, then $P^*_{xz}$ and $P^*_{zy}$ are optimal too. Proof by contradiction:</p>
+  <div>$$L(P_1')<L(P_1^*)\ \Longrightarrow\ L(P_1'\!\cdot\!P_2^*)<L(P^*)\quad\text{contradiction.}$$</div>
+  <p>Consequence — the local recursion that Dijkstra implements:</p>
+  <div>$$D(x)=\min_{z\in N_1(x)}\big[\,L(x,z)+D(z)\,\big]$$</div>
+  <p>Without Bellman you'd have to enumerate exponentially many paths. With it: $O(N\log N)$.</p>
+</div>
+
+<div class="demo">
+  <div class="demo-head"><span class="dot"></span><h4>Demo 7 — Dijkstra, one step at a time</h4>
+    <span class="hint">press Step</span></div>
+  <div class="demo-body">
+    <canvas id="c7" width="880" height="360"></canvas>
+    <div class="btnrow">
+      <button class="btn" id="b7step">▶ Step</button>
+      <button class="btn" id="b7run">⏩ Run</button>
+      <button class="btn" id="b7reset">⟲ Reset</button>
+    </div>
+    <div class="readout" id="r7"></div>
+    <div class="legend">
+      <span><i style="background:#3fb950"></i>settled (final $D$)</span>
+      <span><i style="background:#f59e0b"></i>frontier (tentative $D$)</span>
+      <span><i style="background:#2b3543"></i>untouched ($D=\infty$)</span>
+      <span><i style="background:#58a6ff"></i>just popped</span>
+    </div>
+  </div>
+</div>
+
+<table>
+<tr><th>Algorithm</th><th>Idea</th><th>Cost</th><th>When to use</th></tr>
+<tr><td><b>Dijkstra</b></td><td>priority queue, always expand the cheapest frontier node</td><td>$O(N\log N)$</td>
+    <td>Exact on the graph; easy; the default answer on an exam.</td></tr>
+<tr><td><b>Fast sweeping</b></td><td>a few raster sweeps (↘ ↙ ↖ ↗) updating $D$ in place</td><td>$O(N)$, cache-friendly</td>
+    <td>Real time / video. Mentioned in Ch. 9–10 as the fast substitute.</td></tr>
+<tr><td><b>Fast marching</b></td><td>Dijkstra-like but solves the Eikonal PDE → no grid-direction bias</td><td>$O(N\log N)$</td>
+    <td>When you need a continuous, isotropic distance.</td></tr>
+</table>
+
+<div class="warnbox">
+  <span class="tag">⚠ Exam trap #6</span>
+  <p>Dijkstra requires <b>non-negative</b> edge weights. Our weights are $\sqrt{\cdot}$ or $|\cdot|$ — always $\ge0$. Fine.
+  Also: with 4-neighbours you get "Manhattan-flavoured" artefacts; 8-neighbours with $\sqrt2$ diagonal weights is the
+  usual fix (and still not perfectly isotropic — that's what fast marching solves).</p>
+</div>
+
+<!-- ===================== 9 ===================== -->
+<h2><span class="num">9</span>One-page cheat sheet</h2>
+
+<div class="card">
+<table>
+<tr><th>Symbol</th><th>Name</th><th>In baby words</th></tr>
+<tr><td>$Y$</td><td>luminance channel</td><td>the grey picture the ant walks on</td></tr>
+<tr><td>$\nabla Y$</td><td>gradient</td><td>where the walls are, and which way they face</td></tr>
+<tr><td>$p(s)$, $\dot p(s)$</td><td>path and its tangent</td><td>the road, and the direction you're walking</td></tr>
+<tr><td>$L(p)$</td><td>path length (weighted)</td><td>the total tiredness bill for that road</td></tr>
+<tr><td>$d_L(x,y)$</td><td>geodesic distance</td><td>the bill of the <b>cheapest</b> road</td></tr>
+<tr><td>$\Omega_k$</td><td>scribble $k$</td><td>the crayon mark the user drew</td></tr>
+<tr><td>$D_k(x)$</td><td>distance map</td><td>for every pixel: how tired to reach scribble $k$</td></tr>
+<tr><td>$W(D)=1/D^b$</td><td>weight function</td><td>how loudly a scribble votes; far = quiet</td></tr>
+<tr><td>$b$</td><td>sharpness</td><td>big $b$ = crisp borders, small $b$ = soft blend</td></tr>
+<tr><td>$\gamma$</td><td>edge weight</td><td>how tall the walls are; $\gamma=0$ ⇒ Euclidean</td></tr>
+<tr><td>$D_F,D_B$</td><td>FG/BG distance maps</td><td>tiredness to the "keep" mark vs the "junk" mark</td></tr>
+<tr><td>$\Delta$</td><td>equidistant set</td><td>the tie line, $D_F=D_B$</td></tr>
+<tr><td>$\rho$</td><td>band radius</td><td>how wide the "I'm not sure" stripe is</td></tr>
+<tr><td>$\alpha_T$</td><td>trimap</td><td>1 = keep, 0 = junk, $\varphi$ = don't know yet</td></tr>
+</table>
+</div>
+
+<h3>The 6 sentences that get you the marks</h3>
+<ol>
+  <li>Geodesic distance = shortest-path distance under an <b>image-defined metric</b>; edges are expensive, flat regions cheap.</li>
+  <li>$L(p)=\int|\langle\dot p,\nabla Y\rangle|dl$ is <b>not a geometric length</b> — the dot product charges only for <b>crossing</b> edges, so travelling <b>along</b> an edge is free.</li>
+  <li>$\gamma=0$ reduces the metric to Euclidean; large $\gamma$ makes it purely image-driven.</li>
+  <li>The distance map $D_k(x)=d_L(x,\Omega_k)$ is computed by dynamic programming (Bellman) → Dijkstra $O(N\log N)$, or fast sweeping $O(N)$ for real time.</li>
+  <li>Colorization blends scribble colours with $W(D)=1/D^b$ — a convex combination; $b$ controls smoothness.</li>
+  <li>Matting classifies by $D_F\lessgtr D_B$, and marks a band of radius $\rho$ around the tie set $\Delta$ as unknown $\varphi$.</li>
+</ol>
+
+<!-- ===================== 10 ===================== -->
+<h2><span class="num">10</span>Test yourself (click to reveal)</h2>
+
+<div id="cards">
+<div class="fc"><div class="q">Q1. Two pixels are 3 px apart but on opposite sides of a strong edge. Is their geodesic distance small or large?</div>
+<div class="a">Large. Euclidean is 3 px, but any path must cross the edge and pay $\gamma|\langle\dot p,\nabla Y\rangle|$. That is the whole point: geodesic separates objects that are spatially adjacent.</div></div>
+
+<div class="fc"><div class="q">Q2. What happens to the colorization result if you set $\gamma=0$?</div>
+<div class="a">The metric becomes Euclidean, so $D_k$ are plain distance transforms and the blend becomes a soft Voronoi diagram of the scribbles. Colour bleeds straight across every object boundary. Useless for colorization — this is the motivation for the geodesic metric.</div></div>
+
+<div class="fc"><div class="q">Q3. Why $W(D)=1/D^b$ and not $W(D)=e^{-D}$?</div>
+<div class="a">Both are valid decaying weights and the notes say "for example, an exponentially decaying function". The paper picked $1/D^b$, $b\in[1,6]$. What matters for the exam: $W$ must be positive and decreasing, must satisfy $W(D+\varepsilon)/W(D)\to0$ as $D\to\infty$ so far scribbles stop voting, and its decay rate controls transition smoothness. Also $1/D^b$ blows up at $D\to0$, which pins the colour exactly on the scribble ($c(x)\to c_k$) — a nice built-in hard constraint.</div></div>
+
+<div class="fc"><div class="q">Q4. Increase $b$ from 1 to 6 — what changes visually?</div>
+<div class="a">Transitions get sharper. At $b=6$ the closest scribble dominates almost completely (near-nearest-neighbour labelling); at $b=1$ you get long, soft gradients between scribble colours.</div></div>
+
+<div class="fc"><div class="q">Q5. State Bellman's principle and why we need it here.</div>
+<div class="a">Any sub-path of an optimal path is optimal. Proof by contradiction (swap the sub-path for a cheaper one → cheaper total → contradiction). It gives the recursion $D(x)=\min_{z\in N_1(x)}[L(x,z)+D(z)]$, turning an exponential path enumeration into a polynomial DP — Dijkstra / fast sweeping.</div></div>
+
+<div class="fc"><div class="q">Q6. In matting, which field is the geodesic distance computed over?</div>
+<div class="a">Not the raw image — over the foreground posterior $P(F|c)$ obtained from KDE + Bayes. Same machinery as colorization, different underlying "image". This lets spatial proximity break ties when FG and BG colours overlap (brown jacket on brown sofa).</div></div>
+
+<div class="fc"><div class="q">Q7. Why is the set $\Delta=\{D_F=D_B\}$ usually empty, and what do we do?</div>
+<div class="a">Exact equality of two floats on a discrete grid is a measure-zero event. We locate $\Delta$ by interpolation — find neighbouring pixels where $D_F-D_B$ changes sign, then place the boundary between them (sub-pixel by linear interpolation).</div></div>
+
+<div class="fc"><div class="q">Q8. Give the complexity of Dijkstra vs fast sweeping and when you'd choose each.</div>
+<div class="a">Dijkstra $O(N\log N)$ with a heap, exact for the graph metric, simple. Fast sweeping $O(N)$ with a small constant, done as a handful of raster sweeps in alternating directions, cache-friendly and parallelisable — pick it for video / real-time.</div></div>
+
+<div class="fc"><div class="q">Q9. Your colorized region "leaks" through a boundary. Name three fixes.</div>
+<div class="a">(1) Raise $\gamma$ so the boundary costs more. (2) Raise $b$ so distant scribbles stop voting. (3) Add a scribble inside the leaking region — geodesic distance grows slowly inside a large homogeneous region, so big regions need their own seed. (Also: pre-smooth $Y$ to strengthen real edges vs. noise.)</div></div>
+
+<div class="fc"><div class="q">Q10. Is $d_L$ a true metric?</div>
+<div class="a">With the $\gamma$-form ($\sqrt{1+\gamma^2\langle\cdot\rangle^2}$) yes: non-negative, symmetric, triangle inequality holds (it's a path-infimum), and $d_L(x,y)=0\iff x=y$ since the integrand is $\ge1$. With the pure $|\langle\dot p,\nabla Y\rangle|$ form it is only a <b>pseudo-metric</b>: distinct points inside one flat region have distance 0.</div></div>
+</div>
+
+<p class="muted" style="margin-top:34px;font-size:12.5px">Companion to Ch. 9 (Video Colorization) and Ch. 10 (Video Matting).
+Every demo runs real Dijkstra on a real 8-connected grid — nothing here is faked.</p>
+
+</div>
+
+<script>
+/* ============================================================
+   Shared: synthetic image + geodesic Dijkstra
+   ============================================================ */
+const IW = 220, IH = 150;
+const IMG = new Float32Array(IW*IH);
+
+(function makeImage(){
+  for(let y=0;y<IH;y++)for(let x=0;x<IW;x++){
+    let v = 0.34 + 0.06*Math.sin(x*0.035) + 0.04*Math.cos(y*0.05);   // soft background
+    // bright disc ("apple")
+    const dx=x-IW*0.235, dy=y-IH*0.50, r=Math.hypot(dx,dy);
+    if(r < IW*0.115) v = 0.90 - 0.10*(r/(IW*0.115));
+    // dark vertical wall with a doorway
+    if(x> IW*0.505 && x < IW*0.555 && !(y>IH*0.44 && y<IH*0.58)) v = 0.06;
+    // medium blob on the right
+    const ex=(x-IW*0.78)/(IW*0.13), ey=(y-IH*0.34)/(IH*0.20);
+    if(ex*ex+ey*ey < 1) v = 0.62;
+    // horizontal ledge bottom-right
+    if(x>IW*0.60 && y>IH*0.76 && y<IH*0.80) v = 0.14;
+    IMG[y*IW+x]=v;
+  }
+})();
+
+// gradient magnitude (for demo 2 / drawing)
+const GMAG = new Float32Array(IW*IH);
+(function grad(){
+  for(let y=0;y<IH;y++)for(let x=0;x<IW;x++){
+    const xm=Math.max(0,x-1), xp=Math.min(IW-1,x+1);
+    const ym=Math.max(0,y-1), yp=Math.min(IH-1,y+1);
+    const gx=(IMG[y*IW+xp]-IMG[y*IW+xm])*0.5;
+    const gy=(IMG[yp*IW+x]-IMG[ym*IW+x])*0.5;
+    GMAG[y*IW+x]=Math.hypot(gx,gy);
+  }
+})();
+
+/* --- binary min-heap keyed by float --- */
+function Heap(){ this.k=[]; this.v=[]; }
+Heap.prototype.push=function(key,val){
+  this.k.push(key); this.v.push(val);
+  let i=this.k.length-1;
+  while(i>0){ const p=(i-1)>>1; if(this.k[p]<=this.k[i]) break;
+    [this.k[p],this.k[i]]=[this.k[i],this.k[p]]; [this.v[p],this.v[i]]=[this.v[i],this.v[p]]; i=p; }
+};
+Heap.prototype.pop=function(){
+  const n=this.k.length-1, tk=this.k[0], tv=this.v[0];
+  this.k[0]=this.k[n]; this.v[0]=this.v[n]; this.k.pop(); this.v.pop();
+  let i=0;
+  for(;;){ const l=2*i+1, r=l+1; let s=i;
+    if(l<this.k.length && this.k[l]<this.k[s]) s=l;
+    if(r<this.k.length && this.k[r]<this.k[s]) s=r;
+    if(s===i) break;
+    [this.k[s],this.k[i]]=[this.k[i],this.k[s]]; [this.v[s],this.v[i]]=[this.v[i],this.v[s]]; i=s; }
+  return [tk,tv];
+};
+Heap.prototype.size=function(){ return this.k.length; };
+
+const NB = [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,Math.SQRT2],[1,-1,Math.SQRT2],[-1,1,Math.SQRT2],[-1,-1,Math.SQRT2]];
+
+/* Geodesic distance map from a list of seed indices.
+   Edge cost between a,b : sqrt(dL^2 + gamma^2 * (I(b)-I(a))^2)
+   (discrete form of  sqrt(1 + gamma^2 <p_dot, grad I>^2) ds )
+   Returns {D, par} where par = predecessor index (-1 at seeds). */
+function geodesic(seeds, gamma){
+  const N=IW*IH;
+  const D=new Float32Array(N).fill(Infinity);
+  const par=new Int32Array(N).fill(-1);
+  const done=new Uint8Array(N);
+  const h=new Heap();
+  for(const s of seeds){ D[s]=0; h.push(0,s); }
+  while(h.size()){
+    const [d,i]=h.pop();
+    if(done[i]) continue;
+    done[i]=1;
+    const x=i%IW, y=(i/IW)|0, Ii=IMG[i];
+    for(let n=0;n<8;n++){
+      const nx=x+NB[n][0], ny=y+NB[n][1];
+      if(nx<0||ny<0||nx>=IW||ny>=IH) continue;
+      const j=ny*IW+nx;
+      if(done[j]) continue;
+      // discrete form of  sqrt( 1 + gamma^2 <p_dot, grad I>^2 ) ds
+      //   dL  = |ds|                (1 for axis steps, sqrt(2) for diagonals)
+      //   dv  = <p_dot, grad I> dL  (the intensity jump actually experienced by this step)
+      const dL=NB[n][2];
+      const dv=IMG[j]-Ii;
+      const K=100;                                 // scale so gamma in [0,20] is a useful range
+      const c = Math.sqrt(dL*dL + gamma*gamma*dv*dv*K);
+      const nd = d + c;
+      if(nd < D[j]){ D[j]=nd; par[j]=i; h.push(nd,j); }
+    }
+  }
+  return {D,par};
+}
+
+/* --- colour helpers --- */
+function heatColor(t){                       // 0 -> near white/blue, 1 -> deep purple
+  t=Math.max(0,Math.min(1,t));
+  const stops=[[240,249,255],[125,211,252],[56,189,248],[245,158,11],[190,24,93],[59,7,100]];
+  const f=t*(stops.length-1), i=Math.min(stops.length-2,Math.floor(f)), a=f-i;
+  return [ stops[i][0]+(stops[i+1][0]-stops[i][0])*a,
+           stops[i][1]+(stops[i+1][1]-stops[i][1])*a,
+           stops[i][2]+(stops[i+1][2]-stops[i][2])*a ];
+}
+function blitScaled(ctx, buf, w, h){          // buf = Uint8ClampedArray RGBA of size w*h*4
+  const off=document.createElement('canvas'); off.width=w; off.height=h;
+  off.getContext('2d').putImageData(new ImageData(buf,w,h),0,0);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(off,0,0,ctx.canvas.width,ctx.canvas.height);
+}
+function greyBuf(){
+  const b=new Uint8ClampedArray(IW*IH*4);
+  for(let i=0;i<IW*IH;i++){ const g=IMG[i]*255; b[4*i]=g;b[4*i+1]=g;b[4*i+2]=g;b[4*i+3]=255; }
+  return b;
+}
+function canvasPos(cv,e){
+  const r=cv.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const cy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  return [cx/r.width, cy/r.height];           // normalised 0..1
+}
+
+/* ============================================================
+   DEMO 1 — ant, wall, door (cartoon, own little grid)
+   ============================================================ */
+(function demo1(){
+  const cv=document.getElementById('c1'), ctx=cv.getContext('2d');
+  const GW=44, GH=19;                          // cartoon grid
+  const wall=(gx,gy)=> gx===22 && !(gy>=8 && gy<=10);
+  let start=[6,9], goal=[38,4], wallCost=100;
+  const s1=document.getElementById('s1'), v1=document.getElementById('v1'), r1=document.getElementById('r1');
+
+  function dijk(){
+    const N=GW*GH, D=new Float32Array(N).fill(Infinity), par=new Int32Array(N).fill(-1), done=new Uint8Array(N);
+    const h=new Heap(); const si=start[1]*GW+start[0]; D[si]=0; h.push(0,si);
+    while(h.size()){
+      const [d,i]=h.pop(); if(done[i])continue; done[i]=1;
+      const x=i%GW,y=(i/GW)|0;
+      for(const [dx,dy,dl] of NB){
+        const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
+        const j=ny*GW+nx; if(done[j])continue;
+        const c = dl + (wall(nx,ny)?wallCost:0) + (wall(x,y)?wallCost:0);
+        if(d+c<D[j]){ D[j]=d+c; par[j]=i; h.push(d+c,j); }
+      }
+    }
+    return {D,par};
+  }
+  function straightCost(){                     // cost you'd pay walking the ruler line
+    let c=0, steps=200;
+    for(let k=1;k<=steps;k++){
+      const t=k/steps;
+      const gx=Math.round(start[0]+(goal[0]-start[0])*t), gy=Math.round(start[1]+(goal[1]-start[1])*t);
+      const seg=Math.hypot(goal[0]-start[0],goal[1]-start[1])/steps;
+      c += seg + (wall(gx,gy)? wallCost*seg : 0);
+    }
+    return c;
+  }
+  function draw(){
+    const {D,par}=dijk();
+    const cw=cv.width/GW, ch=cv.height/GH;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      ctx.fillStyle = wall(x,y) ? '#3b4453' : (((x+y)&1)?'#12181f':'#141b23');
+      ctx.fillRect(x*cw,y*ch,cw-1,ch-1);
+    }
+    // straight line
+    ctx.strokeStyle='#f85149'; ctx.lineWidth=3; ctx.setLineDash([7,5]);
+    ctx.beginPath(); ctx.moveTo((start[0]+.5)*cw,(start[1]+.5)*ch);
+    ctx.lineTo((goal[0]+.5)*cw,(goal[1]+.5)*ch); ctx.stroke(); ctx.setLineDash([]);
+    // geodesic path
+    let i=goal[1]*GW+goal[0]; const pts=[];
+    let guard=0;
+    while(i>=0 && guard++<5000){ pts.push([(i%GW+.5)*cw, (((i/GW)|0)+.5)*ch]); i=par[i]; }
+    ctx.strokeStyle='#3fb950'; ctx.lineWidth=4; ctx.lineJoin='round'; ctx.beginPath();
+    pts.forEach((p,k)=> k? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.stroke();
+    // markers
+    ctx.font='bold 22px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🐜',(start[0]+.5)*cw,(start[1]+.5)*ch);
+    ctx.fillText('🍬',(goal[0]+.5)*cw,(goal[1]+.5)*ch);
+
+    const gd=D[goal[1]*GW+goal[0]], sd=straightCost();
+    const eu=Math.hypot(goal[0]-start[0],goal[1]-start[1]);
+    r1.innerHTML='Ruler (Euclidean) distance: <b style="color:#f85149">'+eu.toFixed(1)+'</b> steps &nbsp;·&nbsp; '+
+      'cost if you insist on the straight line: <b style="color:#f85149">'+sd.toFixed(1)+'</b> &nbsp;·&nbsp; '+
+      'geodesic distance (cheapest road): <b style="color:#3fb950">'+gd.toFixed(1)+'</b>'+
+      (wallCost===0? ' &nbsp;— <b>walls cost nothing → the two agree: geodesic = Euclidean.</b>' :
+       (gd<sd-0.5? ' &nbsp;— going <b>around through the door</b> is cheaper.' : ''));
+  }
+  cv.addEventListener('pointerdown',e=>{
+    const [u,v]=canvasPos(cv,e);
+    const gx=Math.min(GW-1,Math.max(0,Math.floor(u*GW))), gy=Math.min(GH-1,Math.max(0,Math.floor(v*GH)));
+    if(!wall(gx,gy)){ goal=[gx,gy]; draw(); }
+  });
+  s1.addEventListener('input',()=>{ wallCost=+s1.value;
+    v1.textContent = wallCost===0?'zero':(wallCost<20?'tiny':(wallCost<60?'medium':'high')); draw(); });
+  draw();
+})();
+
+/* ============================================================
+   DEMO 2 — image and its gradient magnitude
+   ============================================================ */
+(function demo2(){
+  const cv=document.getElementById('c2'), ctx=cv.getContext('2d'), r2=document.getElementById('r2');
+  const halfW=cv.width/2;
+  function draw(hover){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    // left: image
+    const b1=greyBuf();
+    const off=document.createElement('canvas'); off.width=IW; off.height=IH;
+    off.getContext('2d').putImageData(new ImageData(b1,IW,IH),0,0);
+    ctx.drawImage(off,0,0,halfW-4,cv.height);
+    // right: gradient magnitude
+    const b2=new Uint8ClampedArray(IW*IH*4);
+    let gmax=0; for(let i=0;i<IW*IH;i++) gmax=Math.max(gmax,GMAG[i]);
+    for(let i=0;i<IW*IH;i++){
+      const t=Math.min(1,GMAG[i]/(gmax*0.6));
+      b2[4*i]=255*t; b2[4*i+1]=200*t; b2[4*i+2]=60*t; b2[4*i+3]=255;
+    }
+    const off2=document.createElement('canvas'); off2.width=IW; off2.height=IH;
+    off2.getContext('2d').putImageData(new ImageData(b2,IW,IH),0,0);
+    ctx.drawImage(off2,halfW+4,0,halfW-4,cv.height);
+    ctx.fillStyle='#9aa7b4'; ctx.font='12px system-ui'; ctx.textAlign='left';
+    ctx.fillText('Y  (the picture)',10,18);
+    ctx.fillText('‖∇Y‖  (the walls)',halfW+14,18);
+    if(hover){
+      const [ix,iy]=hover;
+      [0,halfW+4].forEach(ox=>{
+        ctx.strokeStyle='#58a6ff'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(ox+(ix/IW)*(halfW-4),(iy/IH)*cv.height,7,0,7); ctx.stroke();
+      });
+    }
+  }
+  cv.addEventListener('pointermove',e=>{
+    const [u,v]=canvasPos(cv,e);
+    let ix, iy=Math.floor(v*IH);
+    if(u<0.5) ix=Math.floor(u*2*IW); else ix=Math.floor((u-0.5)*2*IW);
+    ix=Math.max(0,Math.min(IW-1,ix)); iy=Math.max(0,Math.min(IH-1,iy));
+    const i=iy*IW+ix;
+    r2.innerHTML='Y = <b>'+(IMG[i]*255).toFixed(0)+'</b> &nbsp;·&nbsp; ‖∇Y‖ = <b>'+(GMAG[i]*255).toFixed(1)+'</b> &nbsp;→ '+
+      (GMAG[i]*255>6 ? '<b style="color:#f59e0b">WALL — crossing here is expensive</b>'
+                     : '<b style="color:#3fb950">flat — walking here is nearly free</b>');
+    draw([ix,iy]);
+  });
+  draw(null);
+})();
+
+/* ============================================================
+   DEMO 3 — across vs along the edge (dot product)
+   ============================================================ */
+(function demo3(){
+  const cv=document.getElementById('c3'), ctx=cv.getContext('2d'), r3=document.getElementById('r3');
+  let ang=0.0;                                  // direction of the step
+  const cx=cv.width*0.5, cy=cv.height*0.5, R=110;
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    // background: dark on the left of the edge, bright on the right
+    const grad=ctx.createLinearGradient(cx-60,0,cx+60,0);
+    grad.addColorStop(0,'#1a222c'); grad.addColorStop(1,'#c9d4e0');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,cv.width,cv.height);
+    // gradient vector (points across, to the right)
+    ctx.strokeStyle='#f59e0b'; ctx.lineWidth=4;
+    arrow(ctx,cx,cy,cx+90,cy); ctx.fillStyle='#f59e0b'; ctx.font='bold 14px system-ui';
+    ctx.textAlign='left'; ctx.fillText('∇Y  (across the edge)',cx+96,cy-8);
+    // step direction
+    const ex=cx+R*Math.cos(ang), ey=cy+R*Math.sin(ang);
+    ctx.strokeStyle='#58a6ff'; ctx.lineWidth=4; arrow(ctx,cx,cy,ex,ey);
+    ctx.fillStyle='#58a6ff'; ctx.fillText('ṗ  (my step)',ex+8,ey+4);
+    // the edge line
+    ctx.strokeStyle='#e6edf3'; ctx.setLineDash([6,6]); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,cv.height); ctx.stroke(); ctx.setLineDash([]);
+    const dot=Math.abs(Math.cos(ang));
+    r3.innerHTML='|⟨ṗ, ∇Y⟩| = |cos θ| = <b>'+dot.toFixed(2)+'</b> &nbsp;→ &nbsp;'+
+      (dot<0.15? '<b style="color:#3fb950">walking ALONG the edge → cost ≈ 0, FREE</b>'
+       : dot>0.85? '<b style="color:#f85149">walking straight ACROSS the edge → MAXIMUM cost</b>'
+       : '<b style="color:#f59e0b">diagonal → partial cost</b>')+
+       ' &nbsp;<span class="muted">(drag the blue arrow)</span>';
+  }
+  function arrow(c,x0,y0,x1,y1){
+    c.beginPath(); c.moveTo(x0,y0); c.lineTo(x1,y1); c.stroke();
+    const a=Math.atan2(y1-y0,x1-x0);
+    c.beginPath(); c.moveTo(x1,y1);
+    c.lineTo(x1-12*Math.cos(a-0.4),y1-12*Math.sin(a-0.4));
+    c.lineTo(x1-12*Math.cos(a+0.4),y1-12*Math.sin(a+0.4));
+    c.closePath(); c.fillStyle=c.strokeStyle; c.fill();
+  }
+  let drag=false;
+  const upd=e=>{ const r=cv.getBoundingClientRect();
+    const mx=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width*cv.width;
+    const my=((e.touches?e.touches[0].clientY:e.clientY)-r.top)/r.height*cv.height;
+    ang=Math.atan2(my-cy,mx-cx); draw(); };
+  cv.addEventListener('pointerdown',e=>{drag=true;upd(e);});
+  cv.addEventListener('pointermove',e=>{if(drag)upd(e);});
+  window.addEventListener('pointerup',()=>drag=false);
+  draw();
+})();
+
+/* ============================================================
+   DEMO 4 — the big playground: distance map
+   ============================================================ */
+let D4=null;
+(function demo4(){
+  const cv=document.getElementById('c4'), ctx=cv.getContext('2d');
+  const s4g=document.getElementById('s4g'), v4g=document.getElementById('v4g');
+  const s4r=document.getElementById('s4r'), v4r=document.getElementById('v4r');
+  const r4=document.getElementById('r4');
+  const bRings=document.getElementById('b4rings'), bPath=document.getElementById('b4path'), bReset=document.getElementById('b4reset');
+  let seed=[Math.round(IW*0.235), Math.round(IH*0.50)];
+  let rings=true, showPath=true, cursor=null;
+
+  function gamma(){ return +s4g.value/10; }
+
+  function compute(){
+    D4=geodesic([seed[1]*IW+seed[0]], gamma());
+    draw();
+  }
+  function draw(){
+    const {D,par}=D4;
+    let dmax=0; for(let i=0;i<IW*IH;i++) if(isFinite(D[i])) dmax=Math.max(dmax,D[i]);
+    const step=+s4r.value;
+    const b=new Uint8ClampedArray(IW*IH*4);
+    for(let i=0;i<IW*IH;i++){
+      const d=D[i];
+      let [r,g,bl]=heatColor(d/dmax);
+      if(rings && (d/step)%1 < 0.10){ r*=0.25; g*=0.25; bl*=0.25; }   // iso-contour
+      // faint image structure overlay so you still see the objects
+      const s=0.72+0.28*IMG[i];
+      b[4*i]=r*s; b[4*i+1]=g*s; b[4*i+2]=bl*s; b[4*i+3]=255;
+    }
+    blitScaled(ctx,b,IW,IH);
+    const sx=cv.width/IW, sy=cv.height/IH;
+    // shortest path to cursor
+    if(showPath && cursor){
+      let i=cursor[1]*IW+cursor[0], guard=0;
+      ctx.strokeStyle='#00ffc3'; ctx.lineWidth=3; ctx.beginPath();
+      let first=true;
+      while(i>=0 && guard++<IW*IH){
+        const x=(i%IW+0.5)*sx, y=(((i/IW)|0)+0.5)*sy;
+        first? (ctx.moveTo(x,y),first=false) : ctx.lineTo(x,y);
+        i=par[i];
+      }
+      ctx.stroke();
+    }
+    // seed marker
+    ctx.strokeStyle='#fff'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc((seed[0]+0.5)*sx,(seed[1]+0.5)*sy,9,0,7); ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 12px system-ui'; ctx.textAlign='center';
+    ctx.fillText('Ωk',(seed[0]+0.5)*sx,(seed[1]+0.5)*sy-15);
+
+    let msg='γ = <b>'+gamma().toFixed(1)+'</b> &nbsp;·&nbsp; max D = <b>'+dmax.toFixed(1)+'</b>';
+    if(cursor){
+      const i=cursor[1]*IW+cursor[0];
+      const eu=Math.hypot(cursor[0]-seed[0],cursor[1]-seed[1]);
+      msg += ' &nbsp;·&nbsp; at cursor: Euclidean = <b>'+eu.toFixed(1)+'</b>, geodesic D = <b style="color:#00ffc3">'+
+             D[i].toFixed(1)+'</b> &nbsp;(ratio '+(D[i]/Math.max(eu,0.001)).toFixed(2)+'×)';
+    }
+    if(gamma()===0) msg+=' &nbsp;— <b style="color:#f59e0b">γ=0 ⇒ the picture is invisible ⇒ this IS Euclidean distance</b>'+
+      ' <span class="muted">(rings are slight octagons — the 8-neighbour grid bias of exam trap #6, ≈8% max)</span>';
+    r4.innerHTML=msg;
+  }
+  let painting=false;
+  function toImg(e){ const [u,v]=canvasPos(cv,e);
+    return [Math.max(0,Math.min(IW-1,Math.floor(u*IW))), Math.max(0,Math.min(IH-1,Math.floor(v*IH)))]; }
+  cv.addEventListener('pointerdown',e=>{ painting=true; seed=toImg(e); compute(); });
+  cv.addEventListener('pointermove',e=>{ cursor=toImg(e); if(painting){ seed=cursor; compute(); } else draw(); });
+  window.addEventListener('pointerup',()=>painting=false);
+  cv.addEventListener('pointerleave',()=>{ cursor=null; draw(); });
+  s4g.addEventListener('input',()=>{ v4g.textContent=gamma().toFixed(1); compute(); });
+  s4r.addEventListener('input',()=>{ v4r.textContent=s4r.value; draw(); });
+  bRings.addEventListener('click',()=>{ rings=!rings; bRings.classList.toggle('on',rings);
+    bRings.textContent=rings?'rings ON':'rings OFF'; draw(); });
+  bPath.addEventListener('click',()=>{ showPath=!showPath; bPath.classList.toggle('on',showPath); draw(); });
+  bReset.addEventListener('click',()=>{ seed=[Math.round(IW*0.235),Math.round(IH*0.50)]; compute(); });
+  v4g.textContent=gamma().toFixed(1);
+  compute();
+})();
+
+/* ============================================================
+   DEMO 5 — colorization by geodesic blending
+   ============================================================ */
+(function demo5(){
+  const cv=document.getElementById('c5'), ctx=cv.getContext('2d');
+  const s5b=document.getElementById('s5b'), v5b=document.getElementById('v5b');
+  const s5g=document.getElementById('s5g'), v5g=document.getElementById('v5g');
+  const r5=document.getElementById('r5');
+  const cols=[[229,72,77],[59,130,246],[34,197,94]];
+  let scr=[[Math.round(IW*0.235),Math.round(IH*0.50)],
+           [Math.round(IW*0.85), Math.round(IH*0.80)],
+           [Math.round(IW*0.78), Math.round(IH*0.34)]];
+  let sel=0, maps=null;
+
+  document.querySelectorAll('[data-sc]').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-sc]').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on'); sel=+btn.dataset.sc;
+  }));
+  function gamma(){ return +s5g.value/10; }
+  function bexp(){ return +s5b.value/10; }
+  function compute(){ maps=scr.map(s=>geodesic([s[1]*IW+s[0]],gamma()).D); draw(); }
+  function draw(){
+    const b=new Uint8ClampedArray(IW*IH*4), bb=bexp();
+    for(let i=0;i<IW*IH;i++){
+      let wsum=0, cr=0,cg=0,cbl=0;
+      for(let k=0;k<3;k++){
+        const d=Math.max(maps[k][i],1e-3);
+        const w=1/Math.pow(d,bb);
+        wsum+=w; cr+=w*cols[k][0]; cg+=w*cols[k][1]; cbl+=w*cols[k][2];
+      }
+      cr/=wsum; cg/=wsum; cbl/=wsum;
+      // recombine chroma with the ORIGINAL luminance (that's the real algorithm)
+      const Y=IMG[i];
+      const lum=(0.299*cr+0.587*cg+0.114*cbl)/255;
+      const k=Y/Math.max(lum,0.05);
+      b[4*i]=Math.min(255,cr*k); b[4*i+1]=Math.min(255,cg*k); b[4*i+2]=Math.min(255,cbl*k); b[4*i+3]=255;
+    }
+    blitScaled(ctx,b,IW,IH);
+    const sx=cv.width/IW, sy=cv.height/IH;
+    scr.forEach((s,k)=>{
+      ctx.strokeStyle='#fff'; ctx.lineWidth= k===sel?4:2;
+      ctx.fillStyle='rgb('+cols[k].join(',')+')';
+      ctx.beginPath(); ctx.arc((s[0]+.5)*sx,(s[1]+.5)*sy,10,0,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#fff'; ctx.font='bold 12px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(k+1),(s[0]+.5)*sx,(s[1]+.5)*sy);
+    });
+    r5.innerHTML='$c(x)=\\dfrac{\\sum_k W(D_k)c_k}{\\sum_k W(D_k)}$ with $W(D)=1/D^{'+bexp().toFixed(1)+'}$, $\\gamma='+gamma().toFixed(1)+'$'+
+      ' &nbsp;—&nbsp; '+(bexp()<1.6?'<b style="color:#58a6ff">low b → soft watercolour blending</b>':
+        bexp()>4?'<b style="color:#f59e0b">high b → nearly hard nearest-scribble labelling</b>':'balanced');
+    if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([r5]);
+  }
+  cv.addEventListener('pointerdown',e=>{
+    const [u,v]=canvasPos(cv,e);
+    scr[sel]=[Math.max(0,Math.min(IW-1,Math.floor(u*IW))),Math.max(0,Math.min(IH-1,Math.floor(v*IH)))];
+    compute();
+  });
+  s5b.addEventListener('input',()=>{ v5b.textContent=bexp().toFixed(1); draw(); });
+  s5g.addEventListener('input',()=>{ v5g.textContent=gamma().toFixed(1); compute(); });
+  v5b.textContent=bexp().toFixed(1); v5g.textContent=gamma().toFixed(1);
+  compute();
+})();
+
+/* ============================================================
+   DEMO 6 — trimap
+   ============================================================ */
+(function demo6(){
+  const cv=document.getElementById('c6'), ctx=cv.getContext('2d');
+  const s6r=document.getElementById('s6r'), v6r=document.getElementById('v6r');
+  const s6g=document.getElementById('s6g'), v6g=document.getElementById('v6g');
+  const r6=document.getElementById('r6');
+  let seedF=[Math.round(IW*0.235),Math.round(IH*0.50)];
+  let seedB=[Math.round(IW*0.90), Math.round(IH*0.15)];
+  let which=0, DF=null, DB=null, dist2=null;
+
+  document.querySelectorAll('[data-mt]').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-mt]').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on'); which=+btn.dataset.mt;
+  }));
+  function gamma(){ return +s6g.value/10; }
+
+  function compute(){
+    DF=geodesic([seedF[1]*IW+seedF[0]],gamma()).D;
+    DB=geodesic([seedB[1]*IW+seedB[0]],gamma()).D;
+    // Delta = sign change of DF-DB between 4-neighbours  -> then Euclidean distance transform to Delta
+    const isD=new Uint8Array(IW*IH);
+    for(let y=0;y<IH;y++)for(let x=0;x<IW;x++){
+      const i=y*IW+x, s=Math.sign(DF[i]-DB[i]);
+      if(x+1<IW && Math.sign(DF[i+1]-DB[i+1])!==s) isD[i]=1;
+      if(y+1<IH && Math.sign(DF[i+IW]-DB[i+IW])!==s) isD[i]=1;
+    }
+    // multi-source BFS-ish Euclidean approx (Dijkstra with gamma=0 = Euclidean distance to Delta)
+    const seeds=[]; for(let i=0;i<IW*IH;i++) if(isD[i]) seeds.push(i);
+    dist2 = seeds.length? geodesic(seeds,0).D : new Float32Array(IW*IH).fill(Infinity);
+    draw();
+  }
+  function draw(){
+    const rho=+s6r.value, b=new Uint8ClampedArray(IW*IH*4);
+    let nF=0,nB=0,nU=0;
+    for(let i=0;i<IW*IH;i++){
+      const s=0.55+0.45*IMG[i];
+      let col;
+      if(dist2[i]<=rho){ col=[245,158,11]; nU++; }
+      else if(DF[i]<DB[i]){ col=[63,185,80]; nF++; }
+      else { col=[74,82,97]; nB++; }
+      b[4*i]=col[0]*s; b[4*i+1]=col[1]*s; b[4*i+2]=col[2]*s; b[4*i+3]=255;
+    }
+    blitScaled(ctx,b,IW,IH);
+    const sx=cv.width/IW, sy=cv.height/IH;
+    [[seedF,'#fff','F'],[seedB,'#000','B']].forEach(([s,c,t])=>{
+      ctx.fillStyle=c; ctx.strokeStyle='#111'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc((s[0]+.5)*sx,(s[1]+.5)*sy,11,0,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=c==='#fff'?'#111':'#fff'; ctx.font='bold 13px system-ui';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(t,(s[0]+.5)*sx,(s[1]+.5)*sy);
+    });
+    const tot=IW*IH;
+    r6.innerHTML='ρ = <b>'+rho+'</b> px, γ = <b>'+gamma().toFixed(1)+'</b> &nbsp;→&nbsp; '+
+      'α<sub>T</sub>=1: <b style="color:#3fb950">'+(100*nF/tot).toFixed(0)+'%</b>, '+
+      'α<sub>T</sub>=0: <b style="color:#9aa7b4">'+(100*nB/tot).toFixed(0)+'%</b>, '+
+      'α<sub>T</sub>=φ unknown: <b style="color:#f59e0b">'+(100*nU/tot).toFixed(0)+'%</b>'+
+      (rho===0?' &nbsp;— <b>ρ=0: a hard binary mask, no room for soft hair.</b>':'')+
+      (100*nU/tot>45?' &nbsp;— <b style="color:#f85149">ρ too big: you handed the hard problem back to the opacity step.</b>':'');
+  }
+  cv.addEventListener('pointerdown',e=>{
+    const [u,v]=canvasPos(cv,e);
+    const p=[Math.max(0,Math.min(IW-1,Math.floor(u*IW))),Math.max(0,Math.min(IH-1,Math.floor(v*IH)))];
+    if(which===0) seedF=p; else seedB=p;
+    compute();
+  });
+  s6r.addEventListener('input',()=>{ v6r.textContent=s6r.value; draw(); });
+  s6g.addEventListener('input',()=>{ v6g.textContent=gamma().toFixed(1); compute(); });
+  v6g.textContent=gamma().toFixed(1);
+  compute();
+})();
+
+/* ============================================================
+   DEMO 7 — Dijkstra step by step on a tiny grid
+   ============================================================ */
+(function demo7(){
+  const cv=document.getElementById('c7'), ctx=cv.getContext('2d'), r7=document.getElementById('r7');
+  const GW=11, GH=7;
+  // tiny "image": two flat regions separated by a bright stripe
+  const V=new Float32Array(GW*GH);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++) V[y*GW+x] = (x===5 && y!==3) ? 9 : (x<5?1:2);
+  let D,par,done,h,popped,steps,timer=null;
+  const src=1*1 + 0; // (0,1)
+  function reset(){
+    D=new Float32Array(GW*GH).fill(Infinity); par=new Int32Array(GW*GH).fill(-1);
+    done=new Uint8Array(GW*GH); h=new Heap(); popped=-1; steps=0;
+    const s=3*GW+0; D[s]=0; h.push(0,s);
+    if(timer){clearInterval(timer);timer=null;}
+    draw('Ready. D=0 at the source, ∞ everywhere else.');
+  }
+  function step(){
+    if(!h.size()){ draw('Queue empty — every D is final. Done in '+steps+' pops.'); return false; }
+    let d,i;
+    do{ [d,i]=h.pop(); }while(done[i] && h.size());
+    if(done[i]){ draw('Done.'); return false; }
+    done[i]=1; popped=i; steps++;
+    const x=i%GW, y=(i/GW)|0; let relaxed=0;
+    for(const [dx,dy,dl] of [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1]]){
+      const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
+      const j=ny*GW+nx; if(done[j]) continue;
+      const c = dl + Math.abs(V[j]-V[i]);      // edge cost = move + intensity jump
+      if(d+c < D[j]){ D[j]=d+c; par[j]=i; h.push(d+c,j); relaxed++; }
+    }
+    draw('Popped ('+x+','+y+') with the smallest tentative D = '+d.toFixed(1)+
+         ' → it is now <b>final</b> (Bellman). Relaxed '+relaxed+' neighbour(s).');
+    return true;
+  }
+  function draw(msg){
+    const cw=cv.width/GW, ch=cv.height/GH;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      const i=y*GW+x;
+      let bg='#2b3543';
+      if(done[i]) bg='#1c4a2a';
+      else if(isFinite(D[i])) bg='#4a3410';
+      if(i===popped) bg='#1d4d78';
+      ctx.fillStyle=bg; ctx.fillRect(x*cw+2,y*ch+2,cw-4,ch-4);
+      if(V[i]>5){ ctx.fillStyle='rgba(248,81,73,.35)'; ctx.fillRect(x*cw+2,y*ch+2,cw-4,ch-4); }
+      ctx.fillStyle= done[i]?'#7ee787':(isFinite(D[i])?'#f0b429':'#5a6572');
+      ctx.font='bold 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(isFinite(D[i])? D[i].toFixed(1) : '∞', x*cw+cw/2, y*ch+ch/2);
+      ctx.fillStyle='#5a6572'; ctx.font='10px system-ui';
+      ctx.fillText('Y='+V[i], x*cw+cw/2, y*ch+ch-11);
+      if(par[i]>=0){
+        const px=par[i]%GW, py=(par[i]/GW)|0;
+        ctx.strokeStyle='rgba(126,231,135,.35)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(x*cw+cw/2,y*ch+ch/2);
+        ctx.lineTo((x*cw+cw/2+px*cw+cw/2)/2,(y*ch+ch/2+py*ch+ch/2)/2); ctx.stroke();
+      }
+    }
+    r7.innerHTML = msg + ' &nbsp;<span class="muted">Red cells = bright stripe (an edge) — crossing them costs |ΔY|. Note the gap at row 3: the door.</span>';
+  }
+  document.getElementById('b7step').addEventListener('click',step);
+  document.getElementById('b7reset').addEventListener('click',reset);
+  document.getElementById('b7run').addEventListener('click',()=>{
+    if(timer){clearInterval(timer);timer=null;return;}
+    timer=setInterval(()=>{ if(!step()){clearInterval(timer);timer=null;} },160);
+  });
+  reset();
+})();
+
+/* flashcards */
+document.querySelectorAll('.fc').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('open')));
+
+/* symbol explainer */
+const SYM={
+ p:['$p(s)$ — the road','A road from A to B, drawn as a curve. $s$ goes from 0 (start) to 1 (end). There are infinitely many possible roads; the formula scores each one.'],
+ pdot:['$\\dot p(s)$ — my walking direction','The tangent: which way I am facing at this exact tiny step. Baby words: <b>"where my next footstep points."</b>'],
+ grad:['$\\nabla Y$ — where the walls are','The image gradient. It is big at edges, ≈0 in flat regions, and it <b>points across</b> the edge.'],
+ dot:['$\\langle\\, ,\\,\\rangle$ — the toll booth','Dot product of my step direction with the wall direction. If they line up (I go straight across the wall) it is big → expensive. If they are perpendicular (I walk along the wall) it is 0 → free. <b>This is the cleverest part of the formula.</b>'],
+ abs:['$|\\cdot|$ — always pay','Absolute value: crossing an edge from dark→bright and bright→dark cost the same. No refunds, no negative cost (which would also break Dijkstra).'],
+ int:['$\\int dl(s)$ — the total bill','Add up the toll of every tiny step along the whole road. $dl$ is the little bit of arc length of that step.'],
+ min:['$\\min_p$ — pick the cheapest road','Try every possible road from $x$ to $y$ and keep the smallest total bill. That minimum is the <b>geodesic distance</b> $d_L(x,y)$. Bellman + Dijkstra is how we find it without trying them all.']
+};
+const symout=document.getElementById('symout');
+document.querySelectorAll('.sym').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('.sym').forEach(o=>o.classList.remove('on'));
+  s.classList.add('on');
+  const [t,d]=SYM[s.dataset.k];
+  symout.innerHTML='<b style="color:#a78bfa">'+t+'</b><br>'+d;
+  symout.classList.remove('muted');
+  if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([symout]);
+}));
+</script>
+</body>
+</html>

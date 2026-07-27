@@ -1,0 +1,872 @@
+% ==================================================================
+% Video Processing 0512-4263 (Avidan, TAU) -- NIGHTLY EXAM RECAP
+% Short enough to read every night. Complete enough to be the only
+% thing you read. Sources: html_book 2 (ch1-12), exams_solved.
+% ==================================================================
+\documentclass[9pt,a4paper]{extarticle}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=1.4cm,top=1.3cm,bottom=1.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{multicol}
+\usepackage{booktabs}
+\usepackage[colorlinks=true,linkcolor=blue!55!black]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.15em}
+\setlist{nosep,leftmargin=1.15em}
+\renewcommand{\arraystretch}{1.15}
+
+\definecolor{cIn}{RGB}{0,120,70}
+\definecolor{cOut}{RGB}{190,95,0}
+\definecolor{cTrap}{RGB}{175,25,40}
+\definecolor{cHead}{RGB}{20,60,120}
+
+\titleformat{\section}{\normalfont\large\bfseries\color{cHead}}{\thesection}{0.5em}{}
+\titlespacing*{\section}{0pt}{0.9em}{0.35em}
+
+% ---- the algorithm card -------------------------------------------
+\newtcolorbox{card}[2]{%
+  breakable, enhanced, colback=white, colframe=cHead!75,
+  coltitle=white, fonttitle=\bfseries\small,
+  title={#1 \hfill \normalfont\footnotesize #2},
+  boxrule=0.5pt, left=3.5pt, right=3.5pt, top=3pt, bottom=3pt,
+  toptitle=1.5pt, bottomtitle=1.5pt, before skip=5pt, after skip=5pt}
+
+\newtcolorbox{keybox}[1]{breakable, enhanced, colback=yellow!8,
+  colframe=orange!65!black, coltitle=black, fonttitle=\bfseries\small,
+  title={#1}, boxrule=0.5pt, left=3.5pt, right=3.5pt, top=3pt, bottom=3pt}
+
+\newcommand{\IN}{\textbf{\color{cIn}IN}\ }
+\newcommand{\OUT}{\par\textbf{\color{cOut}OUT}\ }
+\newcommand{\FLOW}{\par\smallskip\textbf{Flow (in words)}\par\nopagebreak}
+\newcommand{\MATH}{\par\smallskip\textbf{Math}\par\nopagebreak}
+\newcommand{\KNOBS}{\par\smallskip\textbf{Knobs}\par\nopagebreak}
+\newcommand{\TRAP}{\par\smallskip\textbf{\color{cTrap}Exam trap}\ }
+\newcommand{\WHERE}{\par\textit{where:}\ }
+\newcommand{\up}{$\uparrow$}
+\newcommand{\dn}{$\downarrow$}
+\newcommand{\kn}[2]{\item \textbf{#1} --- #2}
+\newcommand{\Ix}{I_x}\newcommand{\Iy}{I_y}\newcommand{\It}{I_t}
+
+\begin{document}
+\pagestyle{plain}
+
+\begin{center}
+{\LARGE\bfseries Video Processing --- Nightly Exam Recap}\\[2pt]
+{\small 0512-4263 \textbullet\ Prof.\ Shai Avidan, TAU \textbullet\ every algorithm: what goes in, what comes out, what the knobs do}
+\end{center}
+\vspace{-4pt}
+
+% ===================================================================
+\begin{keybox}{READ THIS PAGE FIRST --- it is worth more than the rest}
+\textbf{The exam is always 8 questions, one per slot, 12--13 pts each.} Name the slot $\Rightarrow$ you know the chapter $\Rightarrow$ you know the machinery.
+
+\smallskip
+\begin{center}\footnotesize
+\begin{tabular}{@{}clll@{}}
+\textbf{\#} & \textbf{Slot} & \textbf{Ch} & \textbf{What it always asks}\\ \midrule
+1 & Optic flow & 2 & ``Modify Horn--Schunck to also use extra input $X$'' (labels, depth, confidence, edges)\\
+2 & Tracking & 4 & Particle-filter resampling (inverse-CDF), or derive the Bayes recursion\\
+3 & Intrinsic / dyn.\ texture & 12 / 5 & Weiss median made \emph{online}, or state-space synthesis in a new domain\\
+4 & ``Paper'' slot & --- & A paper shown in class (time fronts, light fields). Often outside the notes\\
+5 & PatchMatch / retargeting & 11 & Bend the NN field: clone detection, $k$-NN, inpainting, video\\
+6 & Geodesic distance & 9/10 & Distance map or shortest path; edge-\emph{avoiding} vs edge-\emph{following}; $\gamma$\\
+7 & Segmentation & 9 & Propagate seed labels by geodesic distance on some graph\\
+8 & Clustering / theory & 6/11 & ``Is it guaranteed / symmetric?'' $\Rightarrow$ monotone proof or counter-example\\
+\end{tabular}
+\end{center}
+
+\smallskip
+\textbf{Four recipes that solve nearly every question:}
+\begin{enumerate}
+  \item \textbf{``Modify A to accept new input B.''} Ask one thing: is $B$ a \emph{boundary signal} or a \emph{measurement}? Boundary $\Rightarrow$ put it in the \emph{smoothness} weight (turn smoothing off across it). Measurement $\Rightarrow$ put it in the \emph{data} term (anchor / seed / confidence weight).
+  \item \textbf{``Make it online / efficient.''} Replace ``store everything'' by a running statistic: per-pixel 256-bin histogram (running median/mode), incremental Gaussian update, low-rank factorisation, PatchMatch instead of brute-force NN.
+  \item \textbf{``Adapt an image method to a new domain''} (3D points, social graph, words, notes): build the right graph or vector space first, then reuse the \emph{same} machinery --- Dijkstra geodesics, ARMA state space, or NN fields.
+  \item \textbf{``Is $X$ guaranteed / symmetric / a metric?''} Either a monotone-decrease $+$ finiteness argument (terminates), or a 2--3 point counter-example (not symmetric).
+\end{enumerate}
+
+\textbf{The one hammer:} define a cost $\rightarrow$ add a boundary-aware regulariser $\rightarrow$ minimise iteratively (least squares / Dijkstra-DP / EM-style alternation).
+\end{keybox}
+
+% ===================================================================
+\section{Ch.1 --- Motion Representation}
+
+\begin{card}{The transformation ladder: linear $\to$ affine $\to$ homography $\to$ projection}{slot: background for all}
+\IN\ pairs of corresponding points $(p_i,p_i')$ between two images (or a 3D point $+$ a calibrated camera).
+\OUT\ the matrix that maps every pixel of image 1 onto image 2.
+
+\FLOW
+\begin{enumerate}
+  \item Pick the model = how much freedom the motion needs.
+  \item Each point pair gives \textbf{2 equations} (one for $x'$, one for $y'$).
+  \item A model with $k$ free parameters needs $\lceil k/2\rceil$ pairs. More pairs $\Rightarrow$ over-determined $\Rightarrow$ least squares.
+\end{enumerate}
+
+\MATH
+\begin{center}\footnotesize
+\begin{tabular}{@{}llll@{}}
+\textbf{Model} & \textbf{Form} & \textbf{Free params} & \textbf{Min.\ pairs / keeps}\\ \midrule
+Linear $2\times2$ & $p'=Ap$ & 4 & 2 pairs; \emph{cannot translate} (origin is fixed)\\
+Affine $2\times3$ & $p'=(A\ t)\,(x,y,1)^T$ & 6 & 3 pairs; parallel lines stay parallel\\
+Homography $3\times3$ & $p'\cong Hp$, divide by 3rd coord & 8 (9 up to scale) & 4 pairs; a plane under perspective\\
+Projection $3\times4$ & $p\cong K\,\Pi\,[R\ t]\,(X,Y,Z,1)^T$ & 11 (6 ext.\ $+$ 5 int.) & full 3D $\to$ pixel\\
+\end{tabular}
+\end{center}
+Least squares for all of them: $\tilde A\tilde x=b\Rightarrow \tilde x=(\tilde A^T\tilde A)^{-1}\tilde A^Tb$.
+\WHERE $A$ = rotation/scale/shear block; $t=(t_x,t_y)$ = translation, only reachable thanks to the homogeneous ``1''; $R,t$ = \emph{extrinsics} (where the camera is and points); $K$ with $f,k_u,k_v,u_0,v_0$ = \emph{intrinsics} (rays $\to$ pixels); the $1/Z$ inside $\Pi$ is what makes far things small.
+
+\KNOBS
+\begin{itemize}
+  \kn{model richness \up}{fits more complex motion but is far more noise-sensitive and needs more correspondences.}
+  \kn{\# point pairs \up}{LS averages out noise; fewer pairs than needed $\Rightarrow$ system unsolvable.}
+  \kn{normalisation of $H$}{$H$ is only defined up to scale; without fixing it the solve is degenerate.}
+\end{itemize}
+\TRAP a homography is \emph{not} affine: parallel lines may converge. And $2\times2$ can never translate --- if the answer needs a shift, you need the homogeneous coordinate.
+\end{card}
+
+% ===================================================================
+\section{Ch.2 --- Optical Flow}
+
+Everything here sits on the \textbf{brightness constancy} assumption: a moving point keeps its intensity, $I_1(x,y)=I_2(x{+}u,y{+}v)$. Taylor $\Rightarrow$ $\Ix u+\Iy v+\It=0$: \emph{one equation, two unknowns}. Every method below is a different way to add the missing equation.
+
+\begin{card}{Lucas--Kanade (LK)}{Ch.2 \textbullet\ sparse flow}
+\IN\ two frames $I_1,I_2$; a window $W$ around a pixel; (optionally) a warp model.
+\OUT\ one motion vector $(u,v)$ per window --- or the 6 affine warp parameters $P$.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Missing equation} $\to$ assume every pixel in the window shares \emph{one} motion. Now $n^2$ equations, 2 unknowns.
+  \item Build the over-determined system and solve it by least squares (a $2\times2$ inverse --- very cheap).
+  \item Because Taylor is only valid for small motion, \textbf{iterate}: warp $I_2$ by the current estimate, re-measure the residual, add the correction.
+  \item For big motion, run steps 1--3 on an image \textbf{pyramid}, coarse to fine.
+\end{enumerate}
+
+\MATH
+\[ x=(A^TA)^{-1}A^Tb,\qquad A^TA=\begin{pmatrix}\sum \Ix^2 & \sum \Ix\Iy\\ \sum \Ix\Iy & \sum \Iy^2\end{pmatrix},\qquad b=-\textstyle\sum \It \]
+\WHERE $\Ix,\Iy$ = spatial gradients (how fast brightness changes sideways --- the ``lever arm'' that converts motion into intensity change); $\It$ = temporal difference $I_2-I_1$ (how much the pixel actually changed); $A^TA$ = the \emph{structure tensor}, summed over the window --- it says whether the window has enough texture to pin down 2 unknowns; the sum is what turns 1 equation per pixel into a solvable system.
+
+General warp: $P^*=\arg\min_P\sum_X[I_2(W(X;P))-I_1(X)]^2$, updated by $\Delta P^*=-(B^TB)^{-1}B^T\It$ with $B=\nabla I_2\,\partial W/\partial P$.
+
+\KNOBS
+\begin{itemize}
+  \kn{window size \up}{more equations $\Rightarrow$ more robust to noise, but mixes two different motions if the window straddles an object boundary. \dn: worse aperture problem, rank-deficient.}
+  \kn{warp model}{translation (2 params) is stable on small windows; affine (6) fits large windows but needs much more texture.}
+  \kn{pyramid levels \up}{handles larger motion (each level halves the displacement), but coarse levels lose small objects.}
+\end{itemize}
+\TRAP LK fails exactly when $A^TA$ is singular: flat region (rank 0) or a straight edge (rank 1 = \textbf{aperture problem}, only the normal component is observable). That is the whole reason Harris exists.
+\end{card}
+
+\begin{card}{Harris corner detector}{Ch.2 \textbullet\ where LK is allowed to run}
+\IN\ one image.
+\OUT\ a list of corner keypoints = pixels where flow is fully determined.
+
+\FLOW
+\begin{enumerate}
+  \item Take the \emph{same} matrix LK already builds, $H=A^TA$ (structure tensor), on a window around every pixel.
+  \item Its two eigenvalues say what the window looks like: both small = flat, one large = edge, both large = corner.
+  \item Compress the two eigenvalues into one score $R$ so you never have to do an eigendecomposition.
+  \item Threshold $R$, then non-maximum suppression so corners are strong \emph{and} spread out.
+\end{enumerate}
+
+\MATH
+\[ E(u,v)=(u\ v)\,H\begin{pmatrix}u\\v\end{pmatrix},\quad
+R=\underbrace{\det H-\alpha(\operatorname{tr}H)^2}_{\text{Harris}}\ \text{or}\ \underbrace{\lambda_{\min}}_{\text{Shi--Tomasi}}\ \text{or}\ \underbrace{\det H/\operatorname{tr}H}_{\text{Noble}} \]
+\WHERE $E(u,v)$ = how much the window changes if you shift it by $(u,v)$ (big change in \emph{all} directions = corner); $\det H=\lambda_{\min}\lambda_{\max}$ = ``are both directions strong?''; $\operatorname{tr}H=\lambda_{\min}+\lambda_{\max}$ = total gradient energy; $\alpha$ subtracts a penalty that kills the ``one huge eigenvalue'' (edge) case.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\alpha\approx0.04$--$0.06$ \up}{rejects more edges, keeps only sharp corners. \dn: edges start passing as corners.}
+  \kn{threshold $\theta$ \up}{fewer but stronger keypoints (good for RANSAC), risk of too few to fit a model.}
+  \kn{window size \up}{smoother, more rotation-robust $H$, but poorer localisation.}
+\end{itemize}
+\TRAP Harris is \emph{not} scale-invariant --- a corner at one zoom is an edge at another. Pair it with a pyramid.
+\end{card}
+
+\begin{card}{Horn--Schunck (HS)}{Ch.2 \textbullet\ dense flow \textbullet\ \textbf{exam slot 1}}
+\IN\ two frames $I_1,I_2$; smoothness weight $\alpha$.
+\OUT\ a dense flow field $(u,v)$ at \emph{every} pixel.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Missing equation} $\to$ instead of a window, add a global prior: neighbouring pixels should move similarly.
+  \item Write one energy over the whole image: (brightness error)$^2$ $+\ \alpha\cdot$(flow roughness)$^2$.
+  \item Euler--Lagrange $\Rightarrow$ a huge but very sparse linear system ($\approx7$ non-zeros per row).
+  \item Solve it iteratively: each pixel repeatedly pulls itself toward its neighbours' average, corrected by the brightness residual.
+\end{enumerate}
+
+\MATH
+\[ \min_{u,v}\iint \underbrace{(\Ix u+\Iy v+\It)^2}_{\text{data term}}+\ \alpha\underbrace{(|\nabla u|^2+|\nabla v|^2)}_{\text{smoothness prior}}\,dx\,dy \]
+Iteration: $u\leftarrow\bar u-\Ix\dfrac{\Ix\bar u+\Iy\bar v+\It}{\alpha+\Ix^2+\Iy^2}$, and the same with $\Iy$ for $v$.
+\WHERE the data term punishes flow that does not explain the observed brightness change; $|\nabla u|^2$ = how fast the flow field itself varies in space (large = torn/choppy field); $\alpha$ = the exchange rate between the two; $\bar u,\bar v$ = local averages of the current flow (this is where the neighbours enter); the denominator $\alpha+\Ix^2+\Iy^2$ automatically trusts the data more where the gradient is strong.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\alpha$ \up}{smoother, more complete field; washes out real motion boundaries and slows down genuine fast objects. Formally: more prior = MAP.}
+  \kn{$\alpha$ \dn}{follows the data closely (ML), but noisy and full of holes in textureless regions.}
+  \kn{iterations $K$ \up}{closer to the exact solution; information spreads about 1 pixel per iteration, so large flat areas need many.}
+\end{itemize}
+\TRAP the quadratic smoothness term \emph{blurs motion across object boundaries}. Every ``modify HS'' exam question is fixed by making the smoothness weight per-edge: $\alpha\,w(p,q)$ with $w\approx0$ across the given boundary signal (label change, depth jump, edge map) $\Rightarrow$ a \textbf{weighted graph Laplacian} instead of the plain one. A per-pixel \emph{confidence} $U(x)$ instead multiplies the \emph{data} term.
+\end{card}
+
+% ===================================================================
+\section{Ch.3 --- Applications of Motion Estimation}
+
+\begin{card}{Super-resolution (ML and MAP)}{Ch.3}
+\IN\ several low-res frames $\{Y_i\}$ of the same scene with \emph{different sub-pixel} shifts; blur $H$, decimation $D$, motions $F_i$.
+\OUT\ one high-res image $X$.
+
+\FLOW
+\begin{enumerate}
+  \item Write the \emph{forward} model --- how a HR image becomes each LR frame: warp, blur, downsample, add noise.
+  \item Guess an $X$ (e.g.\ upsampled first frame), push it forward, compare with each real LR frame.
+  \item Back-project the residual through the transposed operators and take a gradient-descent step.
+  \item Repeat. If it rings, add a smoothness prior (that is MAP instead of ML).
+\end{enumerate}
+
+\MATH
+\[ Y_i=DHF_iX+v_i;\qquad X_{n+1}=X_n-\beta\sum_i F_i^TH^TD^T(DHF_iX_n-Y_i)\ \big[+\ \gamma L(X_n)\ \text{for MAP}\big] \]
+\WHERE $F_i$ = motion of frame $i$ (the sub-pixel shift that gives new information); $H$ = camera blur (PSF); $D$ = decimation, i.e.\ throwing away pixels; $v_i$ = sensor noise; $F_i^TH^TD^T$ = the same three operations run backwards (smear the error back onto the HR grid); $\beta$ = step size; $L$ = Laplacian, the prior that punishes roughness; $\gamma$ (or $\lambda$) = prior strength.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\beta$ \up}{converges faster, can diverge/oscillate.}
+  \kn{$\lambda,\gamma$ \up}{smoother, kills the ringing of pure ML --- but also kills real detail. \dn: sharper and noisier.}
+  \kn{\# frames \up}{you need roughly $r^2$ frames for an $r\times$ upscale, \emph{and} their sub-pixel offsets must differ.}
+\end{itemize}
+\TRAP identical sub-pixel offsets add \emph{zero} information no matter how many frames. Camera shake actually helps.
+\end{card}
+
+\begin{card}{RANSAC \ \ + \ \ BRIEF}{Ch.3 \textbullet\ the plumbing of feature matching}
+\IN\ a set of candidate matches that contains outliers (RANSAC); a keypoint window (BRIEF).
+\OUT\ a model fitted only to the inliers; a binary descriptor string.
+
+\FLOW (RANSAC)
+\begin{enumerate}
+  \item Draw the \emph{minimal} number of points $n$ that defines the model (2 for a line, 3 for affine, 4 for homography).
+  \item Fit the model on just those, count how many other points agree within threshold $t$ (inliers).
+  \item Repeat $K$ times, keep the model with the most votes, then refit on \emph{all} its inliers.
+\end{enumerate}
+\FLOW (BRIEF) fix a pattern of pixel pairs in the window; write bit $1$ if the first pixel is brighter than the second, else $0$; concatenate. Match by Hamming distance = XOR $+$ popcount.
+
+\MATH
+\[ K=\frac{\log(1-P)}{\log(1-W^n)} \]
+\WHERE $W$ = fraction of matches that are inliers; $n$ = sample size; $P$ = probability you want of hitting at least one all-inlier sample; $K$ = required number of draws. $W^n$ = chance one draw is all-inliers --- this is why $n$ must be \emph{minimal}.
+
+\KNOBS
+\begin{itemize}
+  \kn{$t$ (inlier threshold) \up}{more points counted as inliers, looser and possibly wrong fit. \dn: stricter but may find no consensus.}
+  \kn{$W$ \dn\ or $P$ \up}{$K$ explodes --- RANSAC dies at very high outlier ratios.}
+  \kn{BRIEF \# pairs \up}{more distinctive descriptor, slower matching and more memory.}
+\end{itemize}
+\TRAP one bad match destroys a least-squares fit --- always RANSAC \emph{before} LS. BRIEF is fast and lighting-robust but \textbf{not rotation invariant}.
+\end{card}
+
+\begin{card}{Hyperlapse (cost $+$ dynamic programming)}{Ch.3}
+\IN\ a long shaky video; target speed-up $v$; window $w$; weights $\lambda_s,\lambda_a$.
+\OUT\ a \emph{selected subset} of frames (not evenly spaced) that plays back smooth and fast.
+
+\FLOW
+\begin{enumerate}
+  \item Why not keep every $k$-th frame? Because the camera bobs, so uniform sampling lands at random phases of the bob $\Rightarrow$ jitter.
+  \item Define a cost for ``how smoothly does frame $j$ follow frame $i$'': match Harris$+$BRIEF features, fit an affine transform with RANSAC, measure the leftover misalignment.
+  \item Add two penalties: missing the target speed-up, and changing pace abruptly.
+  \item Find the cheapest path through the frames with a 2-pass dynamic program (build cost table, back-trace).
+\end{enumerate}
+
+\MATH
+\[ C(h,i,j,\mu)=C_m(i,j)+\lambda_s\underbrace{\min(\|(j-i)-\mu\|^2,T_s)}_{C_s:\ \text{speed}}+\lambda_a\underbrace{\min(\|(j-i)-(i-h)\|^2,T_a)}_{C_a:\ \text{acceleration}} \]
+\WHERE $C_m$ = motion/alignment cost between frames $i$ and $j$; $\mu$ (or $v$) = desired frame gap; $h,i,j$ = the previous, current and candidate next frame (three frames are needed because acceleration involves two gaps); $T_s,T_a$ = truncations that stop one bad pair from dominating.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\lambda_s$ \up}{playback speed sticks to target, at the price of jitter. In practice $\lambda_s\gg\lambda_a$: smoothness matters more than exact timing.}
+  \kn{$\lambda_a$ \up}{more uniform pacing (no sudden slow-motion patches).}
+  \kn{window $w$ \up}{DP may skip further ahead $\Rightarrow$ better paths, quadratically costlier.}
+\end{itemize}
+\TRAP the output has \emph{non-uniform} time steps. If the question demands exact playback timing, uniform sampling wins.
+\end{card}
+
+% ===================================================================
+\section{Ch.4 --- Online Tracking: Kalman \& Particle}
+
+Online = frames arrive one at a time, you may not store the video. Every filter is \textbf{predict $+$ correct}.
+
+\begin{card}{Bayesian recursive tracking (the derivation)}{Ch.4 \textbullet\ \textbf{exam slot 2}}
+\IN\ measurements $z_1..z_t$; a motion model; a measurement model.
+\OUT\ the posterior belief $p(x_t\mid z_{1:t})$ over the current state, computed \emph{recursively} (no stored history).
+
+\FLOW
+\begin{enumerate}
+  \item Assume \textbf{Markov}: the future depends only on the present, $p(x_t\mid x_{1:t-1})=p(x_t\mid x_{t-1})$.
+  \item Assume \textbf{conditional independence} of measurements: $z_\tau$ depends only on $x_\tau$.
+  \item Apply Bayes --- the two assumptions collapse the whole history into three factors.
+  \item Marginalise out the past to get the filtering form. Kalman and particle filters are just two ways to \emph{represent} this same distribution.
+\end{enumerate}
+
+\MATH
+\[ p(x_{1:t}\mid z_{1:t})\ \propto\ \underbrace{p(z_t\mid x_t)}_{\text{likelihood}}\ \underbrace{p(x_t\mid x_{t-1})}_{\text{motion model}}\ \underbrace{p(x_{1:t-1}\mid z_{1:t-1})}_{\text{previous posterior = recursion}} \]
+\[ p(x_t\mid z_{1:t})=C\,p(z_t\mid x_t)\int p(x_t\mid x_{t-1})\,p(x_{t-1}\mid z_{1:t-1})\,dx_{t-1} \]
+\WHERE $x_t$ = state (position, velocity, size\dots); $z_t$ = this frame's noisy measurement; the likelihood scores how well the state explains the image (e.g.\ $e^{-\mathrm{SSD}}$ of a template); the integral is the \emph{prediction} step (push the old belief through the motion model); $C$ = normaliser.
+
+\TRAP if asked to ``derive the recursion'', the whole answer is: state the two assumptions, apply Bayes, name the three factors. That is the marking scheme.
+\end{card}
+
+\begin{card}{Kalman filter}{Ch.4}
+\IN\ $\Phi,H,Q,R$; initial $\hat x_0,P_0$; a measurement $z_k$ each frame.
+\OUT\ filtered state $\hat x_k$ and its uncertainty $P_k$, per frame.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Predict:} push the state through the motion model. Uncertainty \emph{grows} by $Q$ (the model is not perfect).
+  \item \textbf{Gain:} compare predicted uncertainty against measurement noise $R$ $\Rightarrow$ how much to trust the new data.
+  \item \textbf{Measure:} get $z_k$ (LK flow, template match near the prediction).
+  \item \textbf{Update:} move the estimate toward the measurement by gain $\times$ (innovation). Uncertainty \emph{shrinks}.
+\end{enumerate}
+
+\MATH
+\begin{align*}
+\hat x'_k&=\Phi\hat x_{k-1}, & P'_k&=\Phi P_{k-1}\Phi^T+Q\\
+K_k&=P'_kH^T(HP'_kH^T+R)^{-1} & &\\
+\hat x_k&=\hat x'_k+K_k(z_k-H\hat x'_k), & P_k&=(I-K_kH)P'_k
+\end{align*}
+\WHERE $\hat x'_k$ = prediction \emph{before} seeing data; $\hat x_k$ = estimate \emph{after}; $P$ = error covariance (small = confident); $\Phi$ = state transition, e.g.\ $[x,v]\mapsto[x+v\Delta t,\,v]$; $H$ = measurement matrix (which part of the state you actually observe); $Q$ = how much the real world deviates from $\Phi$; $R$ = how noisy the sensor is; $z_k-H\hat x'_k$ = \emph{innovation}, the surprise; $K_k$ = the trust dial. 1-D sanity check: $K=P'/(P'+R)$, so $R\to0\Rightarrow K\to1$ (follow the data), $R\to\infty\Rightarrow K\to0$ (ignore the data).
+
+\KNOBS
+\begin{itemize}
+  \kn{$R$ \up}{trust the model, output very smooth but laggy; \dn: snaps to every noisy measurement.}
+  \kn{$Q$ \up}{trust the model less, filter reacts fast to manoeuvres but is jumpy; \dn\ too far: over-confident, drifts away and never recovers after occlusion.}
+  \kn{state vector}{adding velocity/acceleration lets the tracker \emph{coast} through an occlusion instead of freezing.}
+\end{itemize}
+\TRAP Kalman is optimal \textbf{only} for linear dynamics $+$ Gaussian noise, and its belief is a single Gaussian --- it cannot represent ``the target is either here or there''. That is the particle filter's job.
+\end{card}
+
+\begin{card}{Particle filter (Condensation)}{Ch.4 \textbullet\ \textbf{exam slot 2}}
+\IN\ previous particle set $\{S_{t-1}^{(n)},\pi_{t-1}^{(n)},C_{t-1}^{(n)}\}_{n=1}^N$; new frame.
+\OUT\ new weighted particle set $+$ a state estimate.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Select (resample):} draw $r\sim U[0,1]$, pick the smallest $j$ with $C^{(j)}>r$. Heavy particles get duplicated, light ones die. \emph{This is inverse-CDF sampling --- the loaded-die question.}
+  \item \textbf{Predict (drift $+$ diffuse):} $S_t=A S'_t+Bw_t$. Deterministic drift moves the cloud; random diffusion spreads it so new hypotheses appear.
+  \item \textbf{Measure:} weight each particle by how well the image supports it, $\pi=p(z_t\mid x_t)$, e.g.\ $e^{-\mathrm{SSD}}$ against the template.
+  \item \textbf{Normalise} weights to sum to 1 and rebuild the cumulative array $C$. Output the weighted mean (or the max-weight particle).
+\end{enumerate}
+
+\MATH
+\[ \pi_t^{(n)}=p(z_t\mid x_t=S_t^{(n)}),\qquad C_t^{(n)}=C_t^{(n-1)}+\pi_t^{(n)},\qquad \hat x_t=\sum_n\pi_t^{(n)}S_t^{(n)} \]
+\WHERE $S^{(n)}$ = the $n$-th hypothesis (a full state); $\pi^{(n)}$ = its weight = how believable it is; $C^{(n)}$ = running cumulative sum, i.e.\ a discrete CDF, which is what makes weighted sampling a single-comparison operation; $A$ = deterministic motion; $B w_t$ = injected noise.
+
+\KNOBS
+\begin{itemize}
+  \kn{$N$ (particles) \up}{better approximation of any-shaped belief, linear cost increase; \dn: \emph{sample impoverishment} --- the cloud collapses onto one wrong mode.}
+  \kn{diffusion noise \up}{explores more, survives sudden manoeuvres; too much: the estimate rattles and the weights spread thin.}
+  \kn{output rule}{max-weight = sharp but jittery; weighted mean = stable but can land \emph{between} two modes, i.e.\ on nothing.}
+\end{itemize}
+\TRAP ``sample from a distribution using only \texttt{rand()}'' $=$ build the CDF, draw one uniform, invert. Same answer for a loaded die, a discrete pmf, or a continuous $F$ ($x=F^{-1}(r)$).
+\end{card}
+
+% ===================================================================
+\section{Ch.5 --- Dynamic Texture Synthesis}
+
+\begin{card}{SVD $+$ ARMA state-space texture synthesis}{Ch.5 \textbullet\ \textbf{exam slot 3}}
+\IN\ a short video of a \emph{stochastic, stationary} texture (fire, smoke, water, grass); state dimension $n$.
+\OUT\ an endless stream of new, never-repeating frames with the same statistics.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Vectorise:} each frame becomes one long column vector; stack them into a matrix $Y$.
+  \item \textbf{Find the low-dimensional space:} SVD of $Y$, keep the top $n$ components ($\ge95\%$ energy). $U$ = the spatial patterns, $\Sigma V^T$ = how strongly each pattern is on over time = the hidden state trajectory.
+  \item \textbf{Learn the dynamics:} least-squares fit of $A$ such that today's state predicts tomorrow's.
+  \item \textbf{Synthesise:} start from some state, repeatedly apply $A$ \emph{plus noise}, and render each state back to an image with $C$. Without noise the trajectory decays or loops.
+\end{enumerate}
+
+\MATH
+\[ x(t{+}1)=Ax(t)+Bv(t),\qquad y(t)=Cx(t)+w(t);\qquad Y=U\Sigma V^T\Rightarrow \hat C=U,\ \hat X=\Sigma V^T,\ \hat A=\arg\min_A\|X_1^\tau-AX_0^{\tau-1}\| \]
+\WHERE $y(t)$ = the actual frame ($m\approx200{\times}300$ numbers); $x(t)$ = the hidden state ($n\approx50$ numbers) = a compressed description of ``what the fire is doing right now''; $C$ = decoder from state to image; $A$ = the physics: how the state evolves; $v,w$ = state noise and image noise; the constraint $C^TC=I$ removes the ambiguity $A\to TAT^{-1}$.
+
+\KNOBS
+\begin{itemize}
+  \kn{$n$ (state dim) \up}{sharper, more faithful texture, more computation and risk of memorising the input; \dn: blurry mush.}
+  \kn{state noise $v$ \up}{more variety, never repeats; too much: unnatural, unstable trajectory. Zero noise $\Rightarrow$ deterministic and it dies out.}
+  \kn{image noise $w$}{hides the low-rank ``plastic'' look; too much: grainy.}
+\end{itemize}
+\TRAP works only for \emph{statistically stationary} content. Feed it a walking person and you get blurry blobs --- the linear low-rank model has no notion of structure.
+
+\smallskip
+\textbf{Domain-transfer version (the actual exam question):} text with Word2Vec (or a melody with note embeddings). Word $\to$ vector replaces frame $\to$ SVD-vector; fit $A$ on the embedding sequence; run forward with noise; decode by nearest-neighbour in the vocabulary. Noise is essential; the result copies local style, not grammar.
+\end{card}
+
+% ===================================================================
+\section{Ch.6 --- Layer Representation}
+
+\begin{card}{Layer decomposition (LK $+$ K-means) and alpha compositing}{Ch.6}
+\IN\ a video (or frame pair) built from a few coherently moving layers; the number of layers $k$.
+\OUT\ per-pixel layer assignment $+$ one affine motion per layer $+$ the layer images and masks.
+
+\FLOW
+\begin{enumerate}
+  \item Synthesis model: a movie is a stack of layers glued by alpha compositing, $I_k=I_{k-1}(1-\alpha_k)+E_k\alpha_k$.
+  \item To invert it, assume each layer moves as \emph{one affine transform} = a single point in $\mathbb R^6$.
+  \item Fit LK affine motion on many random windows $\Rightarrow$ a cloud of points in $\mathbb R^6$.
+  \item K-means that cloud into $k$ groups = the layers. Refit LK per layer using only its pixels. Repeat.
+\end{enumerate}
+This is the classic \emph{assume A to estimate B, then swap} (EM-style) alternation.
+
+\MATH
+\[ I=\alpha E+(1-\alpha)I_{\text{prev}},\qquad V\in\mathbb R^6\ \text{per window} \]
+\WHERE $E$ = the layer's own image (colour); $\alpha\in[0,1]$ = its mask/opacity (1 = fully covers, 0 = invisible); $V$ = the 6 affine parameters, used here as a \emph{feature vector} to cluster, not as a warp.
+
+\KNOBS
+\begin{itemize}
+  \kn{$k$ \up}{one real object gets split into several layers; \dn: two differently-moving objects get merged. MDL (minimum description length) is the principled way to pick $k$.}
+  \kn{motion model}{affine (6) is usually enough; homography (8) if a layer is a plane under strong perspective.}
+  \kn{\# random windows \up}{denser sampling of motions, slower.}
+\end{itemize}
+\TRAP the clustering happens in \emph{motion space} $\mathbb R^6$, not colour space.
+\end{card}
+
+\begin{card}{K-means (Lloyd) --- and why it must terminate}{Ch.6 \textbullet\ \textbf{exam slot 8}}
+\IN\ points $\{x_i\}\subset\mathbb R^d$; number of clusters $k$; initial centres.
+\OUT\ $k$ centres $+$ an assignment of every point.
+
+\FLOW
+\begin{enumerate}
+  \item Assign: every point goes to its nearest centre.
+  \item Update: every centre moves to the mean of its members.
+  \item Repeat until assignments stop changing.
+\end{enumerate}
+
+\MATH
+\[ J=\sum_i\|x_i-c_{\mathrm{enc}(i)}\|^2,\qquad \frac{\partial J}{\partial c_j}=0\ \Rightarrow\ c_j=\frac{1}{|S_j|}\sum_{i\in S_j}x_i \]
+\WHERE $J$ = distortion, the total squared error; $\mathrm{enc}(i)$ = index of the centre point $i$ belongs to; the derivative shows \emph{why} the update step is the mean --- it is the exact minimiser for fixed assignments.
+
+\smallskip
+\textbf{Termination proof (write this exactly):} (a) The assignment step cannot increase $J$ --- each point moves to a centre at most as far as its current one. (b) The update step cannot increase $J$ --- the mean is the minimiser. So $J$ is monotonically non-increasing. (c) There are at most $k^n$ possible assignments, each with a fixed $J$. Since $J$ never increases, a changed assignment must have strictly lower $J$ (use a fixed tie-break, e.g.\ lowest index, for equidistant points), so no assignment can repeat. A monotone sequence over finitely many values must stop $\Rightarrow$ terminates in finite time. Caveat: only a \emph{local} minimum; global $k$-means is NP-hard.
+
+\KNOBS
+\begin{itemize}
+  \kn{$k$ \up}{distortion always drops (it hits 0 at $k=n$) --- so you cannot pick $k$ by minimising $J$; use MDL.}
+  \kn{initialisation}{decides which local minimum; $k$-means++ avoids empty clusters.}
+  \kn{restarts \up}{keep the lowest-distortion run.}
+\end{itemize}
+\TRAP ``Can it cycle forever?'' No --- monotone $+$ finite. ``Can $J$ increase?'' No. ``Ties?'' Need a deterministic tie-break, otherwise the strictness argument breaks.
+\end{card}
+
+% ===================================================================
+\section{Ch.7 --- Video Magnification}
+
+\begin{card}{Eulerian video magnification}{Ch.7}
+\IN\ a video from a \emph{steady} camera; amplification factor $\alpha$; a temporal frequency band.
+\OUT\ the same video with tiny motions amplified (pulse in a face, a swaying building).
+
+\FLOW
+\begin{enumerate}
+  \item \emph{Lagrangian} would mean tracking each pixel (motion estimation --- hard and fragile). \textbf{Eulerian} instead sits still at each fixed location and only watches its intensity over time.
+  \item Band-pass that per-pixel temporal signal to the frequency you care about ($\approx1$\,Hz for a heartbeat). Everything else (lighting drift, noise) is discarded.
+  \item Multiply the band-passed part by $\alpha$ and add it back to the original.
+  \item Because intensity change $\approx$ displacement $\times$ spatial slope, boosting the change is the same as boosting the displacement --- \emph{without ever estimating motion}.
+\end{enumerate}
+
+\MATH
+\[ I(x,t)=f(x+\delta(t))\approx f(x)+\underbrace{\delta(t)\frac{\partial f}{\partial x}}_{B(x,t)}\ \Rightarrow\ \tilde I=I+\alpha B\approx f\big(x+(1+\alpha)\delta(t)\big) \]
+\WHERE $\delta(t)$ = the true (sub-pixel) displacement you cannot see; $\partial f/\partial x$ = the spatial gradient that converts displacement into a brightness change; $B$ = the temporal variation actually measured, in practice $\approx I_2-I_1$ after band-passing; $\alpha$ = gain.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\alpha$ \up\ (typ.\ 5--50)}{reveals smaller motions but amplifies noise and produces ringing/halos once the Taylor approximation breaks.}
+  \kn{band-pass band}{narrow around the target frequency = clean; too wide = you amplify noise and illumination drift.}
+  \kn{pyramid}{amplify each spatial scale separately so that motion larger than $\sim1$ pixel does not ring.}
+\end{itemize}
+\TRAP the first-order Taylor step assumes motion below $\sim1$ pixel. Big motion, or a shaky camera, gets amplified into garbage --- the camera must be on a tripod.
+\end{card}
+
+% ===================================================================
+\section{Ch.8 --- Background Subtraction}
+
+\begin{card}{Per-pixel Gaussian Mixture Model (GMM)}{Ch.8}
+\IN\ a video stream from a \emph{static} camera; $K$ Gaussians per pixel; rates $\alpha,\rho$; background threshold $T$.
+\OUT\ a binary foreground/background label per pixel, per frame, computed online.
+
+\FLOW
+\begin{enumerate}
+  \item \emph{Motivation:} look at one pixel's value across all frames (its \textbf{intensity profile}). It is not one constant --- a leaf blowing over sky makes it flip between several typical values. So model each pixel as a \emph{mixture} of a few Gaussians.
+  \item Batch clustering of a stored history would work but costs delay, memory and compute. Instead update \emph{incrementally}: no history stored.
+  \item For each new value: if it lies within $2.5\sigma$ of an existing Gaussian, nudge that Gaussian's mean and variance toward it and raise its weight. Otherwise replace the weakest Gaussian with a new one centred on this value (low weight, high variance).
+  \item Sort Gaussians by $\omega_k/\sigma_k$ (frequent \emph{and} tight = background). Take the top ones until their weight sum passes $T$: those are background. Anything else = foreground.
+\end{enumerate}
+
+\MATH
+\[ f(x)=\sum_k\omega_k\,\mathcal N(x;\mu_k,\sigma_k),\quad
+\omega_{k,t}=(1-\alpha)\omega_{k,t-1}+\alpha M_{k,t},\quad
+\mu_t=(1-\rho)\mu_{t-1}+\rho x_t,\quad
+\sigma_t^2=(1-\rho)\sigma_{t-1}^2+\rho(x_t-\mu_t)^2 \]
+\[ B=\arg\min_b\Big(\sum_{k\le b}\omega_k/\sigma_k>T\Big) \]
+\WHERE $\omega_k$ = how often this mode is seen (popularity); $\mu_k,\sigma_k$ = its colour and its spread; $M_{k,t}\in\{0,1\}$ = did the new value match Gaussian $k$; $\alpha$ = learning rate for the weights (how fast a new pattern earns background status); $\rho$ = learning rate for mean/variance; $T$ = what fraction of the observations must be explained before you stop calling modes ``background''. The ratio $\omega/\sigma$ is the key ranking: background is both \emph{common} and \emph{stable}.
+
+\KNOBS
+\begin{itemize}
+  \kn{$K$ (3--5) \up}{models more background modes (leaves $+$ sky $+$ shadow), but starts fitting noise and slows down.}
+  \kn{$\alpha\approx0.01$ \up}{adapts quickly to lighting change, but a car that parks becomes background in seconds (and a slow-moving object is absorbed); \dn: keeps ghosts of things that already left.}
+  \kn{$T$ (0.7--0.9) \up}{more modes counted as background $\Rightarrow$ fewer false alarms, more missed detections.}
+  \kn{match radius $2.5\sigma$ \up}{noise gets absorbed instead of flagged; \dn: hyper-sensitive, everything is foreground.}
+\end{itemize}
+\TRAP fails on sudden global illumination change, camera shake, and shadows (a shadow is a genuine colour change, so it is flagged as foreground).
+\end{card}
+
+% ===================================================================
+\section{Ch.9 --- Colorization \& Geodesic Distance}
+
+The whole chapter is one idea: \textbf{redefine distance so that it follows the image content}. Moving inside a homogeneous region is nearly free; crossing an edge is expensive.
+
+\begin{card}{Geodesic distance colorization / label propagation}{Ch.9 \textbullet\ \textbf{exam slots 6 \& 7}}
+\IN\ a grey (luminance) image or video $Y$; a few user scribbles $\{\Omega_k\}$ each with a colour/label $c_k$; exponent $b$.
+\OUT\ a colour (or a soft label mixture) for \emph{every} pixel.
+
+\FLOW
+\begin{enumerate}
+  \item Build a graph: pixels are nodes, neighbours are edges, edge weight = $|Y(p)-Y(q)|$ (how much brightness changes when you step there).
+  \item For each scribble $k$, run Dijkstra from that whole scribble set at once $\Rightarrow$ a distance map $D_k(x)$ over the image.
+  \item Every pixel votes: nearby scribbles get big weight, far ones almost none.
+  \item Normalise the votes so they sum to 1 $\Rightarrow$ a convex blend of the scribble colours.
+\end{enumerate}
+
+\MATH
+\[ L(p)=\int_p|\langle \dot p(s),\nabla Y\rangle|\,dl,\qquad
+D_k(x)=d_L(x,\Omega_k),\qquad
+c(x)=\frac{\sum_k W(D_k(x))\,c_k}{\sum_k W(D_k(x))},\quad W(D)=\frac{1}{D^{\,b}} \]
+\WHERE $\langle\dot p,\nabla Y\rangle$ = the component of the image gradient \emph{along} the direction you are walking --- so walking parallel to an edge is cheap, crossing it is expensive; $D_k(x)$ = geodesic distance from pixel $x$ to scribble $k$; $W(D)=D^{-b}$ = the vote weight; the denominator makes the weights sum to 1, which is exactly why the output is a valid colour (or a valid percentage mix).
+
+\KNOBS
+\begin{itemize}
+  \kn{$b\in[1,6]$ \up}{votes concentrate on the single nearest scribble $\Rightarrow$ sharp, almost hard boundaries; \dn: soft, washed-out blends between scribbles.}
+  \kn{edge weight definition}{$w=|\nabla Y|$ makes edges into \emph{walls} (colour cannot leak). Invert it and paths \emph{ride} the edges instead --- see the trap.}
+  \kn{scribble placement}{put them \emph{inside} regions, never on an edge; one per distinct region.}
+  \kn{neighbourhood}{4-neighbours in an image; \textbf{6-neighbours in video} (adds $\pm t$) so colour flows through time --- this is why video needs far fewer scribbles than a stack of separate images.}
+\end{itemize}
+\TRAP \textbf{The sign of the edge weight is the whole question.}
+\begin{itemize}
+  \item Want the path/colour to \emph{avoid} edges (colorization, ``stay in the middle of the road''): $w=|\nabla I|$, crossing is expensive.
+  \item Want the path to \emph{follow} an edge (``intelligent scissors'', trace Lena's hat brim): $w=1/(|\nabla I|+\varepsilon)$ or $\max|\nabla I|-|\nabla I|$, so riding a strong contour is nearly free. Same Dijkstra, inverted cost.
+\end{itemize}
+\smallskip
+\textbf{Domain-transfer versions (exam slot 7):} 3D point cloud $\Rightarrow$ build a $k$-NN graph, weight $=\|p-q\|$ plus normal difference, then identical Dijkstra $+\arg\min_k D_k$. Social graph with tie strengths $w(u,v)$ $\Rightarrow$ edge \emph{length} $\ell=1/w$ (or $-\log w$), then the same $W(D_k)/\sum_j W(D_j)$ blend gives ``30\% finance / 70\% fashion''.
+\end{card}
+
+\begin{card}{Dijkstra \ \ vs \ \ Fast sweeping (Danielsson)}{Ch.9}
+\IN\ a weighted grid/graph; a source set $\Omega_s$.
+\OUT\ $D(x)$ = geodesic distance from the source set to every node.
+
+\FLOW (Dijkstra)
+\begin{enumerate}
+  \item $D=0$ on the sources, $\infty$ elsewhere; all nodes unvisited.
+  \item Pop the unvisited node with the smallest $D$ (priority queue).
+  \item Relax its neighbours: $D(y)\leftarrow\min\{D(y),\,D(x)+w(x,y)\}$. Remove $x$. Repeat.
+\end{enumerate}
+Mental picture: water spreading from the sources, flowing slowly through high-gradient areas; the moment a pixel gets wet is its distance. Cost $O(N\log N)$. Correct because of the \textbf{Bellman principle}: every sub-path of an optimal path is optimal.
+
+\FLOW (Fast sweeping) forget the queue: run plain raster scans over the image, updating each pixel from its already-visited neighbours. Four sweeps cover the four diagonal directions; repeat until nothing changes.
+
+\KNOBS
+\begin{itemize}
+  \kn{Dijkstra}{exact, single-source, CPU-friendly. The priority queue is inherently sequential $\Rightarrow$ hard to parallelise.}
+  \kn{Fast sweeping \# sweeps \up}{handles more path turns; 4 sweeps suffice for simple paths, a spiral with $N$ turns needs $\ge4N$. Cache- and GPU-friendly, usually faster in practice.}
+  \kn{neighbourhood size \up}{more possible path directions (less grid bias), higher cost per node.}
+\end{itemize}
+\TRAP ``design it for a GPU'' $\Rightarrow$ fast sweeping, not Dijkstra. ``I need the exact single-source map on a CPU'' $\Rightarrow$ Dijkstra.
+\end{card}
+
+% ===================================================================
+\section{Ch.10 --- Video Matting}
+
+Goal: cut the foreground out and paste it on a new background \emph{without} dragging the old background's colour along. Three stages, all built on Ch.9 geodesics.
+
+\begin{card}{Stage 1 --- Trimap estimation (KDE $+$ geodesic)}{Ch.10}
+\IN\ image/video; FG and BG scribbles; band radius $\rho$; KDE bandwidth $\sigma$.
+\OUT\ a trimap: $1$ = definitely foreground, $0$ = definitely background, $\phi$ = unsure.
+
+\FLOW
+\begin{enumerate}
+  \item From the scribbled pixels build colour distributions for FG and BG using KDE (drop a Gaussian bump on every scribbled colour and sum).
+  \item Bayes turns the two densities into $P(F\mid c)$, the probability that colour $c$ is foreground.
+  \item Compute geodesic distances $D_F,D_B$ using the \emph{gradient of that probability map} as the cost field (so the walls sit where foreground-ness changes, not where brightness changes).
+  \item Label $x$ foreground if $D_F(x)<D_B(x)$. Mark a band of radius $\rho$ around the tie surface $\{D_F=D_B\}$ as ``unsure''.
+\end{enumerate}
+
+\MATH
+\[ f(c\mid F)\propto\sum_{x\in\Omega_F}K(c,c(x)),\ K\propto e^{-\|c-c'\|^2/2\sigma^2};\qquad
+P(F\mid c)=\frac{f(c\mid F)}{f(c\mid F)+f(c\mid B)};\qquad W(x)=\nabla_x P(F\mid c(x)) \]
+\WHERE $K$ = the Parzen kernel, a soft bell so that a colour close to a scribbled colour still counts; $\sigma$ = its width; the ratio is Bayes with a uniform prior; $W(x)$ = the cost field for Dijkstra --- large where foreground-probability changes fast, i.e.\ at the true object boundary.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\rho$ (band radius, 5--15 px) \up}{captures wide fuzzy edges like hair, but leaves far more work (and more error) to stage 2; \dn: fast, but crops hair off.}
+  \kn{$\sigma$ (KDE width) \up}{smoother colour model, generalises to unseen shades; too large: FG and BG distributions merge into mush.}
+  \kn{scribbles}{one per \emph{distinct colour region} of each side, otherwise that region has no density support.}
+\end{itemize}
+\TRAP colour alone is ambiguous when FG and BG share colours --- the \emph{geodesic} term is what breaks the tie (spatial reachability), which is the point of the whole design.
+\end{card}
+
+\begin{card}{Stage 2 --- Opacity map \ \ \& \ \ Stage 3 --- Matting}{Ch.10}
+\IN\ the trimap, the image, a new background $B$.
+\OUT\ a continuous $\alpha(x)\in[0,1]$ inside the band, and the final composite $J$ with no colour bleed.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Opacity:} inside the narrow band there are far more samples than the sparse scribbles, so \emph{re-estimate} FG/BG colour models \emph{locally} along the boundary curve. Combine local probability with geodesic distance $\Rightarrow$ a soft $\alpha$.
+  \item \textbf{Matting:} a fuzzy pixel is physically a mix, $c=\alpha f+(1-\alpha)b$: one equation, two unknown colours. Search a small window for the pair (confident-FG pixel, confident-BG pixel) that best reproduces the observed mixed colour.
+  \item Composite the recovered \emph{pure} foreground colour onto the new background.
+\end{enumerate}
+
+\MATH
+\[ \alpha(x)=\frac{w_F(x)}{w_F(x)+w_B(x)},\quad w_F=\tilde D_F^{\,-r}\tilde P_F,\ r\in(0,2];\qquad
+(x_F^*,x_B^*)=\arg\min\|\alpha c(x_F)+(1-\alpha)c(x_B)-c(x)\|^2 \]
+\[ J(x)=\alpha\,c(x_F^*)+(1-\alpha)B(x) \]
+\WHERE $\tilde D_F$ = local geodesic distance to confident foreground; $\tilde P_F$ = locally re-estimated foreground probability; $r$ = how strongly proximity beats colour evidence; $c(x_F^*)$ = the recovered \emph{pure} foreground colour; $B(x)$ = the new background.
+
+\KNOBS
+\begin{itemize}
+  \kn{$r$ \up}{$\alpha$ is decided mostly by which side is geometrically closer $\Rightarrow$ crisper matte; \dn: colour evidence dominates, softer and noisier.}
+  \kn{window size for the $(f,b)$ search \up}{more candidate pairs $\Rightarrow$ better explanation of the mixed colour, quadratically slower.}
+\end{itemize}
+\TRAP the naive composite $J=\alpha c(x)+(1-\alpha)B$ is \emph{wrong}: $c(x)$ already contains the old background, so its colour bleeds onto the new one (green screen halo). You must recover the pure $f$ first. This is the point of stage 3.
+\end{card}
+
+\begin{card}{Fast KDE via a low-rank kernel}{Ch.10 \textbullet\ efficiency slot}
+\IN\ a kernel $k(x,y)$ and weights $w(y)$; want $f(x)=\sum_y k(x,y)w(y)$ for all $x$.
+\OUT\ the same values in $O((m+n)p)$ instead of $O(mn)$.
+
+\FLOW factor the kernel matrix as a sum of $p$ rank-1 terms $K=\sum_{i=1}^p\phi_i\psi_i^T$. Then the double sum splits into two cheap passes: first collapse the weights, $a_i=\sum_y\psi_i(y)w(y)$ (one pass over $y$), then expand, $f(x)=\sum_i a_i\phi_i(x)$ (one pass over $x$).
+\WHERE $p$ = effective rank; $\phi_i,\psi_i$ = the separable factors. Gaussians are formally infinite rank but their singular values decay fast, so a small $p$ is enough (this is the Fast Multipole idea).
+\KNOBS $p$ \up: more accurate, slower. \dn: faster, coarser.
+\TRAP this is the generic answer to any ``make it efficient'' sub-question involving all-pairs sums.
+\end{card}
+
+% ===================================================================
+\section{Ch.11 --- Retargeting \& PatchMatch}
+
+\begin{card}{Bidirectional similarity retargeting}{Ch.11}
+\IN\ source image/video $S$; a target size; balance $\alpha$; patch size.
+\OUT\ target $T$ of the new size that looks natural.
+
+\FLOW
+\begin{enumerate}
+  \item Two demands, in opposite directions. \textbf{Completeness:} every patch of $S$ should appear somewhere in $T$ (nothing important is lost). \textbf{Coherence:} every patch of $T$ should come from $S$ (nothing is invented / no artifacts).
+  \item Sum them with weight $\alpha$; this is the objective.
+  \item Initialise $T$ by a \emph{gradual} pyramid resize (never from black --- you would land in a garbage local minimum).
+  \item Iterate: for each target patch find its NN in the source and vote its colour in; for each source patch find its NN in the target and vote in too; divide by the accumulated weight. That average is the exact per-pixel minimiser.
+\end{enumerate}
+
+\MATH
+\[ D_{\text{com}}(S,T)=\frac1{N_S}\sum_{P\in S}\min_{Q\in T}d^2(P,Q),\qquad
+D_{\text{coh}}(S,T)=\frac1{N_T}\sum_{Q\in T}\min_{P\in S}d^2(P,Q) \]
+\[ D=\alpha D_{\text{com}}+(1-\alpha)D_{\text{coh}} \]
+\WHERE $P,Q$ = patches (5--7 px, or $5\times5\times3$ space-time cubes for video); $d^2=\|P-Q\|_2^2$; $N_S,N_T$ = patch counts, which normalise for the size difference; each $\min$ is a nearest-neighbour query --- that is the bottleneck PatchMatch solves.
+
+\KNOBS
+\begin{itemize}
+  \kn{$\alpha$ \up}{more content is forced to survive (nothing gets cropped), at the cost of visible squeezing/artifacts; \dn: cleaner-looking result that may silently delete objects. Start at 0.5.}
+  \kn{patch size \up}{more context, more structural consistency, blurrier output; \dn: sharper but incoherent.}
+  \kn{constraint weight $W_P$}{high on a face or a straight line = protect it; $\approx0$ on an object = it cannot vote, so it vanishes and neighbours fill its place. Weights keep $D$ convex.}
+  \kn{pyramid step ($\sim1.1\times$)}{gradual = good initialisation; aggressive = bad local minima.}
+\end{itemize}
+\TRAP the directed distance is \textbf{not symmetric}: with $P=\{0\}$, $Q=\{0,10\}$, $\max_p\min_q d=0$ but the reverse is $10$. That asymmetry is exactly \emph{why} both completeness and coherence are needed.
+\end{card}
+
+\begin{card}{PatchMatch}{Ch.11 \textbullet\ \textbf{exam slot 5}}
+\IN\ source $S$, target $T$; patch size; search window $W$; iterations $K$ (4--6).
+\OUT\ an approximate nearest-neighbour \emph{offset field} $f(x)$: for every patch, where its best match lives.
+
+\FLOW
+\begin{enumerate}
+  \item \textbf{Init:} give every patch a random offset. Almost all are terrible --- but with millions of patches, \emph{some} are accidentally good.
+  \item \textbf{Propagation:} if patch $(100,100)$ matches at $(200,50)$, its right-hand neighbour almost certainly matches at the same offset. So each patch tests its own offset plus its left and upper neighbours' offsets, and keeps the best. Good matches spread across the image like a flood.
+  \item \textbf{Random search:} test a few random offsets around the current one, with an \emph{exponentially shrinking} radius. This escapes local minima and refines.
+  \item Alternate the raster scan direction each pass (so information can also travel up/left). Converges in 4--6 passes, orders of magnitude faster than brute force.
+\end{enumerate}
+
+\MATH
+\[ f(x)=\arg\min_{y}\|P_x-Q_{x+f}\|_2^2;\qquad
+f(x)\leftarrow\arg\min_{f\in\{f(x),\,f(x-e_1),\,f(x-e_2)\}}\|P_x-Q_{x+f}\| \]
+\WHERE $f(x)$ = the offset (a displacement vector, not an absolute position --- that is what makes propagation meaningful); $e_1,e_2$ = one step left / one step up (the already-processed causal neighbours); the shrinking search radius starts at the image size and halves each step.
+
+\KNOBS
+\begin{itemize}
+  \kn{iterations $K$ \up}{better NN field, linearly slower; most of the gain is in the first 2 passes.}
+  \kn{patch size \up}{more context and fewer false matches, blurrier synthesis.}
+  \kn{random-search radius \up}{escapes bad local minima more often, slower convergence.}
+\end{itemize}
+\TRAP PatchMatch relies on \emph{spatial coherence} of matches. If correspondences are genuinely unstructured, propagation buys nothing. It is approximate, never exact NN.
+
+\smallskip
+\textbf{The three classic extensions (know all three):}
+\begin{itemize}
+  \item \textbf{Clone detection:} run PatchMatch of the image \emph{against itself}, forbidding the trivial near-$x$ match. A cloned region shows up as a large connected component with $d\approx0$ \emph{and} one shared dominant offset $v$ (its twin has $-v$). In video: 3D self-PatchMatch, and a duplicated segment appears as a constant \emph{temporal} offset.
+  \item \textbf{$k$-NN:} keep a size-$k$ max-heap of offsets per patch instead of one. Propagation pools \emph{all} $k$ offsets of $x$, of the left and of the upper neighbour and keeps the $k$ best. Random search inserts and evicts the worst. Critical subtlety: enforce \textbf{distinctness}, else the heap fills with $k$ near-copies of one match. Cost $\approx k\times$.
+  \item \textbf{Multi-image:} let the offset carry an image index $(m,y)$; propagation borrows the neighbour's $(m,y)$, random search perturbs $y$ and occasionally re-rolls $m$.
+\end{itemize}
+\end{card}
+
+\begin{card}{Inpainting, reshuffling, object removal}{Ch.11}
+\IN\ the same objective, plus a mask saying which pixels are \emph{fixed} and which are \emph{free}, plus patch weights.
+\OUT\ the edited image.
+
+\FLOW all three are one algorithm: decide what is frozen, minimise completeness $+$ coherence over the rest with PatchMatch.
+\begin{itemize}
+  \item \textbf{Inpainting:} free $=$ the hole $\Omega_m$; frozen $=$ everything else. Make the mask a few pixels \emph{generous} to avoid halos from contaminated edge pixels.
+  \item \textbf{Reshuffling:} freeze the pasted object at its new place, let the algorithm re-synthesise everything around it.
+  \item \textbf{Removal:} set the object's patch weights $\approx0$ so it cannot vote anywhere $\Rightarrow$ it evaporates and neighbours fill in. \textbf{Preservation:} set weights high on the patches you must keep.
+\end{itemize}
+\TRAP patch methods copy, they cannot hallucinate. A large hole over unique structure (a face, text) cannot be filled correctly.
+\end{card}
+
+% ===================================================================
+\section{Ch.12 --- Intrinsic Images (Weiss)}
+
+\begin{card}{Weiss intrinsic images --- median of derivative filters}{Ch.12 \textbullet\ \textbf{exam slot 3}}
+\IN\ $T$ images of a \emph{fixed} scene from a \emph{fixed} camera, with only the lighting changing (a day of webcam frames); derivative filters $\{f_n\}$ (usually just $\partial_x,\partial_y$).
+\OUT\ one reflectance image $\hat r$ (the ``paint'', constant over time) and $T$ illumination images $\hat l(\cdot,t)$ (the ``light'').
+
+\FLOW
+\begin{enumerate}
+  \item Take logs: multiplication becomes addition, $i=r+l$. Now the problem is linear.
+  \item Filter every frame with derivative filters. Key assumption: \textbf{illumination edges are sparse} --- shadow boundaries are rare, so most filtered-lighting values are $\approx0$.
+  \item At each pixel and each filter, take the \textbf{median over time} of the filtered frames. The reflectance gradient is present in \emph{every} frame; the shadow edges are rare outliers, and the median throws outliers away.
+  \item You now have the \emph{gradients} of the reflectance. Reconstruct the image itself by a fixed deconvolution (pseudo-inverse) filter $g$, then get each frame's lighting by subtraction.
+\end{enumerate}
+
+\MATH
+\[ \hat r_n(x,y)=\operatorname*{median}_t\,o_n(x,y,t),\ \ o_n=i\star f_n;\qquad
+\hat r=g\star\Big(\sum_n f_n^{\,r}\star \hat r_n\Big)\ \text{with}\ g\star\Big(\sum_n f_n^{\,r}\star f_n\Big)=\delta;\qquad
+\hat l(\cdot,t)=i(\cdot,t)-\hat r \]
+\WHERE $i=\log I$; $r$ = log reflectance (surface paint); $l$ = log illumination; $f_n^{\,r}(x,y)=f_n(-x,-y)$ = the flipped filter (correlation instead of convolution); $g$ = the deconvolution filter that turns filter responses back into an image --- it depends \emph{only} on the chosen filters, so precompute it once and reuse it forever; $\delta$ = the identity (delta) kernel.
+
+\smallskip
+\textbf{Why the median (derivation in one line):} assume the filtered lighting follows a Laplacian prior $P(x)\propto e^{-\alpha|x|}$ (sparse). Maximising that likelihood over $t$ means minimising $\sum_t|o_n(t)-r_n|$, i.e.\ the $\ell_1$ error --- and the $\ell_1$ minimiser of a set of numbers is the \textbf{median}. (An $\ell_2$/Gaussian prior would have given the mean, which shadows would corrupt.)
+
+\smallskip
+\textbf{Convergence (Claim 2):} with $p_\epsilon=P(|f_n\star l|<\epsilon)$, the probability of a good estimate is $\ge\sum_{k=0}^{\lfloor T/2\rfloor}\binom Tk(1-p_\epsilon)^{T-k}p_\epsilon^k$. Sparser lighting = larger $p_\epsilon$ = faster convergence: $p_\epsilon=0.85$ already gives $\ge0.93$ at $T=3$ frames and $\ge0.97$ at $T=5$.
+
+\KNOBS
+\begin{itemize}
+  \kn{\# frames $T$ \up}{higher confidence (the binomial bound); 3--5 frames already work if lighting is sparse.}
+  \kn{filters $\{f_n\}$}{two derivative filters are enough; adding more improves conditioning but $g$ must be recomputed for the new set.}
+  \kn{sparseness of the lighting}{the single assumption everything rests on. Smooth, non-sparse illumination breaks it.}
+\end{itemize}
+\TRAP take the median of \textbf{gradients}, never of raw pixels. A pixel permanently in shadow has no shadow \emph{edge}, so its gradient median is clean --- but a raw-pixel median (or min, or mean) would bake the shadow permanently into the ``paint''.
+
+\smallskip
+\textbf{Online version (the actual exam question, Moed A Q3):} the only non-online part is the median. Keep, per pixel and per filter, a \textbf{256-bin histogram} of the quantised filter response. Each frame: compute the responses, increment one bin per pixel ($O(1)$), and read the running median as the smallest bin whose cumulative count reaches $t/2$. Then reconstruct with the precomputed $g$ and emit $R_t$ every frame. Memory $=256\times(\#\text{filters})$ per pixel --- \emph{independent of $t$}. The same trick with $\arg\max$ instead of the median gives the running \emph{mode} (background modelling).
+\end{card}
+
+% ===================================================================
+\section{Slot 4 --- The ``paper'' questions (outside the notes)}
+
+\begin{card}{Evolving time fronts (Iguazu) \ \ \& \ \ Light fields / concentric mosaics}{slot 4}
+These two appeared as slot-4 questions and are \emph{not} in the book. Both are answerable from Ch.1 and space-time reasoning; say so explicitly in the exam and then solve it with what you have.
+
+\smallskip
+\textbf{Reverse the pan but keep the water falling down.}
+\begin{enumerate}
+  \item Two motions are entangled: the global camera pan (in $x$) and the local water motion (in $t$). Plain reverse playback reverses \emph{both}, so the water flows up. They must be decoupled.
+  \item Stack all frames into an $x\,y\,t$ volume. A normal output frame is a flat slice at $t=$ const --- a ``time front''.
+  \item Sweep a \textbf{slanted / non-planar time-front surface} through the volume: advance the surface in $-x$ (reversed pan) while the local time coordinate along it still \emph{increases} (water keeps falling).
+  \item Each output frame is one cut of the volume with that surface.
+\end{enumerate}
+
+\smallskip
+\textbf{Novel view from a camera on a rotating arm.}
+\begin{enumerate}
+  \item A rotating camera densely samples the scene's \emph{rays}. A novel view is just a new bundle of rays through a virtual centre.
+  \item Calibrate: each frame $k$ has a known projection matrix $P_k$ (Ch.1 intrinsics $+$ the known arm angle gives $R_k,t_k$). Define the virtual $P_v$.
+  \item For each virtual pixel, back-project to a 3D ray; find the recorded camera/pixel whose ray best coincides with it; copy that colour.
+  \item If the virtual ray falls between recorded rays, blend the nearest ones by angular closeness. This is image-based rendering / the light-field idea.
+\end{enumerate}
+\TRAP for slot 4, points come from \emph{reasoning with the course tools}, not from naming the paper. Start by identifying which two things are entangled, then say how you decouple them.
+\end{card}
+
+% ===================================================================
+\section{The derivations they actually ask for}
+
+\begin{keybox}{Six short derivations --- know the first line of each}
+\begin{enumerate}
+  \item \textbf{Optical flow constraint.} $I(x{+}u,y{+}v,t{+}1)=I(x,y,t)$; first-order Taylor $\Rightarrow$ $\Ix u+\Iy v+\It=0$. One equation, two unknowns --- \emph{everything} in Ch.2 is a way to supply the second.
+  \item \textbf{LK normal equations.} Stack the constraint over a window: $Ax=b$, $A=[\Ix\ \Iy]$ rows, $b=-\It$. Minimise $\|Ax-b\|^2$, set the derivative to zero $\Rightarrow$ $A^TAx=A^Tb$. Solvable iff $A^TA$ (the structure tensor) has rank 2 $\Rightarrow$ corners $\Rightarrow$ Harris.
+  \item \textbf{Horn--Schunck.} Energy $=$ data $+\alpha\cdot$ smoothness. Euler--Lagrange on the integral gives $(\Ix u+\Iy v+\It)\Ix-\alpha\nabla^2u=0$ (and the $v$ twin). Discretising $\nabla^2$ with the Laplacian kernel yields a sparse $2N\times2N$ system, solved by the fixed-point iteration on the card. \emph{To modify it}: replace $\nabla^2$ by a \textbf{weighted graph Laplacian} where each neighbour contributes $-w(p,q)$.
+  \item \textbf{Bayes filtering recursion.} Markov $+$ conditional independence $+$ Bayes $\Rightarrow$ posterior $\propto$ likelihood $\times$ motion model $\times$ previous posterior. Marginalise the past $\Rightarrow$ $p(x_t\mid z_{1:t})=C\,p(z_t\mid x_t)\int p(x_t\mid x_{t-1})p(x_{t-1}\mid z_{1:t-1})dx_{t-1}$. The integral is ``predict'', the multiplication is ``update''.
+  \item \textbf{K-means termination.} Both steps are non-increasing in $J$ (nearest centre; mean is the minimiser); finitely many assignments; monotone $\Rightarrow$ no assignment repeats $\Rightarrow$ halts. Local minimum only.
+  \item \textbf{Weiss median.} Sparse (Laplacian) prior on filtered illumination $\Rightarrow$ ML $=$ minimise $\ell_1$ error over time $\Rightarrow$ the estimator is the temporal \emph{median}. Gaussian prior would have given the mean.
+\end{enumerate}
+\end{keybox}
+
+% ===================================================================
+\section{Last-look sheet}
+
+\begin{multicols}{2}
+\textbf{Which distance / which cost?}
+\begin{itemize}
+  \item Avoid edges (colour, road centre): $w=|\nabla I|$.
+  \item Follow edges (scissors, hat brim): $w=1/(|\nabla I|+\varepsilon)$.
+  \item Foreground-ness (matting): $w=|\nabla P(F\mid c)|$.
+  \item Graph tie strength $\to$ length: $\ell=1/w$ or $-\log w$.
+  \item Point cloud: $k$-NN graph, $w=\|p-q\|$ ($+$ normal difference).
+\end{itemize}
+
+\textbf{Which filter for tracking?}
+\begin{itemize}
+  \item Linear $+$ Gaussian $+$ unimodal $\Rightarrow$ Kalman.
+  \item Non-linear / multi-modal / clutter $\Rightarrow$ particle filter.
+  \item Sample by weight $\Rightarrow$ cumulative array $+$ one \texttt{rand()}.
+\end{itemize}
+
+\textbf{Data term vs smoothness term}
+\begin{itemize}
+  \item New \emph{measurement} or confidence $\Rightarrow$ data term.
+  \item New \emph{boundary} signal $\Rightarrow$ smoothness weight.
+  \item Both wanted $\Rightarrow$ do both, and say why.
+\end{itemize}
+
+\textbf{Make it online / cheap}
+\begin{itemize}
+  \item Median or mode over time $\Rightarrow$ 256-bin histogram.
+  \item Multi-modal per-pixel statistics $\Rightarrow$ incremental GMM.
+  \item All-pairs sums $\Rightarrow$ low-rank kernel factorisation.
+  \item Nearest-neighbour fields $\Rightarrow$ PatchMatch.
+  \item Distance maps on a GPU $\Rightarrow$ fast sweeping.
+\end{itemize}
+
+\columnbreak
+
+\textbf{The regularisation dial, everywhere}
+\begin{itemize}
+  \item HS $\alpha$, super-res $\lambda$: data vs prior (ML vs MAP).
+  \item Kalman $R$ vs $Q$: sensor vs model.
+  \item Colorization $b$: sharp vs soft blend.
+  \item Retargeting $\alpha$: completeness vs coherence.
+  \item GMM $T,\alpha$: what counts as background, how fast.
+\end{itemize}
+
+\textbf{Assumptions that break (name them for free points)}
+\begin{itemize}
+  \item Brightness constancy: specularities, shadows, auto-exposure.
+  \item LK: large motion, flat/edge windows (aperture problem).
+  \item HS: quadratic smoothness blurs motion boundaries.
+  \item Eulerian magnification: motion $>1$ px, shaky camera.
+  \item GMM: sudden lighting change, shadows, camera shake.
+  \item Weiss: needs a fixed camera and sparse lighting.
+  \item Dynamic texture: needs stationary statistics.
+  \item PatchMatch: needs coherent correspondences; approximate.
+  \item Retargeting: bad init (black) $\Rightarrow$ garbage; lines bend.
+\end{itemize}
+
+\textbf{One-line summary of the course}
+\par\smallskip
+Define a cost. Add a boundary-aware regulariser. Minimise it iteratively --- by least squares, by Dijkstra/DP, or by alternating two steps that each only lower the cost.
+\end{multicols}
+
+\end{document}

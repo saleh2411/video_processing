@@ -113,9 +113,12 @@
   <ol class="steps">
     <li><b>Gradient magnitude</b> — the main term, the one that makes edges cheap:
       <div class="eq">$$ f_G(q) \;=\; 1 - \frac{|\nabla I(q)|}{\max_r |\nabla I(r)|} \;\in[0,1] $$</div>
-      $f_G=0$ on the strongest edge in the image, $f_G=1$ in a flat region. For diagonal links the cost is
-      scaled by $1/\sqrt2$ (equivalently, multiply the whole local cost by the step length) so that
-      $8$-connected paths are not artificially cheap.</li>
+      $f_G=0$ on the strongest edge in the image, $f_G=1$ in a flat region. The cost must be scaled by the
+      <b>step length</b>: <b>diagonal links &times;$\sqrt2$</b>, axis links &times;$1$ — otherwise a diagonal
+      step buys $\sqrt2$ pixels of progress for the price of one and $8$-connected paths are artificially
+      cheap. <span class="muted">(Mortensen &amp; Barrett write the same ratio the other way round — scale
+      <em>axis</em> links by $1/\sqrt2$ and diagonals by $1$; identical up to a global constant, since only the
+      ratio $\sqrt2:1$ matters.)</span></li>
     <li><b>Laplacian zero-crossing</b> — sub-pixel edge localisation:
       $f_Z(q) = 0$ if a zero-crossing of $\nabla^2 I$ passes through $q$, else $1$. This is a binary snap:
       it costs nothing to sit exactly on the edge and a fixed penalty to sit one pixel beside it, which stops
