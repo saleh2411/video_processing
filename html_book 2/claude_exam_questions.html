@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practice Exam — questions in Avidan's style</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .qcard { margin:22px 0; border:1px solid var(--line); border-radius:13px; overflow:hidden;
+           background:linear-gradient(180deg,var(--card) 0%,var(--bg-2) 100%); box-shadow:var(--shadow); }
+  .qcard > .qhead { display:flex; align-items:center; gap:12px; padding:12px 18px;
+           border-bottom:1px solid var(--line); background:#161d2e; }
+  .qcard > .qhead .qn { font-weight:800; color:#07221f; background:var(--accent-3);
+           border-radius:8px; padding:2px 10px; font-size:14px; }
+  .qcard > .qhead h3 { margin:0; font-size:15.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink); }
+  .qcard > .qhead .pts { margin-left:auto; font-size:12px; color:var(--ink-faint); letter-spacing:.1em; }
+  .qcard > .qbody { padding:16px 20px; }
+  .qcard > .qbody > p:first-child { margin-top:0; }
+  .qcard .maps { display:inline-block; font-size:12px; padding:2px 9px; border-radius:20px;
+           border:1px solid var(--line); background:#101828; color:var(--ink-dim); margin-top:10px; }
+  details.sol { margin:14px 20px 18px; border:1px solid #1d4a42; border-radius:11px; background:#0f2420; }
+  details.sol > summary { cursor:pointer; padding:11px 16px; font-weight:700; color:var(--good);
+           font-size:14px; letter-spacing:.03em; list-style:none; }
+  details.sol > summary::-webkit-details-marker { display:none; }
+  details.sol > summary::before { content:'▶  '; font-size:11px; }
+  details.sol[open] > summary::before { content:'▼  '; }
+  details.sol[open] > summary { border-bottom:1px solid #1d4a42; }
+  details.sol .solbody { padding:4px 18px 16px; }
+  details.sol .solbody h5 { margin:14px 0 6px; font-size:13px; text-transform:uppercase;
+           letter-spacing:.1em; color:var(--accent-3); }
+  details.sol .solbody h5:first-child { margin-top:8px; }
+  .trap { margin-top:12px; padding:10px 14px; border-radius:9px; background:#2a1520;
+          border-left:3px solid var(--danger); font-size:14.5px; color:var(--ink-dim); }
+  .trap b { color:var(--danger); }
+  .kv { width:100%; border-collapse:collapse; font-size:14px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+  .toolbar { position:sticky; top:56px; z-index:5; display:flex; gap:10px; padding:10px 0;
+             background:linear-gradient(180deg,var(--bg) 70%,transparent); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Practice</b> · questions in the examiner's style</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="summary_before_exam.html">Summary ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Practice set · written to match 2020 / 2022-A / 2022-B</div>
+    <h1>A mock exam, in his handwriting</h1>
+    <p class="lede">Three past papers have a very stable shape: eight questions, 13/12/13/12…, one page each, and
+    the same handful of question <em>moves</em> reused with new costumes. Below: first the pattern decoded, then
+    <strong>12 fresh questions</strong> built only from Chapters 1–12 of this book. Every solution starts hidden —
+    write your answer first, then open it.</p>
+  </header>
+
+  <div class="callout warn"><span class="lbl">Read this before you start</span>
+    These are <strong>my</strong> questions, not real past papers. They are modelled on the observed pattern, and
+    nothing here needs material outside Chapters 1–12. Give yourself the real constraint that makes this useful:
+    <strong>one page per answer, ~20 minutes each.</strong> The hard part of this exam is never the algebra — it is
+    recognising which chapter is wearing the costume.</div>
+
+  <h2>1 · The anatomy of his exam</h2>
+
+  <table class="kv">
+    <tr><th style="width:26%">Fixed feature</th><th>Every paper, 2020 → 2022</th></tr>
+    <tr><td>Structure</td><td>8 questions, 100 points, 3 hours</td></tr>
+    <tr><td>Point pattern</td><td><strong>13, 12, 13, 12, 13, 12, 13, 12</strong> — odd questions are the 13s</td></tr>
+    <tr><td>Length cap</td><td>"Each answer should take one page only (text, images and equations)"</td></tr>
+    <tr><td>Instructions</td><td>"Show all work" · "Justify your answers" · "keep your written answers brief"</td></tr>
+    <tr><td>Headers</td><td>Every question is stamped with an ALL-CAPS topic: OPTIC FLOW, TRACKING, SEGMENTATION…
+      — <em>he tells you the chapter</em></td></tr>
+    <tr><td>Length</td><td>Two to five sentences. Often "Consider Figure N." Often a hint at the end.</td></tr>
+  </table>
+
+  <h3>The topic slots are unusually stable</h3>
+
+  <table class="kv">
+    <tr><th>#</th><th>2020</th><th>2022 Moed A</th><th>2022 Moed B</th></tr>
+    <tr><td>Q1 (13)</td><td>Optic flow — cycle consistency</td><td>Optic flow — semantic segmentation</td><td>Optic flow — sparse LiDAR</td></tr>
+    <tr><td>Q2 (12)</td><td>Optic flow — corridor A=B</td><td>Tracking — loaded die</td><td>Tracking — Markov proof</td></tr>
+    <tr><td>Q3 (13)</td><td>Inpainting — BDS failure</td><td>Intrinsic images — online</td><td>Dynamic texture — Word2Vec</td></tr>
+    <tr><td>Q4 (12)</td><td>Light field</td><td>Evolving time fronts</td><td>Light field</td></tr>
+    <tr><td>Q5 (13)</td><td>Tracking — association matrix</td><td>PatchMatch — clone detection</td><td>PatchMatch — k-NN</td></tr>
+    <tr><td>Q6 (12)</td><td>Covid — predict a week ahead</td><td>Geodesic — the γ parameter</td><td>Geodesic — Lena's hat</td></tr>
+    <tr><td>Q7 (13)</td><td>Segmentation — superpixels</td><td>Segmentation — point clouds</td><td>Segmentation — social graph</td></tr>
+    <tr><td>Q8 (12)</td><td>Anomaly detection — GMM</td><td>Is D symmetric?</td><td>Does k-means terminate?</td></tr>
+  </table>
+
+  <div class="callout key"><span class="lbl">What this table tells you</span>
+    <strong>Q1 is always "modify Horn–Schunck to use extra input X."</strong> Three for three. Q7 is always
+    SEGMENTATION. Q8 is always a short theory question. Q2 and Q5 trade places between tracking and
+    matching. If you only had time to over-prepare three things: <strong>Horn–Schunck modifications, geodesic
+    distance, and the short-proof style of Q8.</strong></div>
+
+  <h3>The seven moves he actually uses</h3>
+
+  <table class="kv">
+    <tr><th style="width:23%">Move</th><th>What it looks like</th><th>Seen in</th></tr>
+    <tr><td>1 · Bolt on an input</td><td>"Modify algorithm X to also take input Y." The answer is almost never
+      a new algorithm — it is <em>which existing term</em> Y should multiply, weight, or gate.</td>
+      <td>HS + segmentation, HS + LiDAR, HS + cycle consistency</td></tr>
+    <tr><td>2 · Costume change</td><td>A course algorithm dressed as something non-visual. The whole task is
+      recognising it.</td>
+      <td>Word2Vec→text (=Ch.5), social graph (=Ch.9), machine sound (=Ch.8), Covid (=Ch.4), point clouds (=Ch.9)</td></tr>
+    <tr><td>3 · Explain the failure</td><td>"Here is a bad result. Explain how this can happen and propose a
+      fix." Tests whether you know an algorithm's <em>assumptions</em>, not its steps.</td>
+      <td>BDS inpainting artefact</td></tr>
+    <tr><td>4 · Is it true?</td><td>"Is X symmetric / guaranteed / always solvable? Prove or give a
+      counter-example." Always Q8. A single clean counter-example beats a paragraph.</td>
+      <td>D symmetric?, k-means termination</td></tr>
+    <tr><td>5 · Extend to k</td><td>"The algorithm returns one thing. Make it return k things / handle a harder
+      case."</td><td>1-NN → k-NN PatchMatch</td></tr>
+    <tr><td>6 · Make it online</td><td>"Design an online version. You may store at most M." Always ships with a
+      hint that names the data structure.</td><td>Intrinsic images, 256 frames</td></tr>
+    <tr><td>7 · Express it in the parameters</td><td>"Write Ω(i,j) in terms of the Kalman filter parameters."
+      Wants a formula, not prose.</td><td>Multi-target association</td></tr>
+  </table>
+
+  <h3>A recipe that works on any of them</h3>
+  <ol class="steps" style="counter-reset:st; list-style:none; padding:0">
+    <li style="counter-increment:st; position:relative; padding:11px 14px 11px 50px; margin-bottom:9px; background:var(--card); border:1px solid var(--line); border-radius:11px">
+      <b>Read the ALL-CAPS header.</b> He has told you the chapter. Write down that chapter's core equation
+      before anything else.</li>
+    <li style="counter-increment:st; position:relative; padding:11px 14px 11px 50px; margin-bottom:9px; background:var(--card); border:1px solid var(--line); border-radius:11px">
+      <b>Name the assumption that is being violated or extended.</b> Nearly every question is "the standard
+      assumption is wrong here" or "here is extra information the standard method ignores."</li>
+    <li style="counter-increment:st; position:relative; padding:11px 14px 11px 50px; margin-bottom:9px; background:var(--card); border:1px solid var(--line); border-radius:11px">
+      <b>Change the smallest possible thing.</b> Keep the data term, weight the prior. Keep the loss, change the
+      input. Answers that rebuild the algorithm from scratch lose marks.</li>
+    <li style="counter-increment:st; position:relative; padding:11px 14px 11px 50px; margin-bottom:9px; background:var(--card); border:1px solid var(--line); border-radius:11px">
+      <b>Write the modified equation.</b> "Show all work" means an equation, not a paragraph.</li>
+    <li style="counter-increment:st; position:relative; padding:11px 14px 11px 50px; margin-bottom:9px; background:var(--card); border:1px solid var(--line); border-radius:11px">
+      <b>Close with the degenerate case.</b> One sentence on what happens at the extreme parameter value, or
+      when the new input is absent. This is cheap and it reads as understanding.</li>
+  </ol>
+
+  <h2>2 · The mock exam</h2>
+
+  <div class="toolbar">
+    <button class="act" id="openAll">Reveal all solutions</button>
+    <button class="act primary" id="closeAll">Hide all solutions</button>
+  </div>
+
+  <p class="muted">8 questions · 100 points · 3 hours · one page per answer.</p>
+
+  <!-- ===================== Q1 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">1</span><h3>Optic Flow</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <p>A neural network takes a grayscale image $I$ and outputs a <em>confidence map</em>
+      $C(x,y) \in [0,1]$, where $C$ is close to $1$ at pixels whose brightness is reliable and close to $0$ at
+      pixels corrupted by specular highlights, saturation, or shadow boundaries — places where the brightness
+      constancy assumption is known to break.</p>
+      <p>Modify the Horn–Schunck algorithm to take as input two grayscale images $I_1, I_2$ and their
+      confidence maps $C_1, C_2$, and produce the optic flow between them.</p>
+      <p>What does your algorithm produce in a region where $C \equiv 0$ everywhere?</p>
+      <span class="maps">Ch. 2</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Base Horn–Schunck minimises
+      $\iint (I_xu + I_yv + I_t)^2 + \alpha(|\nabla u|^2 + |\nabla v|^2)\,dx\,dy$. The first term is the
+      <em>data</em> term — it is exactly the brightness-constancy constraint, and the confidence map is a direct
+      statement about <em>where that constraint is trustworthy</em>. So this question is the mirror image of the
+      semantic-segmentation one: there the extra input told you about the <strong>smoothness</strong> term, here
+      it tells you about the <strong>data</strong> term. Do not touch the smoothness.</p>
+      <h5>Solution</h5>
+      <p>Weight the data term pointwise by the confidence:</p>
+      <div class="eq">$$ \min_{u,v} \iint C(x,y)\,(I_xu + I_yv + I_t)^2 \;+\; \alpha\bigl(|\nabla u|^2 + |\nabla v|^2\bigr)\,dx\,dy $$</div>
+      <p>Take $C = \min(C_1(x,y),\, C_2(x+u,y+v))$ so a pixel counts only if it is reliable in
+      <em>both</em> frames (evaluate the second at the current warp inside the coarse-to-fine loop; $C_1$ alone
+      is acceptable if you say so).</p>
+      <p>Redoing the Euler–Lagrange derivation, $C$ simply rides along on the data terms:</p>
+      <div class="eq">$$ C\,I_x(I_xu + I_yv + I_t) - \alpha \Delta u = 0, \qquad
+                       C\,I_y(I_xu + I_yv + I_t) - \alpha \Delta v = 0 $$</div>
+      <p>giving the iteration</p>
+      <div class="eq">$$ u^{k+1} = \bar u^{k} - \frac{C\,I_x(I_x\bar u^k + I_y\bar v^k + I_t)}{\alpha + C(I_x^2+I_y^2)} $$</div>
+      <p>and symmetrically for $v$. Note this is <em>exactly</em> standard HS with $C=1$, which is the check that
+      you have not broken anything.</p>
+      <h5>The closing sentence</h5>
+      <p>Where $C \equiv 0$ the data term vanishes and the update collapses to $u^{k+1} = \bar u^k$ — pure
+      diffusion. The flow there is <strong>filled in entirely by the smoothness term from the surrounding
+      reliable pixels</strong>, which is exactly the desired behaviour: an unreliable pixel contributes no
+      evidence but still receives an interpolated answer. This is the same fill-in mechanism that handles
+      textureless regions in standard HS.</p>
+      <div class="trap"><b>Trap.</b> Weighting the <em>smoothness</em> term instead. That would say "motion is
+      allowed to jump at specular highlights", which is nonsense — a highlight is not an object boundary. Also
+      avoid setting $C$ to a hard $0/1$ mask and deleting those pixels: keeping the soft weight means a pixel
+      with $C = 0.3$ still contributes a little, and it keeps the system well-conditioned.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q2 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">2</span><h3>Tracking</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <p>You implement a particle filter with $N = 1000$ particles to track a person walking across a room.
+      It works for the first few frames. Then you notice that after re-weighting, one particle holds almost
+      all of the weight and the other 999 hold essentially zero; a few frames later the tracker has lost the
+      person entirely and never recovers.</p>
+      <p>Explain how this can happen, and propose two different fixes.</p>
+      <span class="maps">Ch. 4</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>This is the classic <strong>degeneracy / sample impoverishment</strong> failure of Condensation, and
+      the question is really asking whether you understand what the weights and the resampling step are for.</p>
+      <h5>Why it happens</h5>
+      <p>Weights are multiplied by the likelihood every frame,
+      $w_t^{(i)} \propto w_{t-1}^{(i)}\, p(z_t \mid x_t^{(i)})$. The variance of the importance weights
+      <strong>can only grow</strong> over time, so generically one particle's weight tends to 1 and the rest to 0.
+      Two consequences:</p>
+      <ul>
+        <li><strong>Degeneracy:</strong> you are spending 1000 particles' worth of computation to represent a
+        single hypothesis — the effective sample size $N_{\text{eff}} = 1/\sum_i (w^{(i)})^2$ collapses to ~1.</li>
+        <li><strong>Impoverishment:</strong> resampling then makes 1000 identical copies of that one particle.
+        Since the copies are identical, the posterior has collapsed to a point. If that particle was on the
+        wrong hypothesis — a distractor, a moment of occlusion — the true state is no longer represented
+        <em>anywhere</em> in the particle set, and no amount of future evidence can bring it back. Hence
+        "never recovers".</li>
+      </ul>
+      <h5>Fixes (any two)</h5>
+      <ul>
+        <li><strong>Resample adaptively.</strong> Monitor $N_{\text{eff}}$ and resample only when it drops below
+        a threshold (say $N/2$), instead of every frame. Resampling is what destroys diversity, so do it only
+        when it buys something.</li>
+        <li><strong>Add process noise / jitter after resampling.</strong> Perturb each duplicated particle by
+        the motion-model noise so 1000 copies become 1000 nearby-but-distinct hypotheses. Equivalently, widen
+        $p(x_t \mid x_{t-1})$ — the predict step is the only stage that <em>creates</em> diversity.</li>
+        <li><strong>Flatten the likelihood.</strong> An over-peaked $p(z\mid x)$ (too small an observation
+        variance) is usually the real culprit: it makes one particle win outright. Increasing the assumed
+        measurement noise spreads the weights.</li>
+        <li><strong>Increase $N$</strong>, or inject a fraction of particles drawn uniformly / from a detector
+        each frame so the tracker can re-acquire after a loss.</li>
+      </ul>
+      <div class="trap"><b>Trap.</b> Answering only "use more particles". It delays the collapse but does not
+      prevent it — the weight variance still grows monotonically. You must name the mechanism (weight variance
+      growth → resampling → identical copies) to get the marks.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q3 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">3</span><h3>Dynamic Texture</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <p>A sensor bolted to a pedestrian bridge records a vibration feature vector $y_t \in \mathbb{R}^d$ once
+      per second. You are given a 10-minute recording of the bridge under normal conditions.</p>
+      <p>Suggest an algorithm that takes this recording as input and generates as output an arbitrarily long,
+      realistic continuation of the vibration signal — one that a domain expert would not be able to
+      distinguish from a genuine recording.</p>
+      <span class="maps">Ch. 5</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Costume change. "Take a short recording of something that varies stochastically but stationarily, and
+      synthesize more of it forever" is exactly the <strong>dynamic texture</strong> problem of Ch.5 — the same
+      question as smoke, fire, or water, with $y_t$ a sensor vector instead of a vectorised video frame.
+      Nothing about Ch.5 requires $y_t$ to be pixels.</p>
+      <h5>Solution — model</h5>
+      <p>Model the signal as a linear dynamical system (the ARMA / state-space model of Ch.5):</p>
+      <div class="eq">$$ x_{t+1} = A\,x_t + v_t, \qquad y_t = C\,x_t + w_t $$</div>
+      <p>with hidden state $x_t \in \mathbb{R}^n$, $n \ll d$, and $v_t, w_t$ zero-mean Gaussian noise. $A$
+      carries the <em>dynamics</em> (how the bridge evolves), $C$ the <em>appearance</em> (how state maps to
+      the measured features).</p>
+      <h5>Solution — identification by SVD</h5>
+      <ol>
+        <li>Stack the 600 observations into $Y = [\,y_1\ y_2\ \cdots\ y_T\,] \in \mathbb{R}^{d\times T}$ and
+        subtract the mean.</li>
+        <li>Take the SVD $Y = U\Sigma V^{\!\top}$ and truncate to the top $n$ singular values. Set
+        $\hat C = U_n$ and the state sequence $\hat X = \Sigma_n V_n^{\!\top}$. ($n$ from the singular-value
+        knee.)</li>
+        <li>Estimate the dynamics by least squares on the recovered states:
+        $\hat A = X_{2:T}\,X_{1:T-1}^{+}$ (pseudo-inverse).</li>
+        <li>Estimate the driving-noise covariance from the residual
+        $\hat v_t = x_{t+1} - \hat A x_t$.</li>
+      </ol>
+      <h5>Solution — synthesis</h5>
+      <p>Seed $x_0$ from the recording (e.g. its last state), then iterate
+      $x_{t+1} = \hat A x_t + v_t$ with $v_t$ sampled from the fitted noise, and emit
+      $y_t = \hat C x_t + \text{mean}$. Run for as many steps as you like — the model is generative, so output
+      length is unbounded and never repeats verbatim.</p>
+      <h5>The closing sentence</h5>
+      <p>Stability matters: if any eigenvalue of $\hat A$ has modulus $> 1$ the synthesis diverges, and if all
+      are much less than 1 it decays to the mean and goes dead. Check $\rho(\hat A)$ and rescale the
+      eigenvalues to just inside the unit circle if needed.</p>
+      <div class="trap"><b>Trap.</b> Proposing to loop or shuffle chunks of the original recording. That is
+      not synthesis — it repeats verbatim, has visible seams, and cannot generate anything unseen. The marks
+      are for the <em>generative</em> model. (This is the same answer as the Word2Vec-generates-text question
+      from Moed B, with a different costume.)</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q4 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">4</span><h3>Video Magnification</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <p>A camera on a tripod films a sleeping baby. The baby's breathing moves the chest by well under one
+      pixel per frame — invisible to the eye when you watch the video.</p>
+      <p>Suggest a way to produce a video in which the breathing motion is clearly visible. State which
+      frequencies you would keep and why.</p>
+      <p>What happens to your output if, halfway through the recording, the baby throws an arm across the
+      frame?</p>
+      <span class="maps">Ch. 7</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Sub-pixel motion rules out anything Lagrangian: you cannot track what you cannot localise, and optic
+      flow at this amplitude is pure noise. This is the case Ch.7's <strong>Eulerian</strong> approach was built
+      for — never track anything, just watch each pixel's intensity over time and amplify the part of that
+      signal you care about.</p>
+      <h5>Solution</h5>
+      <ol>
+        <li><strong>Spatial decomposition.</strong> Build a multi-scale pyramid of each frame. Work at a coarse
+        scale — small motions are best represented there, and it suppresses sensor noise.</li>
+        <li><strong>Temporal bandpass per pixel.</strong> Treat each pixel (each pyramid coefficient) as a 1-D
+        time series and bandpass it. A sleeping infant breathes at roughly 30–60 breaths/min, so keep
+        <strong>~0.5–1.0 Hz</strong>. This is the crucial step: it isolates breathing and rejects both DC (the
+        static scene) and higher frequencies (noise, flicker).</li>
+        <li><strong>Amplify.</strong> Multiply the bandpassed signal by $\alpha$ and add it back to the
+        original: $\hat I(x,t) = I(x,t) + \alpha\,B(x,t)$.</li>
+        <li><strong>Collapse</strong> the pyramid to get the output video.</li>
+      </ol>
+      <h5>Why amplifying intensity magnifies motion</h5>
+      <p>First-order Taylor: a small translation $\delta(t)$ of a signal $f$ gives
+      $I(x,t) = f\bigl(x+\delta(t)\bigr) \approx f(x) + \delta(t)\,\tfrac{\partial f}{\partial x}$. The
+      time-varying part is exactly $\delta(t)\,\partial f/\partial x$, so multiplying it by $\alpha$ and adding
+      back yields $f(x) + (1+\alpha)\delta(t)\,\partial f/\partial x \approx f\bigl(x + (1+\alpha)\delta(t)\bigr)$
+      — a motion magnified by $(1+\alpha)$. <strong>Amplifying a temporal intensity change is amplifying motion,
+      provided the motion is small.</strong></p>
+      <h5>The arm</h5>
+      <p>It breaks the method, and saying so earns marks. The Taylor approximation is only valid for motion
+      small relative to the spatial wavelength; a large fast arm movement violates it, so the amplification is
+      no longer a translation and you get severe artefacts — ringing, ghosting and blow-out around the arm's
+      edges. It is also broadband in time, so it leaks into the 0.5–1 Hz band rather than being filtered out.
+      Mitigations: cap $\alpha$ (there is a known bound relating $\alpha$ to spatial wavelength), attenuate
+      $\alpha$ at high spatial frequencies, or detect and mask the large-motion region and leave it unamplified.</p>
+      <div class="trap"><b>Trap.</b> Answering "compute optic flow and scale it up" (the Lagrangian answer).
+      At sub-pixel amplitude the flow estimate is dominated by noise, and you would be magnifying the noise.
+      Name Eulerian explicitly and say why.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q5 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">5</span><h3>PatchMatch</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <p>PatchMatch finds, for every patch in the source image, its nearest neighbour in the target image,
+      under the assumption that a patch matches another patch by <em>translation</em> only.</p>
+      <p>Suggest how to extend PatchMatch so that a patch may also match a target patch that is
+      <strong>rotated and scaled</strong>. Describe precisely what changes in each of the algorithm's two
+      steps, and what your algorithm now stores per pixel.</p>
+      <span class="maps">Ch. 11</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>The key realisation: PatchMatch is <em>not</em> an algorithm about offsets. It is a generic randomised
+      search over a parameter space, and it works because of two properties that have nothing to do with
+      translation — <strong>(i)</strong> neighbouring pixels tend to have similar parameters, so guesses can be
+      propagated, and <strong>(ii)</strong> a randomly-seeded field contains a few lucky good guesses.
+      Both survive when you enlarge the parameter space. So: keep the machinery, widen $f$.</p>
+      <h5>What is stored</h5>
+      <p>Instead of a 2-parameter offset $f(x) = (dx, dy)$, store a <strong>4-parameter</strong> search state
+      per pixel:</p>
+      <div class="eq">$$ f(x) \;=\; (dx,\; dy,\; \theta,\; s) $$</div>
+      <p>with $\theta$ the rotation and $s$ the scale. The candidate patch is now
+      $Q_{x+(dx,dy)}$ sampled through the similarity transform
+      $\;T(\theta,s) = s\!\begin{pmatrix}\cos\theta & -\sin\theta\\ \sin\theta & \cos\theta\end{pmatrix}$,
+      i.e. the target patch is extracted on a rotated/scaled grid around the target point (bilinear
+      interpolation), then compared with the usual $\|P-Q\|_2^2$.</p>
+      <h5>Step 1 — Propagation</h5>
+      <p>Unchanged in structure: in alternating raster order, each pixel takes the best of its own state and
+      its two causal neighbours' states,</p>
+      <div class="eq">$$ f(x) \leftarrow \arg\min_{f \in \{f(x),\, f(x-e_1),\, f(x-e_2)\}} \bigl\| P_x - Q_{x+f} \bigr\| $$</div>
+      <p>but now the <em>whole 4-tuple</em> is copied, not just the offset. This is still justified: a coherent
+      region that has been rotated and scaled as a unit shares one $(\theta, s)$ as well as one offset, so
+      spatial coherence holds in all four parameters.</p>
+      <h5>Step 2 — Random search</h5>
+      <p>Sample perturbations in all four dimensions around the current best, with independently shrinking
+      radii:</p>
+      <div class="eq">$$ dx' = dx + r_i w_x,\quad dy' = dy + r_i w_y,\quad \theta' = \theta + r_i w_\theta,\quad s' = s\,(1 + r_i w_s) $$</div>
+      <p>with $r_i = \gamma^i$, $\gamma = 1/2$, $i = 0,1,2,\dots$ until the radius is below one unit; keep the
+      candidate only if it lowers the distance. Initialise uniformly over the full ranges, e.g.
+      $\theta \sim U[-\pi,\pi]$ and $s \sim U[s_{\min}, s_{\max}]$.</p>
+      <h5>The closing sentence</h5>
+      <p>Cost per pixel stays $O(1)$ in image size — still ~3 propagation candidates plus $O(\log w)$ random
+      samples — so the asymptotic advantage over brute force is preserved. The price is a larger constant and a
+      harder search: the space is 4-D instead of 2-D, so more random-search trials (or more iterations) are
+      needed for the same match quality, and scaled patches need interpolation, which costs a little accuracy.</p>
+      <div class="trap"><b>Trap.</b> Proposing to run ordinary PatchMatch once per $(\theta,s)$ from a
+      discretised set and keep the best. It works but it multiplies the runtime by the number of bins and
+      throws away the whole point — propagation should be sharing the rotation and scale too.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q6 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">6</span><h3>Video Colorization</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <p>You are given a grayscale video. A user draws a few coloured scribbles on the <em>first frame only</em>
+      — red on a car, green on the grass, blue on the sky.</p>
+      <p>Suggest an algorithm that colorizes the entire video.</p>
+      <p>Now suppose a pedestrian, not present in frame 1, walks into the scene at frame 50. What does your
+      algorithm do, and how would you change it?</p>
+      <span class="maps">Ch. 9</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Ch.9 exactly. Colour must spread from the scribbles to every pixel, and it must spread <em>within</em>
+      objects but not <em>across</em> their boundaries. The tool that does this is the <strong>geodesic
+      distance</strong>, where "distance" is measured through the image so that crossing a strong edge is
+      expensive.</p>
+      <h5>Solution</h5>
+      <ol>
+        <li><strong>Treat the video as a 3-D volume</strong> $(x,y,t)$ — this is the move that makes it a video
+        algorithm rather than a per-frame one.</li>
+        <li>Let each scribble $k$ define a seed set $\Omega_k$ with colour $c_k$. For every pixel compute the
+        geodesic distance to each seed set,
+        $D_k(x) = \min_{x_0 \in \Omega_k} \inf_\Gamma \int_0^{l(\Gamma)}\!\sqrt{1+\gamma^2\bigl(\nabla I(s)\cdot\Gamma'(s)\bigr)^2}\,ds$,
+        with the gradient taken in <em>space and time</em>. Because the integrand is large where the path runs
+        across a strong gradient, paths prefer to stay inside homogeneous regions.</li>
+        <li><strong>Assign colour</strong> by the nearest seed, $k^*(x) = \arg\min_k D_k(x)$, or better blend
+        softly, $w_k(x) \propto e^{-D_k(x)/\sigma}$, and set the chrominance to $\sum_k w_k c_k$. Keep the
+        original grayscale as the luminance channel and only synthesize chrominance.</li>
+        <li>Compute the distances with a <strong>fast-marching / Dijkstra</strong> sweep over the volume, which
+        is what makes this tractable.</li>
+      </ol>
+      <p>The temporal dimension is what carries colour from frame 1 to frame 200: a point on the car in frame 50
+      is connected to the scribble by a short path through the volume that runs <em>along</em> the car through
+      time, since the car's appearance changes slowly. Equivalently, one may warp the seeds forward with optic
+      flow (Ch.2) and re-solve per frame; say which you chose.</p>
+      <h5>The pedestrian</h5>
+      <p>It gets coloured <strong>wrong</strong>. Every pixel is forced to take the colour of <em>some</em>
+      scribble — the algorithm has no "none of the above" — so the pedestrian is assigned whichever seed is
+      geodesically closest, most likely bleeding the grass or car colour onto them. Nothing in frame 1
+      describes them.</p>
+      <p>Fixes, any of:</p>
+      <ul>
+        <li><strong>Detect and ask.</strong> Flag pixels whose smallest geodesic distance
+        $\min_k D_k(x)$ exceeds a threshold — that is precisely "this pixel is not well explained by any
+        scribble" — and request a new scribble on those regions. This is the honest answer and it needs no
+        extra machinery.</li>
+        <li><strong>Keyframes.</strong> Let the user scribble on a sparse set of keyframes rather than only
+        frame 1, and let colour propagate through the volume from all of them.</li>
+        <li><strong>Detect new content first</strong> with background subtraction (Ch.8): a newly-appearing
+        object shows up as foreground against the learned per-pixel GMM, so you can automatically identify the
+        region that needs a new seed.</li>
+      </ul>
+      <div class="trap"><b>Trap.</b> Colorizing each frame independently. Colours will flicker frame to frame
+      because the geodesic solution is not temporally constrained, and you would have to re-scribble every
+      frame. The space-time volume is the answer.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q7 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">7</span><h3>Segmentation</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <p>A fixed camera monitors a car park, and you run the per-pixel Gaussian Mixture Model background
+      subtraction of the course. A car arrives, parks, and stays for three hours.</p>
+      <p>(a) Describe what happens to that pixel's mixture model over those three hours, and state precisely
+      the criterion by which the parked car eventually becomes "background".</p>
+      <p>(b) The operator complains that parked cars take far too long to be absorbed. How would you change
+      the model so that a stationary object joins the background within roughly ten minutes? What do you lose?</p>
+      <span class="maps">Ch. 8</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>(a) What happens</h5>
+      <p>Each pixel holds $K$ Gaussians with weights $\omega_i$, means $\mu_i$ and variances $\sigma_i^2$. When
+      the car arrives, the pixel's colour stops matching any existing Gaussian, so the least-likely component is
+      replaced by a new one centred at the car's colour, with a <strong>low initial weight and a high initial
+      variance</strong>. That is why the car is initially reported as foreground.</p>
+      <p>Each subsequent frame matches this new component, so it is updated:</p>
+      <div class="eq">$$ \omega_i \leftarrow (1-\alpha)\,\omega_i + \alpha, \qquad
+        \mu_i \leftarrow (1-\rho)\mu_i + \rho X_t, \qquad
+        \sigma_i^2 \leftarrow (1-\rho)\sigma_i^2 + \rho (X_t-\mu_i)^{\!\top}(X_t-\mu_i) $$</div>
+      <p>with $\alpha$ the learning rate. So over time its <strong>weight grows towards 1</strong> and its
+      <strong>variance shrinks</strong> (the car's colour is consistent). Meanwhile the old asphalt component,
+      no longer matched, has its weight decayed by $(1-\alpha)$ every frame.</p>
+      <p><strong>The criterion.</strong> Sort the components by $\omega_i/\sigma_i$ — high weight <em>and</em>
+      low variance, i.e. "seen often and consistently". The background is the first $B$ components in that
+      order, where</p>
+      <div class="eq">$$ B = \arg\min_b \Bigl( \sum_{i=1}^{b} \omega_i > T \Bigr) $$</div>
+      <p>for a threshold $T$. The car becomes background once its component climbs the $\omega/\sigma$ ranking
+      far enough to fall inside that top-$B$ set. Note the ratio is what stops a brief flicker of a consistent
+      colour from being promoted immediately, and what stops a high-variance component (a swaying tree) from
+      being promoted at all.</p>
+      <h5>(b) Making it faster</h5>
+      <p>The time constant is set by the learning rate: a component's weight approaches 1 like
+      $1-(1-\alpha)^t$, so the absorption time scales as $\approx 1/\alpha$ frames. <strong>Raise
+      $\alpha$.</strong> At 25 fps, ten minutes is $1.5\times10^4$ frames, so $\alpha \sim 10^{-4}$ rather than
+      the much smaller value that gives hours. (Equivalently, keep $\alpha$ but re-run the update on
+      temporally sub-sampled frames.)</p>
+      <p><strong>What you lose.</strong> The learning rate is a single knob controlling <em>all</em>
+      adaptation, so raising it trades in both directions:</p>
+      <ul>
+        <li><strong>Slow-moving or briefly-stopped foreground gets swallowed.</strong> A person standing still
+        at a ticket machine for a minute now starts being absorbed into the background and disappears from the
+        detections.</li>
+        <li>The model becomes <strong>noisier and less stable</strong> — it tracks short-term fluctuations
+        (a passing cloud, camera noise) instead of averaging them out, giving more false foreground.</li>
+        <li>Objects that move away leave a "ghost" that clears faster, which is a genuine gain — the trade is
+        not one-sided.</li>
+      </ul>
+      <p>A better answer if you have room: decouple the two, using a fast $\alpha$ for weights and a slow one
+      for $\mu,\sigma$, or explicitly detect "stopped objects" and promote them on a separate timer, so that
+      absorption speed is no longer tied to noise robustness.</p>
+      <div class="trap"><b>Trap.</b> Saying background = "the component with the largest weight". The criterion
+      is the ratio $\omega/\sigma$ <em>and</em> the cumulative-weight threshold $T$, which allows more than one
+      background mode — essential for genuinely multi-modal pixels like a swaying branch or a flickering
+      screen.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== Q8 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">8</span><h3>Optic Flow</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <p>The Lucas–Kanade method estimates the flow of a pixel by assuming the flow is constant over a small
+      window $W$ around it and solving the resulting over-determined system in the least-squares sense.</p>
+      <p>Is this system always solvable? Prove it or give a counter-example, and state exactly the condition
+      under which a unique solution exists.</p>
+      <span class="maps">Ch. 2</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>Set-up</h5>
+      <p>Each pixel in the window contributes one brightness-constancy equation
+      $I_x u + I_y v + I_t = 0$, so with $|W| = N$ pixels we get $A\,\mathbf{u} = b$ with</p>
+      <div class="eq">$$ A = \begin{pmatrix} I_x(p_1) & I_y(p_1) \\ \vdots & \vdots \\ I_x(p_N) & I_y(p_N)\end{pmatrix},
+        \quad \mathbf{u} = \begin{pmatrix}u\\v\end{pmatrix}, \quad
+        b = -\begin{pmatrix} I_t(p_1)\\ \vdots \\ I_t(p_N)\end{pmatrix} $$</div>
+      <p>The least-squares solution is $\mathbf{u} = (A^{\!\top}\!A)^{-1}A^{\!\top}b$, so everything hinges on
+      the $2\times2$ matrix</p>
+      <div class="eq">$$ A^{\!\top}\!A \;=\; \begin{pmatrix} \sum I_x^2 & \sum I_xI_y \\[2pt] \sum I_xI_y & \sum I_y^2 \end{pmatrix} $$</div>
+      <p>— the <strong>structure tensor</strong>, exactly the matrix of the Harris corner detector.</p>
+      <h5>Answer: no, not always</h5>
+      <p>A unique solution exists <strong>if and only if $A^{\!\top}\!A$ is invertible</strong>, i.e. both
+      eigenvalues $\lambda_1 \ge \lambda_2 > 0$ are non-zero. In practice one demands $\lambda_2$ be
+      comfortably above the noise floor, and that $\lambda_1/\lambda_2$ not be too large.</p>
+      <h5>Two counter-examples</h5>
+      <ul>
+        <li><strong>A uniform window</strong> (blank wall, clear sky): $I_x = I_y = 0$ everywhere in $W$, so
+        $A^{\!\top}\!A = 0$. Both eigenvalues zero, rank 0 — no information at all, any $\mathbf{u}$ fits.</li>
+        <li><strong>A straight edge</strong> through the window: every gradient points the same direction
+        $\mathbf{n}$, so every row of $A$ is a multiple of $\mathbf{n}^{\!\top}$ and
+        $A^{\!\top}\!A = (\sum \|\nabla I\|^2)\,\mathbf{n}\mathbf{n}^{\!\top}$ — an outer product, hence
+        <strong>rank 1</strong>, $\lambda_2 = 0$, singular. The solution set is a whole line: motion along the
+        edge is unrecoverable. This is the <strong>aperture problem</strong>, and it is not a numerical
+        accident — the information is genuinely absent.</li>
+      </ul>
+      <h5>The link to Harris</h5>
+      <p>Reading the eigenvalues classifies the window, which is precisely the Harris corner detector:</p>
+      <table class="kv">
+        <tr><th>Eigenvalues</th><th>Window contains</th><th>LK</th></tr>
+        <tr><td>$\lambda_1 \approx \lambda_2 \approx 0$</td><td>flat region</td><td>unsolvable, rank 0</td></tr>
+        <tr><td>$\lambda_1 \gg \lambda_2 \approx 0$</td><td>a straight edge</td><td>unsolvable, rank 1 — normal flow only</td></tr>
+        <tr><td>$\lambda_1, \lambda_2$ both large</td><td>a corner / texture</td><td>solvable and well conditioned</td></tr>
+      </table>
+      <p>So <em>"where should I trust Lucas–Kanade?"</em> and <em>"where are the corners?"</em> are the same
+      question — which is why the two appear in the same chapter, and why sparse LK is run at Harris corners.</p>
+      <h5>Closing</h5>
+      <p>Note the contrast with Horn–Schunck: HS avoids this failure not by getting more data but by adding a
+      global smoothness prior, which couples pixels and lets well-conditioned windows fill in the flow for
+      ill-conditioned ones.</p>
+      <div class="trap"><b>Trap.</b> Answering "yes, because least squares always has a solution." Least
+      squares always has a <em>minimiser</em>, but it is <em>unique</em> only when $A^{\!\top}\!A$ is
+      invertible; here it is singular for the two most common window contents in any real image. Naming
+      "the aperture problem" without the rank argument is worth about half the marks.</div>
+    </div></details>
+  </div>
+
+  <h2>3 · Extra drills — one per remaining chapter</h2>
+  <p class="muted">Shorter, same style, covering the chapters the mock exam above did not touch. Same rule:
+  answer first, then open.</p>
+
+  <!-- ===================== E1 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">E1</span><h3>Motion Representation</h3><span class="pts">drill</span></div>
+    <div class="qbody">
+      <p>A camera on a tripod rotates about its optical centre and zooms while filming a static building.</p>
+      <p>(a) What is the <em>minimal</em> motion model that exactly describes the mapping between any two
+      frames, and how many free parameters does it have? Justify why a simpler model is insufficient and a more
+      general one unnecessary.</p>
+      <p>(b) A bus drives past, covering about 20% of the frame. How do you estimate the model reliably?</p>
+      <span class="maps">Ch. 1 · Ch. 3</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>(a)</h5>
+      <p>A <strong>homography</strong> (projective transform), <strong>8 free parameters</strong> — a
+      $3\times3$ matrix defined up to scale.</p>
+      <p><em>Why it is exact:</em> when the camera rotates about its centre of projection, there is no
+      parallax — the mapping between two views is $H = K_2 R K_1^{-1}$, independent of scene depth. Zoom just
+      changes the intrinsics $K$, which stays inside the same form. So one homography maps any frame to any
+      other exactly, however complicated the 3-D scene.</p>
+      <p><em>Why not simpler:</em> an affine model (6 params) cannot represent the perspective foreshortening
+      induced by rotation; straight lines stay straight but the vanishing-point behaviour is wrong. A pure
+      translation or similarity is even further off.</p>
+      <p><em>Why not more general:</em> nothing more is needed — there is no parallax to explain, so optic flow
+      or a per-pixel model would be over-parameterised and less robust. (Note the crucial caveat: this holds
+      <em>only</em> because the camera rotates about its centre. Translate the tripod and parallax appears,
+      no single homography exists, and you need depth.)</p>
+      <h5>(b)</h5>
+      <p><strong>RANSAC.</strong> The bus is a coherent 20% of the measurements that follow a <em>different</em>
+      motion — exactly the outlier structure least squares handles worst, since a consistent outlier population
+      biases the fit rather than averaging out.</p>
+      <ol>
+        <li>Detect and match features between frames (Harris corners + descriptors).</li>
+        <li>Repeat: sample <strong>4 point correspondences</strong> at random (the minimum for a homography),
+        solve for $H$ exactly, and count inliers — matches with reprojection error
+        $\|x' - Hx\| < \tau$.</li>
+        <li>Keep the $H$ with the largest inlier set, then re-fit by least squares on all its inliers.</li>
+      </ol>
+      <p>Iterations needed: $N = \log(1-p)/\log(1-w^s)$ with $w \approx 0.8$ inlier rate and $s=4$, so a few
+      dozen samples suffice for $p = 0.99$.</p>
+      <div class="trap"><b>Trap.</b> Answering "least squares over all matches". The bus's matches are mutually
+      consistent, so they pull the estimate toward a compromise between two motions rather than cancelling out.
+      Robustness here <em>requires</em> a consensus method.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== E2 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">E2</span><h3>Motion Applications</h3><span class="pts">drill</span></div>
+    <div class="qbody">
+      <p>A security camera records a car driving away. You extract 30 consecutive frames, each containing the
+      licence plate, but in every single frame the plate is too low-resolution to read.</p>
+      <p>Suggest an algorithm that produces one readable image of the plate. Under what condition does your
+      method gain nothing at all?</p>
+      <span class="maps">Ch. 3</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Ch.3, super-resolution. The 30 frames are not 30 copies of the same measurement: because the car moves,
+      each frame samples the underlying continuous plate on a <em>slightly different sub-pixel grid</em>. That
+      sub-pixel diversity is the extra information, and fusing it recovers detail no single frame contains.</p>
+      <h5>Solution</h5>
+      <ol>
+        <li><strong>Register to sub-pixel accuracy.</strong> Pick a reference frame and estimate the motion of
+        the plate region from every other frame to it, at sub-pixel precision (Lucas–Kanade; the plate is
+        planar and roughly fronto-parallel over a short burst, so a homography or even affine model suffices).
+        <em>Registration accuracy is the whole ballgame</em> — errors here translate directly into blur.</li>
+        <li><strong>Warp onto a finer grid.</strong> Choose an output grid $k\times$ denser (say $k=3$) and map
+        every pixel of every frame onto it using the estimated motion. Each low-res pixel lands at a
+        non-integer position, so together the 30 frames populate the fine grid densely.</li>
+        <li><strong>Fuse.</strong> Combine the scattered samples into the high-res image — e.g. iteratively
+        minimise $\sum_t \| D\,B\,W_t\,x - y_t \|^2 + \lambda\,\Gamma(x)$, where $W_t$ warps, $B$ blurs by the
+        camera PSF, $D$ downsamples, $y_t$ are the observed frames and $\Gamma$ is a smoothness/edge prior.
+        Solve by gradient descent (back-projection).</li>
+      </ol>
+      <h5>When it gains nothing</h5>
+      <p>If the motion between frames is a <strong>whole number of pixels</strong> (or zero — a stationary
+      car). Then every frame samples the scene on <em>exactly the same</em> grid, the 30 images are
+      shifted copies carrying identical information, and averaging them reduces noise but adds <strong>no
+      resolution whatsoever</strong>. Sub-pixel motion is not an inconvenience to be corrected — it is the
+      signal the method feeds on.</p>
+      <div class="trap"><b>Trap.</b> Answering "upsample and sharpen" (bicubic + unsharp mask). That invents
+      no new information; it only redistributes what one frame already had. The marks are for using the
+      <em>multiple</em> frames and saying why sub-pixel shifts matter.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== E3 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">E3</span><h3>Layer Decomposition</h3><span class="pts">drill</span></div>
+    <div class="qbody">
+      <p>A static camera films a street. A train passes horizontally in front of a stationary building, and a
+      flag flutters on the building's roof.</p>
+      <p>Suggest an algorithm that takes the video and outputs a labelling of every pixel into coherently-moving
+      layers. How many layers should your algorithm find, and what decides that number?</p>
+      <span class="maps">Ch. 6</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>Ch.6: layer decomposition = "group pixels that share one <em>parametric</em> motion". The recipe is
+      estimate motion → cluster the motions → assign pixels → iterate.</p>
+      <h5>Solution</h5>
+      <ol>
+        <li><strong>Local motion estimation.</strong> Divide the frame into blocks (or use optic flow, Ch.2)
+        and fit an affine motion model to each block by Lucas–Kanade, giving a 6-vector
+        $\theta_j = (a_1,\dots,a_6)$ per block.</li>
+        <li><strong>Cluster the motion parameters</strong> with K-means in the 6-D parameter space. Blocks on
+        the train share one $\theta$ (pure horizontal translation), blocks on the building share another
+        (identity), so they form distinct clusters.</li>
+        <li><strong>Assign every pixel</strong> to the layer whose motion model best predicts it — minimise the
+        residual $|I_2(x + \theta_k(x)) - I_1(x)|$ over $k$.</li>
+        <li><strong>Iterate</strong> (an EM-style loop): re-fit each layer's affine model using <em>all</em>
+        pixels currently assigned to it, then re-assign. Repeat to convergence. This is what sharpens the
+        boundaries — the initial block grid straddles the train's edge, and re-fitting fixes it.</li>
+      </ol>
+      <h5>How many layers</h5>
+      <p>Two dominant ones — <strong>train</strong> and <strong>building/background</strong>. The flag is the
+      interesting case: it moves, but <em>not</em> according to any single parametric model (it is a
+      non-rigid, stochastic dynamic texture, Ch.5). So it will not form a clean affine cluster; it either
+      gets absorbed into the background layer with a large residual, or fragments across several tiny
+      spurious layers.</p>
+      <p>What decides $K$: it is a parameter of K-means and must be chosen, e.g. by the usual distortion-vs-$K$
+      knee, by merging clusters whose motion models are within a tolerance of each other, or by a model-order
+      criterion (MDL) that penalises layers which do not reduce the residual enough to pay for themselves.
+      Saying "$K$ is a free parameter and here is how I would set it" is the expected answer.</p>
+      <div class="trap"><b>Trap.</b> Forgetting the iterate step and reporting the raw block clustering. Block
+      boundaries do not coincide with object boundaries, so a one-pass answer gives a blocky, wrong mask.
+      Also worth one sentence: pixels near the train's edge are ambiguous (occlusion), and a residual threshold
+      should leave them unassigned rather than forcing a label.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== E4 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">E4</span><h3>Video Matting</h3><span class="pts">drill</span></div>
+    <div class="qbody">
+      <p>A presenter with loose curly hair stands in front of a green screen. An engineer implements the
+      compositing as a hard binary decision — "if the pixel is green, replace it with the new background;
+      otherwise keep it" — and the result looks wrong around the hair.</p>
+      <p>Explain precisely why this fails, write the model that fixes it, and describe how to estimate its
+      unknowns.</p>
+      <span class="maps">Ch. 10</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>Why the hard decision fails</h5>
+      <p>A pixel is not a point — it integrates light over a finite sensor area. Where a hair strand is thinner
+      than a pixel, or at any object boundary, that area contains <strong>both</strong> hair and green screen,
+      so the recorded colour is a <em>mixture</em> of the two. There is no correct binary answer for such a
+      pixel: calling it foreground keeps a green fringe, calling it background chops the hair away. Curly hair
+      is nearly all such pixels, which is why it is the standard failure case.</p>
+      <h5>The model</h5>
+      <p>The compositing equation, with a per-pixel opacity $\alpha \in [0,1]$:</p>
+      <div class="eq">$$ I(x) \;=\; \alpha(x)\,F(x) \;+\; \bigl(1-\alpha(x)\bigr)\,B(x) $$</div>
+      <p>$\alpha = 1$ is pure foreground, $\alpha = 0$ pure background, and intermediate values are the mixed
+      pixels. Compositing onto a new background is then
+      $I' = \alpha F + (1-\alpha)B_{\text{new}}$.</p>
+      <p><strong>This is ill-posed:</strong> per pixel there are 3 equations (RGB) and 7 unknowns
+      ($\alpha$, $F$, $B$ — 3 channels each). Hence the need for user input and a prior.</p>
+      <h5>Estimating the unknowns</h5>
+      <ol>
+        <li><strong>Trimap.</strong> The user (or an automatic step) partitions the frame into definite
+        foreground, definite background, and a narrow <em>unknown</em> band around the boundary. Inside the
+        first two, $\alpha$ is 1 and 0 by construction; only the band must be solved.</li>
+        <li><strong>Model the colour distributions.</strong> For each unknown pixel, gather nearby known
+        foreground and background samples and build non-parametric estimates of $p(F)$ and $p(B)$ using
+        <strong>kernel density estimation</strong> (Ch.10).</li>
+        <li><strong>Solve per pixel</strong> for the $(\alpha, F, B)$ that best explains the observed colour
+        under those densities — maximise $p(F)p(B)$ subject to
+        $I = \alpha F + (1-\alpha)B$, or equivalently minimise the compositing residual plus the two
+        colour-model penalties.</li>
+        <li><strong>For video, add temporal coherence:</strong> solve on the space-time volume, or propagate
+        the trimap between frames with optic flow (Ch.2), so $\alpha$ does not flicker frame to frame — a
+        per-frame solution produces visible boundary crawl.</li>
+      </ol>
+      <p>The green screen is a genuine simplification worth mentioning: $B$ is known and nearly constant, which
+      removes 3 of the 7 unknowns and makes the system far better conditioned than natural-image matting.</p>
+      <div class="trap"><b>Trap.</b> Stopping at "use a soft threshold on greenness". That produces
+      <em>an</em> $\alpha$ but does not recover $F$, so the hair keeps its green spill — the recovered
+      foreground colour must be un-mixed too, which is why $F$ is an unknown in the model and not just taken
+      from $I$.</div>
+    </div></details>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Self-check — what a full-mark answer contains</span>
+    <table>
+      <tr><th>Element</th><th>Why it earns marks</th></tr>
+      <tr><td>Name the chapter/method in the first line</td><td>Shows you decoded the costume. Half the
+        difficulty of these questions is identification.</td></tr>
+      <tr><td>State the assumption being violated or extended</td><td>Nearly every question is built on one.</td></tr>
+      <tr><td>Write the modified equation</td><td>"Show all work" — a paragraph without an equation reads as
+        vague, however correct.</td></tr>
+      <tr><td>Change the minimum</td><td>Rebuilding from scratch signals you did not see the connection.</td></tr>
+      <tr><td>Say what breaks / the degenerate case</td><td>One sentence, very cheap, reads as real
+        understanding rather than recall.</td></tr>
+      <tr><td>Fit on one page</td><td>It is an explicit instruction on every paper.</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="index.html"><span class="dir">‹ Back</span><span class="ttl">Contents</span></a>
+    <a class="next" href="summary_before_exam.html"><span class="dir">Next ›</span><span class="ttl">Summary before the exam</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const all = () => document.querySelectorAll('details.sol');
+  document.getElementById('openAll').onclick  = () => all().forEach(d => d.open = true);
+  document.getElementById('closeAll').onclick = () => all().forEach(d => d.open = false);
+  // never restore an open state on reload — questions come first
+  all().forEach(d => d.open = false);
+})();
+</script>
+</body>
+</html>
