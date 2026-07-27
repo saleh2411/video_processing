@@ -42,6 +42,13 @@
   .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
   .toolbar { position:sticky; top:56px; z-index:5; display:flex; gap:10px; padding:10px 0;
              background:linear-gradient(180deg,var(--bg) 70%,transparent); }
+  .exfig { margin:16px 0 12px; padding:14px 14px 10px; background:#0a0f1c;
+           border:1px solid var(--line); border-radius:10px; }
+  .exfig svg { display:block; width:100%; height:auto; max-width:100%; }
+  .figcap { font-size:13px; color:var(--ink-dim); margin:10px 2px 0; line-height:1.5; }
+  .figcap b { color:var(--ink); }
+  .never { background:#2a1520; }
+  .never td:first-child { color:var(--danger); }
 </style>
 </head>
 <body>
@@ -58,8 +65,9 @@
     <div class="eyebrow">Practice set · written to match 2020 / 2022-A / 2022-B</div>
     <h1>A mock exam, in his handwriting</h1>
     <p class="lede">Three past papers have a very stable shape: eight questions, 13/12/13/12…, one page each, and
-    the same handful of question <em>moves</em> reused with new costumes. Below: first the pattern decoded, then
-    <strong>12 fresh questions</strong> built only from Chapters 1–12 of this book. Every solution starts hidden —
+    the same handful of question <em>moves</em> reused with new costumes. Below: first the pattern decoded —
+    including <strong>the five chapters he has never once examined</strong> — then <strong>17 fresh
+    questions</strong> with figures, built only from Chapters 1–12 of this book. Every solution starts hidden —
     write your answer first, then open it.</p>
   </header>
 
@@ -101,6 +109,33 @@
     SEGMENTATION. Q8 is always a short theory question. Q2 and Q5 trade places between tracking and
     matching. If you only had time to over-prepare three things: <strong>Horn–Schunck modifications, geodesic
     distance, and the short-proof style of Q8.</strong></div>
+
+  <h3>What he has <em>never</em> examined — your blind spots</h3>
+
+  <p>Just as useful as the pattern is the gap. Cross-referencing all three papers against the twelve chapters:</p>
+
+  <table class="kv">
+    <tr><th style="width:22%">Chapter</th><th>Exam history</th><th>Risk</th></tr>
+    <tr><td>Ch.2 Optic flow</td><td>Q1 every year, plus extra slots</td><td>Certain — over-prepare</td></tr>
+    <tr><td>Ch.9 Geodesic / colorization</td><td>2020 Q7, 2022A Q6, 2022B Q6</td><td>Certain</td></tr>
+    <tr><td>Ch.11 PatchMatch / BDS</td><td>2020 Q3, 2022A Q5+Q8, 2022B Q5</td><td>Certain</td></tr>
+    <tr><td>Ch.4 Kalman / particle</td><td>2020 Q5+Q6, 2022A Q2, 2022B Q2</td><td>High</td></tr>
+    <tr><td>Ch.8 GMM background</td><td>2020 Q8 (as factory noise)</td><td>Medium</td></tr>
+    <tr><td>Ch.5 Dynamic texture</td><td>2022B Q3 (as Word2Vec)</td><td>Medium</td></tr>
+    <tr><td>Ch.12 Intrinsic images</td><td>2022A Q3</td><td>Medium</td></tr>
+    <tr class="never"><td>Ch.1 Motion representation</td><td><strong>never asked directly</strong> — only implied by the 2020 corridor question</td><td>Open</td></tr>
+    <tr class="never"><td>Ch.3 Motion applications</td><td><strong>never asked</strong> — no super-resolution, no hyperlapse, no dynamic programming</td><td>Open</td></tr>
+    <tr class="never"><td>Ch.6 Layer decomposition</td><td><strong>never asked</strong> — K-means appeared only as a termination proof</td><td>Open</td></tr>
+    <tr class="never"><td>Ch.7 Video magnification</td><td><strong>never asked, in any form</strong></td><td>Open</td></tr>
+    <tr class="never"><td>Ch.10 Video matting</td><td><strong>never asked, in any form</strong></td><td>Open</td></tr>
+  </table>
+
+  <div class="callout warn"><span class="lbl">How to read the red rows</span>
+    A chapter he has never examined is not a chapter he will not examine — it is a chapter you have no past
+    paper to practise on, which is exactly where a surprise costs you 13 points. <strong>§3 below is written
+    entirely from these five rows.</strong> Note also that Ch.7 and Ch.10 are the two chapters with a
+    <em>single</em> dominant idea each (Eulerian amplification; the compositing equation with $\alpha$), which
+    makes them very easy to build a question around.</div>
 
   <h3>The seven moves he actually uses</h3>
 
@@ -157,7 +192,39 @@
   <div class="qcard">
     <div class="qhead"><span class="qn">1</span><h3>Optic Flow</h3><span class="pts">13 points</span></div>
     <div class="qbody">
-      <p>A neural network takes a grayscale image $I$ and outputs a <em>confidence map</em>
+      <div class="exfig">
+        <svg viewBox="0 0 720 170" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="f1road" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2a3550"/><stop offset="1" stop-color="#161d2e"/></linearGradient>
+          </defs>
+          <!-- panel a : input image -->
+          <rect x="10" y="16" width="210" height="130" fill="url(#f1road)" stroke="#2c3650"/>
+          <path d="M10 110 L220 110 L220 146 L10 146 Z" fill="#20293f"/>
+          <rect x="46" y="62" width="72" height="46" rx="7" fill="#39445e"/>
+          <rect x="52" y="50" width="52" height="20" rx="6" fill="#39445e"/>
+          <ellipse cx="66" cy="110" rx="10" ry="9" fill="#0e1320"/><ellipse cx="106" cy="110" rx="10" ry="9" fill="#0e1320"/>
+          <ellipse cx="92" cy="58" rx="15" ry="8" fill="#f2f6ff" opacity=".92"/>
+          <ellipse cx="150" cy="122" rx="42" ry="13" fill="#0a0e18" opacity=".85"/>
+          <text x="115" y="163" font-size="12" fill="#8ea0c0" text-anchor="middle">a</text>
+          <!-- panel b : confidence map -->
+          <rect x="255" y="16" width="210" height="130" fill="#e8eef8" stroke="#2c3650"/>
+          <ellipse cx="337" cy="58" rx="19" ry="12" fill="#1a2133"/>
+          <ellipse cx="395" cy="122" rx="46" ry="16" fill="#1a2133"/>
+          <ellipse cx="337" cy="58" rx="27" ry="18" fill="#1a2133" opacity=".35"/>
+          <ellipse cx="395" cy="122" rx="55" ry="21" fill="#1a2133" opacity=".35"/>
+          <text x="360" y="163" font-size="12" fill="#8ea0c0" text-anchor="middle">b</text>
+          <text x="470" y="52" font-size="11" fill="#8ea0c0">C ≈ 1  reliable</text>
+          <rect x="470" y="58" width="52" height="9" fill="#e8eef8" stroke="#2c3650"/>
+          <text x="470" y="92" font-size="11" fill="#8ea0c0">C ≈ 0  unreliable</text>
+          <rect x="470" y="98" width="52" height="9" fill="#1a2133" stroke="#2c3650"/>
+          <text x="470" y="128" font-size="11" fill="#6b7a99">(highlight, shadow,</text>
+          <text x="470" y="142" font-size="11" fill="#6b7a99">saturation)</text>
+        </svg>
+        <p class="figcap"><b>Figure 1:</b> (a) Input image $I$. (b) The corresponding confidence map $C$,
+        where dark regions mark pixels whose brightness the network considers unreliable.</p>
+      </div>
+      <p>Consider Figure 1. A neural network takes a grayscale image $I$ and outputs a <em>confidence map</em>
       $C(x,y) \in [0,1]$, where $C$ is close to $1$ at pixels whose brightness is reliable and close to $0$ at
       pixels corrupted by specular highlights, saturation, or shadow boundaries — places where the brightness
       constancy assumption is known to break.</p>
@@ -304,8 +371,34 @@
   <div class="qcard">
     <div class="qhead"><span class="qn">4</span><h3>Video Magnification</h3><span class="pts">12 points</span></div>
     <div class="qbody">
-      <p>A camera on a tripod films a sleeping baby. The baby's breathing moves the chest by well under one
-      pixel per frame — invisible to the eye when you watch the video.</p>
+      <div class="exfig">
+        <svg viewBox="0 0 720 160" xmlns="http://www.w3.org/2000/svg">
+          <line x1="40" y1="80" x2="690" y2="80" stroke="#2c3650"/>
+          <line x1="40" y1="20" x2="40" y2="140" stroke="#2c3650"/>
+          <text x="18" y="30" font-size="11" fill="#6b7a99">+1</text>
+          <text x="20" y="84" font-size="11" fill="#6b7a99">0</text>
+          <text x="16" y="136" font-size="11" fill="#6b7a99">−1</text>
+          <text x="360" y="156" font-size="11" fill="#8ea0c0" text-anchor="middle">time (seconds) →</text>
+          <text x="52" y="34" font-size="11" fill="#8ea0c0">chest displacement (pixels)</text>
+          <!-- one-pixel band -->
+          <rect x="40" y="72" width="650" height="16" fill="#41d8c9" opacity=".08"/>
+          <line x1="40" y1="72" x2="690" y2="72" stroke="#41d8c9" stroke-dasharray="3 4" opacity=".6"/>
+          <line x1="40" y1="88" x2="690" y2="88" stroke="#41d8c9" stroke-dasharray="3 4" opacity=".6"/>
+          <text x="600" y="68" font-size="10.5" fill="#41d8c9">± 1 pixel</text>
+          <!-- the breathing signal, amplitude ~0.15 px -->
+          <path fill="none" stroke="#ffb454" stroke-width="2"
+            d="M40 80 Q60 74 80 80 T120 80 T160 80 T200 80 T240 80 T280 80 T320 80 T360 80 T400 80 T440 80 T480 80 T520 80 T560 80 T600 80 T640 80 T680 80"/>
+          <path fill="none" stroke="#ffb454" stroke-width="2" opacity="0"
+            d="M40 80"/>
+          <text x="150" y="112" font-size="11" fill="#ffb454">breathing ≈ 0.15 px amplitude, ≈ 0.7 Hz</text>
+          <line x1="146" y1="104" x2="120" y2="86" stroke="#ffb454" stroke-width="1"/>
+        </svg>
+        <p class="figcap"><b>Figure 2:</b> Vertical displacement of a point on the baby's chest, measured over
+        time. The dashed band marks $\pm 1$ pixel. The breathing signal never leaves a small fraction of one
+        pixel.</p>
+      </div>
+      <p>Consider Figure 2. A camera on a tripod films a sleeping baby. The baby's breathing moves the chest by
+      well under one pixel per frame — invisible to the eye when you watch the video.</p>
       <p>Suggest a way to produce a video in which the breathing motion is clearly visible. State which
       frequencies you would keep and why.</p>
       <p>What happens to your output if, halfway through the recording, the baby throws an arm across the
@@ -354,8 +447,45 @@
   <div class="qcard">
     <div class="qhead"><span class="qn">5</span><h3>PatchMatch</h3><span class="pts">13 points</span></div>
     <div class="qbody">
-      <p>PatchMatch finds, for every patch in the source image, its nearest neighbour in the target image,
-      under the assumption that a patch matches another patch by <em>translation</em> only.</p>
+      <div class="exfig">
+        <svg viewBox="0 0 720 190" xmlns="http://www.w3.org/2000/svg">
+          <!-- source -->
+          <rect x="20" y="20" width="180" height="140" fill="#151c2e" stroke="#2c3650"/>
+          <text x="20" y="14" font-size="11.5" fill="#8ea0c0">source S</text>
+          <g transform="translate(78,72)">
+            <rect x="0" y="0" width="44" height="44" fill="none" stroke="#41d8c9" stroke-width="2"/>
+            <path d="M6 38 L22 8 L38 38 Z" fill="#41d8c9" opacity=".5"/>
+          </g>
+          <text x="88" y="132" font-size="12" fill="#41d8c9">P</text>
+          <!-- target -->
+          <rect x="300" y="20" width="400" height="140" fill="#151c2e" stroke="#2c3650"/>
+          <text x="300" y="14" font-size="11.5" fill="#8ea0c0">target T</text>
+          <!-- translated match -->
+          <g transform="translate(330,66)">
+            <rect x="0" y="0" width="44" height="44" fill="none" stroke="#7ee787" stroke-width="2"/>
+            <path d="M6 38 L22 8 L38 38 Z" fill="#7ee787" opacity=".5"/>
+          </g>
+          <text x="326" y="128" font-size="11" fill="#7ee787">translated ✓ found today</text>
+          <!-- rotated match -->
+          <g transform="translate(500,88) rotate(-38)">
+            <rect x="-22" y="-22" width="44" height="44" fill="none" stroke="#ffb454" stroke-width="2"/>
+            <path d="M-16 16 L0 -14 L16 16 Z" fill="#ffb454" opacity=".5"/>
+          </g>
+          <text x="466" y="146" font-size="11" fill="#ffb454">rotated ✗ missed</text>
+          <!-- scaled match -->
+          <g transform="translate(612,84) scale(1.5)">
+            <rect x="-22" y="-22" width="44" height="44" fill="none" stroke="#ffb454" stroke-width="1.4"/>
+            <path d="M-16 16 L0 -14 L16 16 Z" fill="#ffb454" opacity=".5"/>
+          </g>
+          <text x="586" y="146" font-size="11" fill="#ffb454">scaled ✗ missed</text>
+          <path d="M204 92 L296 88" stroke="#7ee787" stroke-dasharray="4 4" fill="none"/>
+        </svg>
+        <p class="figcap"><b>Figure 3:</b> A patch $P$ in the source and three occurrences of the same content
+        in the target. Standard PatchMatch recovers only the translated copy (green); the rotated and scaled
+        copies (amber) are missed.</p>
+      </div>
+      <p>Consider Figure 3. PatchMatch finds, for every patch in the source image, its nearest neighbour in the
+      target image, under the assumption that a patch matches another patch by <em>translation</em> only.</p>
       <p>Suggest how to extend PatchMatch so that a patch may also match a target patch that is
       <strong>rotated and scaled</strong>. Describe precisely what changes in each of the algorithm's two
       steps, and what your algorithm now stores per pixel.</p>
@@ -465,8 +595,38 @@
   <div class="qcard">
     <div class="qhead"><span class="qn">7</span><h3>Segmentation</h3><span class="pts">13 points</span></div>
     <div class="qbody">
-      <p>A fixed camera monitors a car park, and you run the per-pixel Gaussian Mixture Model background
-      subtraction of the course. A car arrives, parks, and stays for three hours.</p>
+      <div class="exfig">
+        <svg viewBox="0 0 720 175" xmlns="http://www.w3.org/2000/svg">
+          <line x1="46" y1="130" x2="700" y2="130" stroke="#2c3650"/>
+          <line x1="46" y1="18" x2="46" y2="130" stroke="#2c3650"/>
+          <text x="16" y="30" font-size="11" fill="#6b7a99">255</text>
+          <text x="30" y="134" font-size="11" fill="#6b7a99">0</text>
+          <text x="52" y="16" font-size="11" fill="#8ea0c0">observed intensity at one pixel</text>
+          <!-- asphalt level -->
+          <path d="M46 104 L200 104" stroke="#6ea8ff" stroke-width="2" fill="none"/>
+          <path d="M200 104 L204 58 L700 58" stroke="#6ea8ff" stroke-width="2" fill="none"/>
+          <text x="80" y="120" font-size="11" fill="#6ea8ff">empty asphalt</text>
+          <text x="420" y="48" font-size="11" fill="#6ea8ff">car body colour — constant for 3 hours</text>
+          <!-- arrival marker -->
+          <line x1="202" y1="22" x2="202" y2="130" stroke="#ffb454" stroke-dasharray="4 4"/>
+          <text x="208" y="30" font-size="11" fill="#ffb454">car parks</text>
+          <!-- time axis -->
+          <text x="373" y="152" font-size="11" fill="#8ea0c0" text-anchor="middle">time →</text>
+          <text x="46" y="168" font-size="10.5" fill="#6b7a99">t = 0</text>
+          <text x="670" y="168" font-size="10.5" fill="#6b7a99">t = 3 h</text>
+          <!-- foreground/background label bar -->
+          <rect x="46" y="136" width="156" height="7" fill="#2c3650"/>
+          <rect x="202" y="136" width="200" height="7" fill="#ff6b81"/>
+          <rect x="402" y="136" width="298" height="7" fill="#7ee787"/>
+          <text x="250" y="132" font-size="10" fill="#ff6b81">reported FOREGROUND</text>
+          <text x="470" y="132" font-size="10" fill="#7ee787">reported BACKGROUND</text>
+        </svg>
+        <p class="figcap"><b>Figure 4:</b> The intensity recorded at a single pixel of the car park over three
+        hours, and the label the background-subtraction system assigns to it. The transition from foreground to
+        background happens long after the car has stopped moving.</p>
+      </div>
+      <p>Consider Figure 4. A fixed camera monitors a car park, and you run the per-pixel Gaussian Mixture Model
+      background subtraction of the course. A car arrives, parks, and stays for three hours.</p>
       <p>(a) Describe what happens to that pixel's mixture model over those three hours, and state precisely
       the criterion by which the parked car eventually becomes "background".</p>
       <p>(b) The operator complains that parked cars take far too long to be absorbed. How would you change
@@ -578,15 +738,527 @@
     </div></details>
   </div>
 
-  <h2>3 · Extra drills — one per remaining chapter</h2>
-  <p class="muted">Shorter, same style, covering the chapters the mock exam above did not touch. Same rule:
-  answer first, then open.</p>
+  <h2>3 · Blind spots — the chapters with no exam history</h2>
+
+  <p class="muted">One full-weight question for each red row of the table in §1 — Ch.1, Ch.3, Ch.6, Ch.7 and
+  Ch.10. These are the chapters you cannot practise from a past paper, so they are the ones most likely to
+  cost you a whole question. Same rules: one page, ~20 minutes, answer before opening.</p>
+
+  <!-- ===================== N1 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">N1</span><h3>Motion Applications</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <div class="exfig">
+        <svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
+          <text x="14" y="16" font-size="11.5" fill="#8ea0c0">input frames (2 hours, hand-held)</text>
+          <g>
+            <rect x="14" y="26" width="46" height="34" fill="#20293f" stroke="#2c3650"/>
+            <rect x="70" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(4 93 47)"/>
+            <rect x="126" y="24" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(-6 149 41)"/>
+            <rect x="182" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(3 205 47)"/>
+            <rect x="238" y="26" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(-4 261 43)"/>
+            <rect x="294" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(5 317 47)"/>
+            <rect x="350" y="24" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(-3 373 41)"/>
+            <rect x="406" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(2 429 47)"/>
+            <rect x="462" y="26" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(-5 485 43)"/>
+            <rect x="518" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(4 541 47)"/>
+            <rect x="574" y="24" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(-2 597 41)"/>
+            <rect x="630" y="30" width="46" height="34" fill="#20293f" stroke="#2c3650" transform="rotate(3 653 47)"/>
+          </g>
+          <text x="14" y="104" font-size="11.5" fill="#ff6b81">(a) keep every 4th frame — shaky</text>
+          <g stroke="#ff6b81" stroke-width="1.6" fill="none">
+            <path d="M37 118 L149 118 M149 118 L261 118 M261 118 L373 118 M373 118 L485 118 M485 118 L597 118"/>
+          </g>
+          <g fill="#ff6b81">
+            <circle cx="37" cy="118" r="4"/><circle cx="149" cy="118" r="4"/><circle cx="261" cy="118" r="4"/>
+            <circle cx="373" cy="118" r="4"/><circle cx="485" cy="118" r="4"/><circle cx="597" cy="118" r="4"/>
+          </g>
+          <text x="14" y="158" font-size="11.5" fill="#7ee787">(b) chosen by shortest path — smooth</text>
+          <g stroke="#7ee787" stroke-width="1.6" fill="none">
+            <path d="M37 172 L93 172 M93 172 L205 172 M205 172 L317 172 M317 172 L429 172 M429 172 L541 172 M541 172 L653 172"/>
+          </g>
+          <g fill="#7ee787">
+            <circle cx="37" cy="172" r="4"/><circle cx="93" cy="172" r="4"/><circle cx="205" cy="172" r="4"/>
+            <circle cx="317" cy="172" r="4"/><circle cx="429" cy="172" r="4"/><circle cx="541" cy="172" r="4"/>
+            <circle cx="653" cy="172" r="4"/>
+          </g>
+        </svg>
+        <p class="figcap"><b>Figure 5:</b> Frame selection for a timelapse. (a) Uniform sub-sampling picks frames
+        regardless of how well consecutive choices align. (b) A selection chosen to trade off playback speed
+        against inter-frame alignment.</p>
+      </div>
+      <p>Consider Figure 5. A helmet camera records a two-hour hike at 30 fps. You want a two-minute timelapse.
+      Keeping every 30th frame gives the right length, but the result is violently shaky and unwatchable,
+      because consecutive kept frames happen to point in very different directions.</p>
+      <p>Suggest an algorithm that selects which frames to keep so that the output is both approximately the
+      requested length and as smooth as possible. Write down the cost you minimise and say how you minimise it.</p>
+      <span class="maps">Ch. 3 · never examined</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>How to think about it</h5>
+      <p>The naive method fails because it makes the selection decision using <em>only the clock</em>, ignoring
+      what the frames look like. Turn it into an <strong>optimisation over which frames to keep</strong>. The
+      key structural observation: a selection is an increasing sequence of frame indices, so the search space
+      is a directed acyclic graph and the optimum is a <strong>shortest path</strong> — solvable exactly by
+      <strong>dynamic programming</strong>, not by greedy or by search.</p>
+      <h5>The graph</h5>
+      <p>Node $i$ = "output frame $i$ of the input is used". Edge $i \to j$ (with $j > i$) = "frame $j$ is the
+      next one shown after frame $i$". A path from the first frame to the last <em>is</em> a selection.</p>
+      <h5>The cost on an edge</h5>
+      <div class="eq">$$ C(i,j) \;=\; \underbrace{C_m(i,j)}_{\text{alignment}} \;+\; \lambda_s\underbrace{C_s(i,j)}_{\text{speed}} $$</div>
+      <ul>
+        <li><strong>Alignment / motion cost</strong> $C_m(i,j)$ — how badly frames $i$ and $j$ line up. Estimate
+        the homography $H_{ij}$ between them (Ch.1 + RANSAC) and penalise the residual displacement of the frame
+        centre, $\;C_m = \| H_{ij}\,c - c \|$. Small when the camera was pointing the same way; large across a
+        head-turn. This is the term that buys smoothness.</li>
+        <li><strong>Speed cost</strong> $C_s(i,j) = \bigl( (j-i) - \tau \bigr)^2$, where $\tau$ is the target
+        skip (here $\tau = 30$). This keeps the output near the requested length while permitting local
+        deviation — the algorithm may skip 22 frames here and 41 there if that avoids a jump.</li>
+      </ul>
+      <p>Add a third term over <em>pairs</em> of edges to penalise changes in speed,
+      $C_a(h,i,j) = \bigl((j-i)-(i-h)\bigr)^2$, so the timelapse does not visibly speed up and slow down. This
+      makes the state $(h,i)$ rather than $i$ — still a DP, just on edges instead of nodes.</p>
+      <h5>Minimising it</h5>
+      <p>Let $D(j)$ be the cost of the best path ending at $j$:</p>
+      <div class="eq">$$ D(j) \;=\; \min_{\,i \,<\, j,\; j-i \le w} \Bigl[\, D(i) + C(i,j) \,\Bigr] $$</div>
+      <p>Sweep $j$ in increasing order, store the arg-min as a back-pointer, then backtrack from the last frame
+      to read off the chosen sequence. Capping the jump at $j - i \le w$ (say $w = 2\tau$) keeps it
+      $O(N w)$ instead of $O(N^2)$, which matters at $2\text{h} \times 30\,\text{fps} = 216{,}000$ frames.</p>
+      <h5>Closing</h5>
+      <p>Optionally follow with a <strong>stabilisation</strong> pass — warp the selected frames by a smoothed
+      camera path (fit a low-order curve through the $H$'s and re-render), since frame selection alone can only
+      choose among motions that were actually recorded; it cannot invent a viewpoint that was never captured.</p>
+      <div class="trap"><b>Trap.</b> A greedy answer ("from the current frame, jump to whichever nearby frame
+      aligns best"). It gets stuck: a locally cheap jump can force an expensive one later, and it cannot
+      guarantee the total length. The point of this question is recognising the <em>shortest-path</em>
+      structure and saying <strong>dynamic programming</strong> — it is the one place in the course where DP is
+      the answer.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== N2 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">N2</span><h3>Motion Representation</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <div class="exfig">
+        <svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="180" y="14" width="360" height="172" fill="#151c2e" stroke="#2c3650"/>
+          <g stroke="#41d8c9" stroke-width="1.7" fill="none">
+            <path d="M360 100 L360 100"/>
+            <path d="M330 82 L306 66"/><path d="M390 82 L414 66"/>
+            <path d="M330 118 L306 134"/><path d="M390 118 L414 134"/>
+            <path d="M334 100 L300 100"/><path d="M386 100 L420 100"/>
+            <path d="M360 76 L360 50"/><path d="M360 124 L360 150"/>
+            <path d="M300 60 L258 32"/><path d="M420 60 L462 32"/>
+            <path d="M300 140 L258 168"/><path d="M420 140 L462 168"/>
+            <path d="M296 88 L238 78"/><path d="M424 88 L482 78"/>
+            <path d="M296 112 L238 122"/><path d="M424 112 L482 122"/>
+          </g>
+          <g fill="#41d8c9">
+            <polygon points="306,66 314,70 312,62"/><polygon points="414,66 406,70 408,62"/>
+            <polygon points="306,134 314,130 312,138"/><polygon points="414,134 406,130 408,138"/>
+            <polygon points="300,100 308,96 308,104"/><polygon points="420,100 412,96 412,104"/>
+            <polygon points="360,50 356,58 364,58"/><polygon points="360,150 356,142 364,142"/>
+            <polygon points="258,32 267,36 264,28"/><polygon points="462,32 453,36 456,28"/>
+            <polygon points="258,168 267,164 264,172"/><polygon points="462,168 453,164 456,172"/>
+            <polygon points="238,78 247,80 245,72"/><polygon points="482,78 473,80 475,72"/>
+            <polygon points="238,122 247,120 245,128"/><polygon points="482,122 473,120 475,128"/>
+          </g>
+          <circle cx="360" cy="100" r="5" fill="#ffb454"/>
+          <text x="368" y="96" font-size="12" fill="#ffb454">FOE</text>
+          <text x="186" y="10" font-size="11.5" fill="#8ea0c0">image plane — measured optic flow</text>
+          <!-- side schematic -->
+          <text x="20" y="34" font-size="11.5" fill="#8ea0c0">top view</text>
+          <polygon points="30,110 66,94 66,126" fill="#39445e" stroke="#6ea8ff"/>
+          <line x1="66" y1="110" x2="150" y2="110" stroke="#6ea8ff" stroke-dasharray="4 4"/>
+          <polygon points="150,110 140,105 140,115" fill="#6ea8ff"/>
+          <text x="80" y="102" font-size="11" fill="#6ea8ff">V</text>
+          <line x1="150" y1="70" x2="150" y2="150" stroke="#2c3650" stroke-width="3"/>
+          <text x="60" y="176" font-size="11" fill="#6b7a99">obstacle at Z</text>
+          <line x1="118" y1="172" x2="146" y2="150" stroke="#6b7a99" stroke-width="1"/>
+        </svg>
+        <p class="figcap"><b>Figure 6:</b> A camera translating straight along its optical axis at speed $V$
+        toward an obstacle at distance $Z$, and the resulting optic flow field in the image plane. The point
+        from which the flow appears to radiate is marked FOE.</p>
+      </div>
+      <p>Consider Figure 6. A camera moves with constant speed $V$ straight along its own optical axis. Focal
+      length is $f$, and image coordinates $(x,y)$ are measured from the principal point.</p>
+      <p>(a) Derive the optic flow $(u,v)$ at an image point $(x,y)$ corresponding to a scene point at depth
+      $Z$, and show that the flow field is radial.</p>
+      <p>(b) A robot with this camera must brake before hitting the obstacle. Show that it can compute the
+      <em>time to collision</em> from the flow field alone, without knowing $V$, $Z$, or $f$.</p>
+      <span class="maps">Ch. 1 · never examined</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>(a) Derivation</h5>
+      <p>Pinhole projection of a scene point $(X,Y,Z)$:</p>
+      <div class="eq">$$ x = f\frac{X}{Z}, \qquad y = f\frac{Y}{Z} $$</div>
+      <p>The camera translates along $+Z$ at speed $V$, so relative to the camera the scene point has
+      $\dot X = 0$, $\dot Y = 0$, $\dot Z = -V$. Differentiate $x$ with respect to time using the quotient
+      rule:</p>
+      <div class="eq">$$ u = \dot x = f\,\frac{\dot X Z - X\dot Z}{Z^2} = f\,\frac{0 - X(-V)}{Z^2}
+        = \frac{f X V}{Z^{2}} = \underbrace{\frac{fX}{Z}}_{=\,x}\cdot\frac{V}{Z} $$</div>
+      <p>and identically for $y$. Therefore</p>
+      <div class="eq">$$ \boxed{\;(u,v) \;=\; \frac{V}{Z}\,(x,\,y)\;} $$</div>
+      <p><strong>The flow at every point is parallel to the vector from the principal point to that point</strong>
+      — i.e. purely radial, pointing outward, with magnitude proportional to the radius $r=\sqrt{x^2+y^2}$.
+      The single point of zero flow, $(0,0)$ here, is the <span class="term">focus of expansion</span>: it is
+      the image of the direction of travel, which is why it stays fixed while everything else streams away
+      from it.</p>
+      <h5>(b) Time to collision</h5>
+      <p>Time to collision is $\text{TTC} = Z/V$. Take the magnitude of the flow, $|(u,v)| = \frac{V}{Z}r$, and
+      divide:</p>
+      <div class="eq">$$ \frac{r}{|(u,v)|} \;=\; \frac{r}{\tfrac{V}{Z}r} \;=\; \frac{Z}{V} \;=\; \text{TTC} $$</div>
+      <p><strong>Every unknown cancels.</strong> $f$, $V$ and $Z$ all disappear; TTC is the ratio of two
+      quantities you can measure directly in the image — a point's distance from the FOE and its flow
+      magnitude. This is why a camera with no calibration, no stereo and no speedometer can still brake in
+      time.</p>
+      <p>An equivalent and more robust form uses the divergence, which averages over the whole field rather
+      than trusting one point:</p>
+      <div class="eq">$$ \nabla\!\cdot\!(u,v) = \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y}
+        = \frac{V}{Z} + \frac{V}{Z} = \frac{2}{\text{TTC}} \qquad\Longrightarrow\qquad
+        \text{TTC} = \frac{2}{\nabla\!\cdot\!(u,v)} $$</div>
+      <h5>Closing</h5>
+      <p>In practice: estimate the FOE by intersecting the flow vectors (least squares, with RANSAC to reject
+      independently moving objects), then fit $\text{TTC}$ from all points at once. Note the two failure cases —
+      the estimate is ill-conditioned near the FOE itself, where $r$ and $|(u,v)|$ are both near zero and the
+      ratio is noise; and $Z$ is recoverable only up to the scale set by $V$, which is the usual monocular
+      scale ambiguity.</p>
+      <div class="trap"><b>Trap.</b> Claiming you need to recover depth first. You do not, and the whole point
+      is that the <em>ratio</em> $Z/V$ survives while $Z$ and $V$ individually do not. Also do not confuse the
+      FOE with the image centre in general — they coincide only because the motion here is along the optical
+      axis.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== N3 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">N3</span><h3>Video Matting</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <div class="exfig">
+        <svg viewBox="0 0 720 180" xmlns="http://www.w3.org/2000/svg">
+          <!-- frame 1 -->
+          <rect x="14" y="18" width="150" height="130" fill="#1b2740" stroke="#2c3650"/>
+          <g><ellipse cx="89" cy="72" rx="26" ry="30" fill="#c7a98a"/>
+             <path d="M63 66 q6 -34 26 -34 q20 0 26 34 q-10 -16 -26 -16 q-16 0 -26 16Z" fill="#3a2a20"/>
+             <path d="M89 102 q-34 6 -40 46 h80 q-6 -40 -40 -46Z" fill="#4a5b7d"/></g>
+          <text x="14" y="14" font-size="11" fill="#8ea0c0">frame 1</text>
+          <text x="82" y="170" font-size="12" fill="#8ea0c0">a</text>
+          <!-- trimap -->
+          <rect x="192" y="18" width="150" height="130" fill="#000" stroke="#2c3650"/>
+          <path d="M267 34 q-42 12 -48 60 q-4 30 -4 54 h104 q0 -24 -4 -54 q-6 -48 -48 -60Z" fill="#808080"/>
+          <path d="M267 46 q-32 12 -36 52 q-3 26 -3 50 h78 q0 -24 -3 -50 q-4 -40 -36 -52Z" fill="#fff"/>
+          <text x="192" y="14" font-size="11" fill="#8ea0c0">trimap on frame 1</text>
+          <text x="260" y="170" font-size="12" fill="#8ea0c0">b</text>
+          <text x="350" y="52" font-size="10.5" fill="#e6ecf7">■ known FG</text>
+          <text x="350" y="70" font-size="10.5" fill="#9fb0cc">■ unknown band</text>
+          <text x="350" y="88" font-size="10.5" fill="#6b7a99">■ known BG</text>
+          <!-- alpha zoom -->
+          <rect x="452" y="18" width="120" height="130" fill="#0e1320" stroke="#2c3650"/>
+          <g stroke="#fff" fill="none" stroke-width="1.1">
+            <path d="M470 148 q6 -60 22 -84" opacity=".85"/><path d="M486 148 q4 -66 20 -90" opacity=".6"/>
+            <path d="M502 148 q2 -58 18 -80" opacity=".45"/><path d="M518 148 q0 -62 16 -86" opacity=".3"/>
+            <path d="M534 148 q-2 -54 14 -74" opacity=".2"/>
+          </g>
+          <text x="452" y="14" font-size="11" fill="#8ea0c0">α, zoom on hair</text>
+          <text x="508" y="170" font-size="12" fill="#8ea0c0">c</text>
+          <!-- frame 200 -->
+          <rect x="596" y="18" width="110" height="130" fill="#1b2740" stroke="#2c3650"/>
+          <g transform="translate(28,4)"><ellipse cx="595" cy="70" rx="22" ry="26" fill="#c7a98a"/>
+             <path d="M573 64 q5 -30 22 -30 q17 0 22 30 q-9 -14 -22 -14 q-14 0 -22 14Z" fill="#3a2a20"/>
+             <path d="M595 96 q-29 5 -34 44 h68 q-5 -39 -34 -44Z" fill="#4a5b7d"/></g>
+          <text x="596" y="14" font-size="11" fill="#8ea0c0">frame 200 — no trimap</text>
+          <text x="648" y="170" font-size="12" fill="#8ea0c0">d</text>
+        </svg>
+        <p class="figcap"><b>Figure 7:</b> (a) A frame of the input video. (b) A trimap supplied by the user on
+        frame 1 only: known foreground (white), known background (black), unknown band (grey). (c) A zoom on the
+        recovered opacity around the hair. (d) A later frame, for which no trimap was supplied.</p>
+      </div>
+      <p>Consider Figure 7. A person with loose curly hair walks in front of an ordinary cluttered background —
+      not a green screen. The user supplies a trimap on <em>frame 1 only</em>. Your task is to composite the
+      person onto a new background for the whole 300-frame sequence.</p>
+      <p>(a) Write down the model you are solving and explain why a hard binary mask cannot work here.</p>
+      <p>(b) Describe how you obtain a trimap for frames 2 to 300, and what you do to stop the result from
+      flickering.</p>
+      <span class="maps">Ch. 10 · never examined</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>(a) The model</h5>
+      <p>A pixel integrates light over a finite sensor area. Where a hair strand is thinner than a pixel — or
+      at any object boundary — that area contains <em>both</em> hair and background, so the recorded colour is
+      a genuine <strong>mixture</strong>. There is no correct binary label for such a pixel: foreground keeps a
+      halo of background colour, background chops the hair off. Curly hair is almost entirely such pixels.</p>
+      <p>Hence the compositing equation with a per-pixel opacity:</p>
+      <div class="eq">$$ I(x) \;=\; \alpha(x)\,F(x) \;+\; \bigl(1-\alpha(x)\bigr)B(x), \qquad \alpha \in [0,1] $$</div>
+      <p>and the new composite is $I' = \alpha F + (1-\alpha)B_{\text{new}}$.</p>
+      <p><strong>It is ill-posed:</strong> 3 equations (RGB) and 7 unknowns ($\alpha$, and $F,B$ with three
+      channels each) at every pixel — which is exactly why the user must supply a trimap and why we need a
+      colour prior. Note that unlike a green screen, $B$ is now unknown too, so none of the 7 comes for free.</p>
+      <h5>(a, continued) Solving frame 1</h5>
+      <p>Inside the known regions $\alpha$ is 1 and 0 by construction; only the unknown band is solved. For each
+      unknown pixel, collect nearby known foreground and background colours and build non-parametric
+      <strong>kernel density estimates</strong> $p(F)$ and $p(B)$. Then choose the $(\alpha, F, B)$ that best
+      explains the observed colour — maximise $p(F)\,p(B)$ subject to the compositing equation, or equivalently
+      minimise $\|I - \alpha F - (1-\alpha)B\|^2$ plus the two colour-model penalties.</p>
+      <h5>(b) Propagating to the rest of the sequence</h5>
+      <p>The user will not trimap 300 frames, so the trimap must be carried forward. Two mechanisms, best used
+      together:</p>
+      <ul>
+        <li><strong>Warp the trimap with optic flow.</strong> Compute the flow from frame $t$ to $t+1$ (Ch.2)
+        and warp the frame-$t$ trimap forward. Then <strong>re-dilate the unknown band</strong> — flow is
+        unreliable exactly at the boundary and on hair, so widening the band by a few pixels converts a
+        potential hard error into an "I don't know", which the matting step is designed to resolve.</li>
+        <li><strong>Re-derive the band from the previous $\alpha$.</strong> Threshold $\alpha_{t-1}$ at, say,
+        $0.05$ and $0.95$ and set the band to the region in between, dilated. This re-anchors the trimap to the
+        matte rather than compounding flow error frame after frame.</li>
+      </ul>
+      <h5>(b, continued) Stopping the flicker</h5>
+      <p>Solving each frame independently gives a matte that jitters — the hair boundary "crawls", which is far
+      more visible in motion than any single frame's error. Fixes:</p>
+      <ul>
+        <li><strong>Solve on the space-time volume.</strong> Treat the video as $(x,y,t)$ and add a temporal
+        smoothness term on $\alpha$, e.g. $\;\mu\sum_t \|\alpha_t - \alpha_{t-1}\circ W_t\|^2$ where $W_t$ warps
+        by the flow. Coherence along <em>motion trajectories</em>, not along fixed pixels.</li>
+        <li><strong>Share the colour models over time</strong> — build $p(F)$ and $p(B)$ from a temporal window
+        of frames rather than one, so the estimate does not lurch when a single frame is noisy.</li>
+        <li><strong>Re-key periodically:</strong> flag frames whose matting residual is large (occlusion, the
+        person turning, a new background object) and ask the user for a fresh trimap there — a handful of
+        keyframes across 300 is a reasonable interaction budget.</li>
+      </ul>
+      <div class="trap"><b>Trap.</b> Recovering $\alpha$ but taking $F$ straight from the input image. The
+      observed colour at a boundary pixel is <em>already mixed</em>, so using it as $F$ carries the old
+      background's colour into the new composite — the classic coloured fringe. $F$ must be un-mixed, which is
+      precisely why it appears as an unknown in the model.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== N4 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">N4</span><h3>Video Magnification</h3><span class="pts">12 points</span></div>
+    <div class="qbody">
+      <div class="exfig">
+        <svg viewBox="0 0 720 170" xmlns="http://www.w3.org/2000/svg">
+          <!-- small motion, valid -->
+          <text x="14" y="16" font-size="11.5" fill="#7ee787">(a) small displacement — amplification valid</text>
+          <path d="M20 76 q30 -34 60 0 q30 34 60 0 q30 -34 60 0" fill="none" stroke="#6ea8ff" stroke-width="1.8"/>
+          <path d="M26 76 q30 -34 60 0 q30 34 60 0 q30 -34 60 0" fill="none" stroke="#7ee787" stroke-width="1.8" stroke-dasharray="4 3"/>
+          <line x1="80" y1="96" x2="86" y2="96" stroke="#7ee787" stroke-width="3"/>
+          <text x="60" y="112" font-size="10.5" fill="#7ee787">δ ≪ λ</text>
+          <line x1="20" y1="128" x2="140" y2="128" stroke="#6b7a99"/>
+          <text x="64" y="142" font-size="10.5" fill="#6b7a99">λ</text>
+          <!-- boundary -->
+          <line x1="255" y1="14" x2="255" y2="156" stroke="#2c3650" stroke-dasharray="3 4"/>
+          <!-- large, breaks -->
+          <text x="272" y="16" font-size="11.5" fill="#ff6b81">(b) (1+α)δ too large — Taylor breaks</text>
+          <path d="M278 76 q30 -34 60 0 q30 34 60 0 q30 -34 60 0" fill="none" stroke="#6ea8ff" stroke-width="1.8"/>
+          <path d="M330 76 q30 -34 60 0 q30 34 60 0 q30 -34 60 0" fill="none" stroke="#ff6b81" stroke-width="1.8" stroke-dasharray="4 3"/>
+          <line x1="338" y1="96" x2="390" y2="96" stroke="#ff6b81" stroke-width="3"/>
+          <text x="336" y="112" font-size="10.5" fill="#ff6b81">(1+α)δ &gt; λ/8</text>
+          <!-- artifact result -->
+          <text x="500" y="140" font-size="10.5" fill="#ff6b81">→ ringing / ghosting</text>
+          <path d="M500 76 q12 -40 24 0 q6 30 12 -6 q10 40 22 -14 q14 34 24 -4 q10 30 20 4"
+                fill="none" stroke="#ff6b81" stroke-width="1.5"/>
+        </svg>
+        <p class="figcap"><b>Figure 8:</b> A one-dimensional intensity profile of spatial wavelength $\lambda$
+        (blue) and its shifted version (dashed). (a) The displacement $\delta$ is small compared with $\lambda$.
+        (b) After amplification the displacement is no longer small, and the reconstruction is not a shift of
+        the original.</p>
+      </div>
+      <p>Consider Figure 8. In Eulerian video magnification, the temporally bandpassed signal is multiplied by
+      $\alpha$ and added back to the original frame.</p>
+      <p>(a) Show, using a first-order expansion, why adding an amplified intensity change is equivalent to
+      magnifying motion, and state precisely the assumption this relies on.</p>
+      <p>(b) The method has a bound of the form $(1+\alpha)\,\delta(t) < \lambda/8$. Explain where such a bound
+      comes from, what you see when it is violated, and how you would choose $\alpha$ for an image containing
+      both coarse and fine detail.</p>
+      <span class="maps">Ch. 7 · never examined</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>(a) Why amplifying intensity amplifies motion</h5>
+      <p>Take a 1-D intensity profile $f(x)$ translating by a small time-varying displacement $\delta(t)$, so
+      the observed signal is</p>
+      <div class="eq">$$ I(x,t) = f\bigl(x + \delta(t)\bigr) $$</div>
+      <p>First-order Taylor expansion about $x$:</p>
+      <div class="eq">$$ I(x,t) \;\approx\; f(x) \;+\; \delta(t)\,\frac{\partial f(x)}{\partial x} $$</div>
+      <p>The temporal bandpass isolates exactly the time-varying part,
+      $B(x,t) = \delta(t)\,\partial f/\partial x$ (assuming $\delta$ lies in the passband and $f(x)$, being
+      constant in time, is removed as DC). Amplify and add back:</p>
+      <div class="eq">$$ \hat I(x,t) = I(x,t) + \alpha B(x,t) = f(x) + (1+\alpha)\,\delta(t)\,\frac{\partial f}{\partial x}
+        \;\approx\; f\bigl(x + (1+\alpha)\delta(t)\bigr) $$</div>
+      <p>— the same profile, displaced by $(1+\alpha)\delta(t)$. <strong>Motion magnified by $(1+\alpha)$,
+      with no tracking and no correspondence.</strong></p>
+      <p><strong>The assumption</strong> is the one made in the very first line: the first-order Taylor
+      expansion is accurate, i.e. $\delta$ is small relative to the scale over which $\partial f/\partial x$
+      itself changes. Note the last step runs the expansion <em>backwards</em>, so it needs
+      $(1+\alpha)\delta$ — the <em>amplified</em> displacement — to be small too. That is the whole content of
+      part (b).</p>
+      <h5>(b) Where the bound comes from</h5>
+      <p>For a sinusoidal component $f(x) = A\cos(2\pi x/\lambda)$, the Taylor expansion is accurate only while
+      the shift is a small fraction of the wavelength; beyond roughly $\lambda/8$ the linear term is no longer a
+      good model of the true shift, and the reconstruction stops being a translation of the original. Hence</p>
+      <div class="eq">$$ (1+\alpha)\,\delta(t) \;<\; \frac{\lambda}{8} \qquad\Longrightarrow\qquad
+        \alpha \;<\; \frac{\lambda}{8\,\delta(t)} - 1 $$</div>
+      <p>The bound is <strong>per spatial wavelength</strong>: fine detail (small $\lambda$) tolerates far less
+      amplification than coarse structure.</p>
+      <p><strong>When violated</strong> you no longer get a shifted image, you get $f(x)$ plus a large multiple
+      of its derivative — which looks like <strong>ringing and overshoot at edges, ghosting/doubling, and
+      clipping</strong> where the amplified signal leaves the valid intensity range. Noise is amplified by the
+      same factor, so it also becomes visibly grainy.</p>
+      <h5>Choosing α with mixed detail</h5>
+      <p>Do not use one $\alpha$. Since the pyramid already separates spatial scales, use a
+      <strong>spatial-frequency-dependent</strong> $\alpha$: apply the full $\alpha$ at coarse pyramid levels
+      (large $\lambda$) and <strong>attenuate it toward zero at fine levels</strong>, following the bound above.
+      In practice: pick a target $\alpha$ and a cutoff wavelength $\lambda_c$, use $\alpha$ for
+      $\lambda > \lambda_c$, and taper linearly below it. This is what lets you push amplification hard on the
+      slow, large-scale signal you care about without the fine texture exploding.</p>
+      <div class="trap"><b>Trap.</b> Answering that the limit is "when the motion gets too big to see properly".
+      The bound is not about visibility, it is about the validity of the first-order approximation, and it is
+      stated relative to the <em>spatial wavelength</em>, not in absolute pixels. A 2-pixel displacement is
+      fine on a smooth gradient and catastrophic on a checkerboard.</div>
+    </div></details>
+  </div>
+
+  <!-- ===================== N5 ===================== -->
+  <div class="qcard">
+    <div class="qhead"><span class="qn">N5</span><h3>Layer Decomposition</h3><span class="pts">13 points</span></div>
+    <div class="qbody">
+      <div class="exfig">
+        <svg viewBox="0 0 720 170" xmlns="http://www.w3.org/2000/svg">
+          <!-- observed -->
+          <rect x="14" y="20" width="190" height="126" fill="#131a2b" stroke="#2c3650"/>
+          <g opacity=".95">
+            <rect x="40" y="58" width="40" height="60" fill="#3d5a80"/>
+            <rect x="96" y="44" width="34" height="74" fill="#4a6b8a"/>
+            <rect x="146" y="66" width="38" height="52" fill="#35506f"/>
+          </g>
+          <g opacity=".55" stroke="#c7d4e8" fill="none" stroke-width="1.4">
+            <path d="M24 132 L60 96 L92 118 L128 78 L166 108 L198 82"/>
+            <circle cx="60" cy="96" r="7"/><circle cx="128" cy="78" r="7"/>
+          </g>
+          <text x="14" y="16" font-size="11.5" fill="#8ea0c0">observed video I</text>
+          <text x="106" y="162" font-size="12" fill="#8ea0c0">a</text>
+          <text x="216" y="90" font-size="20" fill="#8ea0c0">=</text>
+          <!-- layer 1 -->
+          <rect x="244" y="20" width="190" height="126" fill="#131a2b" stroke="#2c3650"/>
+          <g><rect x="270" y="58" width="40" height="60" fill="#3d5a80"/>
+             <rect x="326" y="44" width="34" height="74" fill="#4a6b8a"/>
+             <rect x="376" y="66" width="38" height="52" fill="#35506f"/></g>
+          <text x="244" y="16" font-size="11.5" fill="#41d8c9">transmitted layer T (display)</text>
+          <text x="336" y="162" font-size="12" fill="#8ea0c0">b</text>
+          <text x="446" y="90" font-size="20" fill="#8ea0c0">+</text>
+          <!-- layer 2 -->
+          <rect x="474" y="20" width="190" height="126" fill="#131a2b" stroke="#2c3650"/>
+          <g stroke="#c7d4e8" fill="none" stroke-width="1.4">
+            <path d="M484 132 L520 96 L552 118 L588 78 L626 108 L658 82"/>
+            <circle cx="520" cy="96" r="7"/><circle cx="588" cy="78" r="7"/>
+          </g>
+          <text x="474" y="16" font-size="11.5" fill="#ffb454">reflected layer R (street)</text>
+          <text x="566" y="162" font-size="12" fill="#8ea0c0">c</text>
+        </svg>
+        <p class="figcap"><b>Figure 9:</b> (a) A video shot through a shop window. (b) The transmitted layer —
+        the display behind the glass. (c) The reflected layer — the street behind the camera. The observed video
+        is the sum of the two.</p>
+      </div>
+      <p>Consider Figure 9. You film a shop window while walking slowly past it. Each frame shows both the
+      display behind the glass and a reflection of the street behind you, superimposed. The two contents move
+      differently across the sequence.</p>
+      <p>Suggest an algorithm that takes the video and outputs two separate videos, one per layer. State the
+      image formation model you assume and explain what property of the sequence makes the separation possible
+      at all.</p>
+      <span class="maps">Ch. 6 · never examined</span>
+    </div>
+    <details class="sol"><summary>Show solution</summary><div class="solbody">
+      <h5>The model</h5>
+      <p>Glass both transmits and reflects, and neither layer occludes the other, so the layers combine
+      <strong>additively</strong> rather than by opacity:</p>
+      <div class="eq">$$ I(x,y,t) \;=\; T(x,y,t) \;+\; R(x,y,t) $$</div>
+      <p>(Contrast this with matting, Ch.10, where the composite is $\alpha F + (1-\alpha)B$ — here there is no
+      $\alpha$, which actually makes the algebra simpler.) This is severely ill-posed per frame: one equation,
+      two unknowns per pixel, and $T = I,\ R = 0$ always fits.</p>
+      <h5>What makes it solvable</h5>
+      <p><strong>The two layers undergo different, coherent parametric motions.</strong> The display is at the
+      window plane; the reflection is a virtual image located behind the camera, at a different effective depth.
+      As you walk past, the two therefore move with different parallax — each layer is internally consistent but
+      the two disagree. A single frame contains no information to separate them; the <em>motion difference
+      across frames</em> is the entire signal. (If you stood perfectly still, the problem would be
+      unsolvable — worth saying.)</p>
+      <h5>The algorithm</h5>
+      <ol>
+        <li><strong>Estimate two dominant motions.</strong> Compute local motion on blocks (Lucas–Kanade,
+        Ch.2), fit an affine/homography model per block, and cluster the parameter vectors with
+        <strong>K-means, $K = 2$</strong> (Ch.6). Two clusters emerge, $\theta_T$ and $\theta_R$ — the display's
+        motion and the reflection's motion. Blocks where one layer dominates vote cleanly; mixed blocks fall
+        between and are simply unreliable votes at this stage.</li>
+        <li><strong>Align to layer $T$.</strong> Warp every frame by $\theta_T^{-1}$ into a common reference.
+        In this stack the display is <strong>stationary</strong> and the reflection <strong>slides</strong>.</li>
+        <li><strong>Separate by a temporal statistic.</strong> Take the per-pixel <strong>temporal median</strong>
+        of the aligned stack. What is constant survives; what moves is a minority at any given pixel and is
+        rejected as an outlier. That gives $\hat T$. Then
+        $\hat R_t = I_t - \hat T$ warped back.</li>
+        <li><strong>Refine by alternating.</strong> Now align to $\theta_R$ instead, median the stack
+        $I_t - \hat T$ to get a cleaner $\hat R$, subtract to re-estimate $\hat T$, and iterate. Each pass
+        sharpens both layers and lets you re-fit the two motion models on cleaner data.</li>
+      </ol>
+      <p>Add a prior if the residual is ambiguous: natural images have <strong>sparse gradients</strong>
+      (Ch.12), so prefer the decomposition minimising
+      $\sum \|\nabla T\|_1 + \|\nabla R\|_1$ — this discourages splitting a single real edge across both
+      layers.</p>
+      <h5>Closing</h5>
+      <p>Note the family resemblance: step 3 is exactly the argument of Ch.12 — align, then let a temporal
+      median reject whatever is inconsistent — and the setup is the additive-transparency case that appears
+      there as the Reagan/Einstein experiment. Failure cases: the reflection is often much dimmer, so it is
+      recovered with a lower signal-to-noise ratio; and if the two motions happen to coincide (you move exactly
+      parallel to the glass at the right distance) the two clusters merge and separation fails.</p>
+      <div class="trap"><b>Trap.</b> Reaching for background subtraction (Ch.8). The GMM assumes the background
+      is what a pixel sees <em>most of the time</em> and that foreground <em>occludes</em> it. Here nothing
+      occludes anything — both layers are present in every pixel of every frame simultaneously — so the
+      occlusion model does not apply and you must use the additive model plus motion.</div>
+    </div></details>
+  </div>
+
+  <h2>4 · Extra drills — quick-fire</h2>
+  <p class="muted">Shorter, same style. These revisit the same five blind-spot chapters from different angles,
+  so treat them as a second pass rather than new territory. Same rule: answer first, then open.</p>
 
   <!-- ===================== E1 ===================== -->
   <div class="qcard">
     <div class="qhead"><span class="qn">E1</span><h3>Motion Representation</h3><span class="pts">drill</span></div>
     <div class="qbody">
-      <p>A camera on a tripod rotates about its optical centre and zooms while filming a static building.</p>
+      <div class="exfig">
+        <svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg">
+          <text x="14" y="16" font-size="11.5" fill="#8ea0c0">top view</text>
+          <line x1="120" y1="126" x2="120" y2="40" stroke="#39445e" stroke-width="3"/>
+          <line x1="102" y1="126" x2="138" y2="126" stroke="#39445e" stroke-width="3"/>
+          <polygon points="108,52 144,36 144,68" fill="#39445e" stroke="#6ea8ff"/>
+          <circle cx="120" cy="52" r="3.5" fill="#ffb454"/>
+          <text x="86" y="46" font-size="10.5" fill="#ffb454">C</text>
+          <path d="M160 30 A 60 60 0 0 1 160 74" fill="none" stroke="#41d8c9" stroke-dasharray="4 3"/>
+          <polygon points="160,74 152,68 156,78" fill="#41d8c9"/>
+          <text x="172" y="56" font-size="11" fill="#41d8c9">rotation about C</text>
+          <line x1="144" y1="52" x2="300" y2="52" stroke="#6ea8ff" stroke-dasharray="3 4"/>
+          <line x1="144" y1="52" x2="290" y2="18" stroke="#6ea8ff" stroke-dasharray="3 4"/>
+          <line x1="144" y1="52" x2="290" y2="90" stroke="#6ea8ff" stroke-dasharray="3 4"/>
+          <!-- building -->
+          <rect x="330" y="14" width="120" height="120" fill="#20293f" stroke="#2c3650"/>
+          <g fill="#39445e"><rect x="344" y="28" width="20" height="20"/><rect x="378" y="28" width="20" height="20"/>
+            <rect x="412" y="28" width="20" height="20"/><rect x="344" y="62" width="20" height="20"/>
+            <rect x="378" y="62" width="20" height="20"/><rect x="412" y="62" width="20" height="20"/>
+            <rect x="344" y="96" width="20" height="20"/><rect x="412" y="96" width="20" height="20"/></g>
+          <text x="330" y="148" font-size="11" fill="#6b7a99">static building</text>
+          <!-- bus -->
+          <rect x="486" y="86" width="96" height="34" rx="6" fill="#8a3d4a" stroke="#ff6b81"/>
+          <circle cx="508" cy="122" r="7" fill="#0e1320" stroke="#ff6b81"/>
+          <circle cx="560" cy="122" r="7" fill="#0e1320" stroke="#ff6b81"/>
+          <line x1="590" y1="103" x2="650" y2="103" stroke="#ff6b81" stroke-width="1.6"/>
+          <polygon points="650,103 640,98 640,108" fill="#ff6b81"/>
+          <text x="486" y="80" font-size="11" fill="#ff6b81">bus, ≈ 20% of the frame</text>
+        </svg>
+        <p class="figcap"><b>Figure 10:</b> (Left) Top view of the setup: a camera rotating about its centre of
+        projection $C$ on a tripod. (Right) The scene — a static building, with a bus driving through part of
+        the field of view.</p>
+      </div>
+      <p>Consider Figure 10. A camera on a tripod rotates about its optical centre and zooms while filming a
+      static building.</p>
       <p>(a) What is the <em>minimal</em> motion model that exactly describes the mapping between any two
       frames, and how many free parameters does it have? Justify why a simpler model is insufficient and a more
       general one unnecessary.</p>
