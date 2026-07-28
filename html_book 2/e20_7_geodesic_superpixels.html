@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q7 — Superpixels from geodesic distance</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q7</b> · Segmentation, geodesic superpixels</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch09_video_colorization.html">‹ Chapter 9</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_8_gmm_anomaly.html">Q8 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 9 &amp; 6 · Exam 8/7/2020, question 7 · 13 points</div>
+    <h1>Drop $K$ pebbles in a pond, let the ripples fight</h1>
+    <p class="lede">Superpixels are k-means, with one substitution: replace “distance” by <b>geodesic distance</b>,
+    and the whole thing becomes a multi-source Dijkstra that cannot leak across an edge. Two ingredients you
+    already own — nothing new is required.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 7 · 13 points · SEGMENTATION</span>
+    <p>Superpixels is a mid-level image representation that breaks the image into small and homogenous regions
+    called superpixels. An image is usually represented by around 1000 or 2000 superpixels, as this reduces the
+    computational burden of subsequent tasks. See Figure 5 for an example.
+    <strong>Write a pseudo-code of an algorithm that uses geodesic distances to calculate superpixels of an image.
+    Your algorithm should take as input the image and the number of requested superpixels.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    It is <b>k-means with a geodesic metric</b>, i.e. a Lloyd iteration:
+    <br><b>1.</b> $S=\sqrt{N/K}$; place $K$ seeds on a regular $S$-grid, nudged to the lowest-gradient pixel in a
+    $3\times3$ window.
+    <br><b>2.</b> <b>Assign:</b> run <b>multi-source Dijkstra</b> from all $K$ seeds at once on the pixel graph with
+    edge weights $w(p,q)=\sqrt{\|p-q\|^2+\gamma^2\|I(q)-I(p)\|^2}$. Each pixel takes the label of the seed that
+    reaches it first — a <em>geodesic Voronoi</em> tessellation.
+    <br><b>3.</b> <b>Update:</b> move each seed to its region's centroid (snapped back onto the region).
+    <br><b>4.</b> Repeat 2–3 until the seeds stop moving; then enforce connectivity and absorb tiny fragments.
+    <br><br>Cost: $O(N\log N)$ per iteration, $\approx 10$ iterations.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">Pebbles in a pond with walls in it</span>
+    <p>Picture the picture as a shallow pond. Now build little <b>walls</b> in the pond wherever the picture has
+    an edge — where the bear stops and the water starts, there is a wall. Inside the bear, flat ground. Inside the
+    water, flat ground.</p>
+    <p>Now drop $K$ pebbles into the pond, spread out evenly, and let each pebble send out a ripple. The ripples
+    spread at the same speed — <em>except</em> they have to climb over walls, which slows them down a lot.</p>
+    <p>Every drop of water in the pond belongs to <strong>whichever ripple got there first</strong>.</p>
+    <p>What happens? A ripple started inside the bear races freely around the bear, but it stalls at the bear's
+    outline. A ripple started in the water fills water. So the little territories you end up with
+    <b>automatically stop at the object boundaries</b> — nobody told them where the bear is; the walls did it.</p>
+    <p>One more round: after the first fight, each pebble was probably not sitting in the middle of the territory
+    it won. So pick it up, put it in the middle, and run the ripples again. A few rounds and it settles down. That
+    settling-down loop is <b>exactly k-means</b>; the walls are the only new part.</p>
+    <p>Why bother? Because now you have ~1000 tiles instead of a million pixels, and every tile is one colour and
+    one material. Whatever you wanted to do next — tracking, matting, segmentation, colorization — you now do on
+    1000 things instead of a million, and none of your tiles straddles a boundary.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Where the “walls” come from</span>
+    They are the same geodesic metric as the colorization/matting chapter:
+    $d(a,b)=\inf_\Gamma\int_0^{l(\Gamma)}\sqrt{1+\gamma^2(\nabla I\cdot\Gamma')^2}\,ds$. The “1” charges for
+    walking; the $\gamma^2(\nabla I\cdot\Gamma')^2$ charges for <em>crossing</em> image structure. Discretise a
+    single pixel step and the integral becomes $\sqrt{\|p-q\|^2+\gamma^2\|I(q)-I(p)\|^2}$ — one wall per edge.
+    See <a href="q6_geodesic_gamma.html">Moed A Q6</a> for that integrand read symbol by symbol.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The pseudo-code</h2>
+
+  <pre class="ruler">
+SUPERPIXELS_GEODESIC(I, K)                       # I : H×W×3 image,  K : requested count
+────────────────────────────────────────────────────────────────────────
+ 1  N ← H·W                                      # number of pixels
+ 2  S ← round( sqrt(N / K) )                     # nominal superpixel side
+ 3  γ ← edge sensitivity      (e.g. 10)          # 0 ⇒ Euclidean ⇒ plain SLIC-like grid
+ 4  I ← smooth(I, σ≈1)  ;  convert to CIELAB     # noise ⇒ spurious walls
+
+    # ---------- 1. seeds ------------------------------------------------
+ 5  seeds ← { (x,y) : x = S/2, 3S/2, … ,  y = S/2, 3S/2, … }        # regular grid, |seeds| ≈ K
+ 6  for each s in seeds:
+ 7      s ← argmin over the 3×3 window around s of ‖∇I‖             # do not start ON an edge
+    # (a seed sitting on a boundary would immediately split two objects)
+
+    # ---------- 2. Lloyd iterations -------------------------------------
+ 8  repeat until  Σ‖s_k − s_k^prev‖ &lt; ε   or  T iterations (T ≈ 10):
+
+        # ---- 2a. ASSIGN : multi-source Dijkstra = geodesic Voronoi -----
+ 9      D[p] ← ∞ ,  L[p] ← −1        for all pixels p
+10      Q ← empty min-priority-queue
+11      for k = 1 … K:
+12          D[s_k] ← 0 ;  L[s_k] ← k ;  push(Q, (0, s_k))
+13      while Q not empty:
+14          (d,u) ← pop-min(Q)
+15          if d &gt; D[u]: continue                      # stale entry
+16          for each q in Neighbours8(u):
+17              w ← sqrt( ‖q−u‖²  +  γ²·‖I(q) − I(u)‖² )      # the geodesic step cost
+18              if D[u] + w &lt; D[q]:
+19                  D[q] ← D[u] + w ;  L[q] ← L[u] ;  push(Q, (D[q], q))
+        #  optional speed-up: only relax q if ‖q − s_{L[u]}‖∞ &lt; 2S  (SLIC-style local search)
+
+        # ---- 2b. UPDATE : move each seed to the middle of its region ---
+20      for k = 1 … K:
+21          R_k ← { p : L[p] = k }
+22          c_k ← mean position of R_k                  # spatial centroid
+23          s_k ← argmin_{p ∈ R_k} ‖p − c_k‖            # snap back inside the region
+        #  (exact version: s_k ← argmin_{p∈R_k} Σ_{q∈R_k} d_geo(p,q) — the geodesic medoid)
+
+    # ---------- 3. post-process ------------------------------------------
+24  for each connected component C of each label:
+25      if C is not the component containing s_k  or  |C| &lt; S²/4:
+26          relabel C to the adjacent label with the smallest mean colour difference
+27  return L                                      # label map: ≈ K connected superpixels
+────────────────────────────────────────────────────────────────────────
+COST : step 2a is Dijkstra over N nodes with 8 edges each → O(N log N)
+       (O(N) with a bucket queue / fast marching);  × T iterations.
+</pre>
+
+  <div class="callout key"><span class="lbl">The five lines that earn the marks</span>
+    <b>Line 2</b> — $S=\sqrt{N/K}$ is how the requested <em>number</em> becomes a <em>size</em>.
+    <b>Line 7</b> — never start a seed on an edge.
+    <b>Line 17</b> — the geodesic weight; this is the whole difference from SLIC.
+    <b>Lines 11–12</b> — <em>multi-source</em> initialisation: one Dijkstra for all $K$ seeds, not $K$ Dijkstras.
+    <b>Lines 24–27</b> — connectivity is not guaranteed by the assignment step and must be fixed afterwards.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the algorithm, running</h4><span class="tag">press Run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: the image with the superpixel boundaries drawn on top (the exam
+      figure). Middle: each superpixel painted with its own mean colour — this is what the “mid-level
+      representation” actually buys you. Right: the geodesic distance field $D$, the thing Dijkstra computes.</p>
+      <canvas id="cvA" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>K — requested superpixels <span class="val" id="vAk">120</span></label><input type="range" id="Ak" min="20" max="400" step="10" value="120"></div>
+        <div class="control"><label>γ — edge sensitivity <span class="val" id="vAg">10</span></label><input type="range" id="Ag" min="0" max="60" step="1" value="10"></div>
+        <div class="control"><label>Lloyd iterations <span class="val" id="vAt">6</span></label><input type="range" id="At" min="1" max="14" step="1" value="6"></div>
+      </div>
+      <div class="controls"><button class="chk" id="Ago">▶ Run</button></div>
+      <div class="readout" id="Aro">Press <b>Run</b>.</div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Three experiments</span>
+    <b>1.</b> Set $\gamma=0$: the metric collapses to Euclidean, the ripples ignore the picture completely, and
+    you get a plain hexagonal-ish grid — <em>compact but boundary-blind</em>. That single slider is the difference
+    between SLIC and geodesic superpixels.
+    <br><b>2.</b> Push $\gamma$ high: superpixels hug every contour, but they become long, thin and ragged — they
+    follow texture as well as objects. Compactness and boundary adherence trade off, and $\gamma$ is the knob.
+    <br><b>3.</b> Set iterations to 1: the tiles are lopsided because the seeds are still on the initial grid.
+    Watch them settle as you increase it — that is Lloyd's algorithm converging.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Why every line is what it is</h2>
+
+  <div class="explain">
+    <span class="explain-label">It is literally k-means</span>
+    <p>Line up the two algorithms and the correspondence is exact:</p>
+  </div>
+
+  <div class="summary">
+    <table>
+      <tr><th>k-means (Ch. 6)</th><th>Geodesic superpixels</th></tr>
+      <tr><td>$k$ cluster centres</td><td>$K$ seeds, initialised on an $S$-grid</td></tr>
+      <tr><td>assign each point to the nearest centre</td><td>assign each pixel to the geodesically nearest seed
+        (one multi-source Dijkstra does all $K$ at once)</td></tr>
+      <tr><td>move each centre to the mean of its cluster</td><td>move each seed to the centroid of its region,
+        snapped back inside it</td></tr>
+      <tr><td>repeat; cost decreases monotonically ⇒ terminates</td><td>same argument (see
+        <a href="b8_kmeans_termination.html">B8</a>) — but only for a fixed metric, and the metric here <em>is</em>
+        fixed, so it terminates</td></tr>
+      <tr><td>distance = $\|x-\mu\|^2$ in feature space</td><td>distance = the geodesic $d(p,s_k)$ — path-based,
+        so it respects walls</td></tr>
+    </table>
+  </div>
+
+  <div class="explain">
+    <h4 class="mini">Why multi-source Dijkstra rather than $K$ separate runs</h4>
+    <p>You only need, for every pixel, the distance to the <em>nearest</em> seed and which seed that is — the
+    point-to-set distance, not $K$ separate maps. Seeding the priority queue with all $K$ sources at distance 0
+    computes exactly that in <b>one</b> $O(N\log N)$ sweep. Running $K$ Dijkstras would cost $O(KN\log N)$ and then
+    you would still have to take a minimum. This is the same trick as the multi-scribble distance map in
+    colorization.</p>
+
+    <h4 class="mini">Why the search can be restricted to a $2S\times2S$ window</h4>
+    <p>A pixel more than a couple of superpixel-widths from a seed will never be won by it, so relaxing those
+    edges is wasted work. Restricting each seed's expansion to a $2S\times2S$ neighbourhood makes the assignment
+    step $O(N)$ instead of $O(N\log N)$ — each pixel is then examined by a constant number of seeds. This is
+    exactly SLIC's optimisation, and it is what makes 1000+ superpixels real-time.</p>
+
+    <h4 class="mini">Why connectivity must be repaired afterwards</h4>
+    <p>Dijkstra's label field is <em>almost</em> connected but not guaranteed to be: when a seed moves in the
+    update step, a small pocket of pixels can end up labelled $k$ while being cut off from $s_k$ by a cheaper
+    route from another seed, and thin structures can pinch off orphan fragments. A single connected-component
+    pass that reassigns any component not containing its own seed (and any component below $S^2/4$ pixels) to the
+    most similar neighbouring label fixes it, and also guarantees the promised “around 1000” count is not silently
+    inflated.</p>
+
+    <h4 class="mini">Why smooth first, and why CIELAB</h4>
+    <p>Every noise spike is a wall. A mild Gaussian ($\sigma\approx1$) removes the fake walls without moving the
+    real ones. CIELAB is used because Euclidean distance in that space is roughly perceptually uniform, so
+    $\|I(q)-I(p)\|$ means “how different do these look” rather than “how different are these voltages”, which is
+    what makes one global $\gamma$ work across the whole image.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — Euclidean vs geodesic, side by side</h4><span class="tag">one boundary, two metrics</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The same seeds, the same iterations, the same $K$ — only the metric
+      differs. Left $\gamma=0$ (Euclidean: SLIC-like). Right $\gamma>0$ (geodesic). Look at what happens along the
+      animal's outline.</p>
+      <canvas id="cvB" width="900" height="290"></canvas>
+      <div class="controls">
+        <div class="control"><label>γ for the right-hand panel <span class="val" id="vBg">14</span></label><input type="range" id="Bg" min="1" max="60" step="1" value="14"></div>
+      </div>
+      <div class="controls"><button class="chk" id="Bgo">▶ Compute both</button></div>
+      <div class="readout" id="Bro">Press <b>Compute both</b>.</div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Idea.</strong> Superpixels = k-means on the pixel grid with the geodesic metric instead of the
+    Euclidean one. The assignment step of k-means becomes a <b>multi-source Dijkstra</b> from the $K$ seeds, which
+    produces a geodesic Voronoi tessellation; because crossing an image edge is expensive, the tessellation
+    boundaries snap to object boundaries.</p>
+
+    <p><strong>Metric.</strong> On the 8-connected pixel graph, weight the edge $p\!\to\!q$ by the discretised
+    geodesic integrand</p>
+    <div class="eq">$$ w(p,q)=\sqrt{\;\|q-p\|^2+\gamma^2\,\|I(q)-I(p)\|^2\;} $$</div>
+    <p>($\gamma=0$ gives Euclidean/compact superpixels; larger $\gamma$ gives stronger boundary adherence). Work
+    in CIELAB and pre-smooth with $\sigma\approx1$ so that noise does not create false edges.</p>
+
+    <p><strong>Pseudo-code.</strong></p>
+    <pre class="ruler" style="margin-top:6px">
+GEODESIC_SUPERPIXELS(I, K):
+  N ← H·W ;  S ← round(sqrt(N/K))                    # nominal side length
+  I ← Lab(gaussian(I, σ=1))
+  seeds ← regular grid with spacing S                # |seeds| ≈ K
+  for each seed s:  s ← argmin ‖∇I‖ in the 3×3 window around s
+  repeat T times (or until the seeds stop moving):
+      # --- assignment: multi-source Dijkstra ---
+      D[·] ← ∞ ; L[·] ← −1 ; Q ← ∅
+      for k = 1..K:  D[s_k] ← 0 ; L[s_k] ← k ; push(Q,(0,s_k))
+      while Q ≠ ∅:
+          (d,u) ← pop_min(Q) ;  if d &gt; D[u]: continue
+          for q ∈ N8(u):
+              w ← sqrt(‖q−u‖² + γ²‖I(q)−I(u)‖²)
+              if D[u]+w &lt; D[q]:  D[q] ← D[u]+w ; L[q] ← L[u] ; push(Q,(D[q],q))
+      # --- update: Lloyd step ---
+      for k = 1..K:  c_k ← centroid{p : L[p]=k} ;  s_k ← nearest pixel to c_k with L = k
+  enforce connectivity: relabel every component not containing its seed, and any
+      component smaller than S²/4, to the neighbouring label of closest mean colour
+  return L</pre>
+
+    <p><strong>Complexity.</strong> Each assignment is one Dijkstra over $N$ nodes of degree 8, i.e.
+    $O(N\log N)$ (or $O(N)$ with a bucket queue / fast marching), times $T\approx10$ iterations. Restricting each
+    seed's expansion to a $2S\times2S$ window makes it $O(N)$ per iteration, since then each pixel is only
+    considered by $O(1)$ seeds — this is what allows $K=1000$–$2000$ at video rates.</p>
+
+    <p><strong>Remarks.</strong> (i) $K$ enters only through $S=\sqrt{N/K}$; the output count is approximately, not
+    exactly, $K$, which is why the merge step matters. (ii) Termination follows from the k-means argument: the
+    assignment step and the centroid step each do not increase the objective, and the number of labelings is
+    finite. (iii) $\gamma$ trades compactness against boundary adherence; $\gamma=0$ degenerates to a regular grid
+    (SLIC without the colour term), $\gamma\to\infty$ gives ragged superpixels that follow texture and noise.
+    (iv) Seeds must not be initialised on an edge, otherwise a single superpixel straddles two objects from the
+    start.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why $S=\sqrt{N/K}$?</summary>
+    <p>If $K$ superpixels tile $N$ pixels evenly, each owns $N/K$ pixels. A roughly square region of area $N/K$
+    has side $\sqrt{N/K}$. So $S$ is the natural grid spacing for the seeds, the natural search radius ($2S$), and
+    the natural threshold for "this fragment is too small" ($S^2/4$). Every scale in the algorithm is derived from
+    this one number, which is how the user-facing parameter $K$ propagates through.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why Dijkstra and not a plain BFS or a distance transform?</summary>
+    <p>Because the edge weights are not equal. BFS computes shortest paths only when every edge costs the same,
+    and a distance transform assumes the Euclidean metric on a uniform grid. Here the cost of a step depends on
+    the local image gradient, so you need a genuine weighted shortest-path algorithm. Dijkstra is correct because
+    all the weights are non-negative (they are square roots of sums of squares, hence $\ge\|q-p\|>0$). The
+    continuous-domain alternative with the same output is fast marching / fast sweeping (Ch. 9).</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does the algorithm terminate? Does it find the global optimum?</summary>
+    <p>Terminates: it is Lloyd's algorithm with a fixed metric. The assignment step gives each pixel its cheapest
+    seed (cannot increase the objective $\sum_p d(p,s_{L[p]})$), the update step moves each seed to a better
+    representative of its own region (cannot increase it either), and there are finitely many labelings, so no
+    labeling can repeat — see <a href="b8_kmeans_termination.html">B8</a> for the full argument. Global optimum:
+    no. Like k-means it is initialisation-dependent; the regular grid initialisation is what makes the result
+    reproducible and roughly uniform in practice.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What does $\gamma\to\infty$ do, and why is that bad?</summary>
+    <p>The arclength term becomes negligible, so distance measures only accumulated colour variation. Ripples then
+    flow freely through any flat region no matter how far, and superpixels become enormous, thin and ragged —
+    they follow every texture ripple, not just object boundaries, and they lose the compactness that made them
+    useful as a <em>regular</em> mid-level representation. It is also unstable in noise, since noise creates
+    gradients. Keeping the “1” in $\sqrt{1+\gamma^2(\cdot)^2}$ is what guarantees a floor on the cost per step and
+    hence bounded superpixel size.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How is this different from SLIC?</summary>
+    <p>SLIC measures a <em>direct</em> 5-D distance between a pixel and a seed,
+    $D=\sqrt{d_{lab}^2+(m/S)^2d_{xy}^2}$ — it compares the pixel with the seed's colour, ignoring what lies
+    between them. The geodesic version measures the cost of the cheapest <em>path</em>, so a pixel that happens to
+    have the same colour as a seed on the other side of a strong edge is still far away. That makes geodesic
+    superpixels much better at not leaking through thin barriers, at the cost of a shortest-path computation
+    instead of a local comparison. Setting $\gamma=0$ collapses the geodesic version to a purely spatial grid.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why do superpixels reduce the computational burden of later tasks, concretely?</summary>
+    <p>They turn a pixel grid into a graph with $\sim10^3$ nodes instead of $\sim10^6$. A graph-cut, a CRF, a
+    label-propagation or a k-NN search then runs on that graph, typically a $10^3$-fold reduction in nodes and a
+    similar reduction in edges. Just as important: each node carries an <em>aggregated</em> feature (mean colour,
+    texture histogram, size, shape), which is far more discriminative and far less noisy than a single pixel — so
+    you get both speed and better features. The requirement is that superpixels never straddle a true boundary,
+    since any such error is unrecoverable downstream; that requirement is exactly what the geodesic metric buys.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>the shape of it</td><td>k-means / Lloyd, with a geodesic metric</td></tr>
+      <tr><td>$S$</td><td>$\sqrt{N/K}$ — grid spacing, search radius $2S$, merge threshold $S^2/4$</td></tr>
+      <tr><td>seed init</td><td>regular grid, then move off the local edge (min $\|\nabla I\|$ in $3\times3$)</td></tr>
+      <tr><td>assign</td><td>ONE multi-source Dijkstra, all $K$ seeds pushed at distance 0</td></tr>
+      <tr><td>edge weight</td><td>$\sqrt{\|q-p\|^2+\gamma^2\|I(q)-I(p)\|^2}$</td></tr>
+      <tr><td>update</td><td>centroid of the region, snapped back inside it</td></tr>
+      <tr><td>post</td><td>connected components; merge fragments $<S^2/4$</td></tr>
+      <tr><td>cost</td><td>$O(N\log N)$/iter, $O(N)$ with the $2S$ window; $T\approx10$</td></tr>
+      <tr><td>$\gamma$</td><td>0 = compact grid, blind to edges; large = ragged, follows texture</td></tr>
+      <tr><td>vs SLIC</td><td>path cost, not pixel-to-seed comparison ⇒ no leaking through barriers</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_6_covid_kalman.html"><span class="dir">Previous</span><span class="ttl">Q6 · COVID-19</span></a>
+    <a class="next" href="e20_8_gmm_anomaly.html"><span class="dir">Next question</span><span class="ttl">Q8 · Anomaly detection ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Toy image + the geodesic superpixel algorithm
+   ========================================================= */
+const SP = (function(){
+  const W=150,H=96,C=3;
+  const px=new Float32Array(W*H*C);
+  let sd=2024; const rnd=()=>{ sd=(sd*1103515245+12345)&0x7fffffff; return sd/0x7fffffff; };
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    // teal water with waves
+    const w=0.06*Math.sin(x*0.20+y*0.11)+0.04*Math.sin(x*0.07-y*0.23)+0.02*(rnd()-0.5);
+    let r=0.10+w, g2=0.36+w, b=0.44+w;
+    // two bear-ish blobs
+    const inA=((x-58)/30)**2+((y-46)/17)**2<1;
+    const inB=((x-104)/24)**2+((y-52)/13)**2<1;
+    const inC=((x-33)/10)**2+((y-38)/9)**2<1;
+    if(inA||inB||inC){ const n=0.05*(rnd()-0.5);
+      r=0.74+n; g2=0.63+n; b=0.48+n; }
+    const i=(y*W+x)*C; px[i]=r; px[i+1]=g2; px[i+2]=b;
+  }
+  return {W,H,C,px};
+})();
+
+function spRun(K,gamma,iters){
+  const {W,H,C,px}=SP, N=W*H;
+  const S=Math.max(3,Math.round(Math.sqrt(N/K)));
+  // ---- gradient magnitude for seed nudging
+  const gm=new Float32Array(N);
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    let s=0;
+    for(let c=0;c<C;c++){
+      const dx=px[((y)*W+x+1)*C+c]-px[((y)*W+x-1)*C+c];
+      const dy=px[((y+1)*W+x)*C+c]-px[((y-1)*W+x)*C+c];
+      s+=dx*dx+dy*dy;
+    }
+    gm[y*W+x]=Math.sqrt(s);
+  }
+  // ---- seeds on a grid, nudged off edges
+  let seeds=[];
+  for(let y=Math.round(S/2);y<H;y+=S) for(let x=Math.round(S/2);x<W;x+=S){
+    let bx=x,by=y,bg=1e9;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      const nx=Math.max(1,Math.min(W-2,x+dx)), ny=Math.max(1,Math.min(H-2,y+dy));
+      if(gm[ny*W+nx]<bg){bg=gm[ny*W+nx];bx=nx;by=ny;}
+    }
+    seeds.push([bx,by]);
+  }
+  const Ks=seeds.length;
+  const D=new Float64Array(N), L=new Int32Array(N);
+  const NB=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+  function dijkstra(){
+    D.fill(Infinity); L.fill(-1);
+    const hp=[];
+    const push=(d,i)=>{ hp.push([d,i]); let c=hp.length-1;
+      while(c>0){ const p=(c-1)>>1; if(hp[p][0]<=hp[c][0])break; const t=hp[p];hp[p]=hp[c];hp[c]=t; c=p; } };
+    const pop=()=>{ const top=hp[0], last=hp.pop();
+      if(hp.length){ hp[0]=last; let c=0;
+        for(;;){ const l=2*c+1,r=l+1; let m=c;
+          if(l<hp.length&&hp[l][0]<hp[m][0])m=l;
+          if(r<hp.length&&hp[r][0]<hp[m][0])m=r;
+          if(m===c)break; const t=hp[m];hp[m]=hp[c];hp[c]=t; c=m; } }
+      return top; };
+    seeds.forEach(([x,y],k)=>{ const i=y*W+x; D[i]=0; L[i]=k; push(0,i); });
+    while(hp.length){
+      const [d,u]=pop();
+      if(d>D[u]) continue;
+      const ux=u%W, uy=(u/W)|0;
+      for(const [dx,dy] of NB){
+        const vx=ux+dx, vy=uy+dy;
+        if(vx<0||vy<0||vx>=W||vy>=H) continue;
+        const v=vy*W+vx;
+        let dc=0; for(let c=0;c<C;c++){ const t=px[v*C+c]-px[u*C+c]; dc+=t*t; }
+        const len2=dx*dx+dy*dy;
+        const w=Math.sqrt(len2+gamma*gamma*dc);
+        const nd=d+w;
+        if(nd<D[v]){ D[v]=nd; L[v]=L[u]; push(nd,v); }
+      }
+    }
+  }
+  for(let it=0;it<iters;it++){
+    dijkstra();
+    if(it===iters-1) break;
+    // Lloyd update
+    const sx=new Float64Array(Ks), sy=new Float64Array(Ks), cn=new Float64Array(Ks);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const k=L[y*W+x]; if(k<0) continue;
+      sx[k]+=x; sy[k]+=y; cn[k]++; }
+    const ns=[];
+    for(let k=0;k<Ks;k++){
+      if(cn[k]===0){ ns.push(seeds[k]); continue; }
+      const cx=sx[k]/cn[k], cy=sy[k]/cn[k];
+      // snap to the nearest pixel of that label
+      let bx=Math.round(cx), by=Math.round(cy), bd=1e9, found=false;
+      for(let r=0;r<=S&&!found;r++){
+        for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+          const nx=Math.round(cx)+dx, ny=Math.round(cy)+dy;
+          if(nx<1||ny<1||nx>=W-1||ny>=H-1) continue;
+          if(L[ny*W+nx]!==k) continue;
+          const dd=dx*dx+dy*dy; if(dd<bd){bd=dd;bx=nx;by=ny;found=true;}
+        }
+      }
+      ns.push([bx,by]);
+    }
+    seeds=ns;
+  }
+  // region mean colours
+  const acc=new Float64Array(Ks*C), cnt=new Float64Array(Ks);
+  for(let i=0;i<N;i++){ const k=L[i]; if(k<0)continue; cnt[k]++;
+    for(let c=0;c<C;c++) acc[k*C+c]+=px[i*C+c]; }
+  const mean=new Float32Array(Ks*C);
+  for(let k=0;k<Ks;k++) for(let c=0;c<C;c++) mean[k*C+c]= cnt[k]? acc[k*C+c]/cnt[k] : 0;
+  return {L,D,seeds,mean,Ks,S,W,H};
+}
+
+function spDraw(g,R,ox,oy,cell,mode,title,sub){
+  const {W,H,C,px}=SP;
+  let mxD=0; if(mode==='dist'){ for(let i=0;i<R.D.length;i++) if(isFinite(R.D[i])) mxD=Math.max(mxD,R.D[i]); }
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x; let r,gg,b;
+    if(mode==='mean'){ const k=R.L[i]; r=R.mean[k*C]; gg=R.mean[k*C+1]; b=R.mean[k*C+2]; }
+    else if(mode==='dist'){ const v=Math.min(1,R.D[i]/(mxD||1)); r=gg=b=v; }
+    else { r=px[i*C]; gg=px[i*C+1]; b=px[i*C+2]; }
+    // boundary?
+    let bd=false;
+    if(mode!=='dist'){
+      if(x+1<W && R.L[i]!==R.L[i+1]) bd=true;
+      if(y+1<H && R.L[i]!==R.L[i+W]) bd=true;
+    }
+    if(bd){ r=0.03; gg=0.05; b=0.08; }
+    g.fillStyle='rgb('+(r*255|0)+','+(gg*255|0)+','+(b*255|0)+')';
+    g.fillRect(ox+x*cell,oy+y*cell,cell+.4,cell+.4);
+  }
+  if(mode==='dist') R.seeds.forEach(([x,y])=>{ g.fillStyle='#f07178';
+    g.fillRect(ox+x*cell-1.2,oy+y*cell-1.2,2.6,2.6); });
+  g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(ox-.5,oy-.5,W*cell+1,H*cell+1);
+  if(title){ g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText(title,ox,oy-20); }
+  if(sub){ g.fillStyle='#6b7a99'; g.font='11px system-ui'; g.fillText(sub,ox,oy-6); }
+}
+
+/* ---------- DEMO 1 ---------- */
+(function(){
+  const cv=document.getElementById('cvA'), g=cv.getContext('2d'), ro=document.getElementById('Aro');
+  const eK=document.getElementById('Ak'), eG=document.getElementById('Ag'), eT=document.getElementById('At');
+  const vK=document.getElementById('vAk'), vG=document.getElementById('vAg'), vT=document.getElementById('vAt');
+  function sync(){ vK.textContent=eK.value; vG.textContent=eG.value; vT.textContent=eT.value; }
+  [eK,eG,eT].forEach(e=>e.oninput=sync); sync();
+  function blank(){ g.clearRect(0,0,cv.width,cv.height);
+    spDraw(g,{L:new Int32Array(SP.W*SP.H).fill(0),D:new Float64Array(SP.W*SP.H),seeds:[],mean:new Float32Array(3),Ks:1},
+           40,60,1.85,'raw','the input image','press Run'); }
+  blank();
+  document.getElementById('Ago').onclick=()=>{
+    ro.innerHTML='computing…';
+    setTimeout(()=>{
+      const t0=performance.now();
+      const R=spRun(+eK.value,(+eG.value)/10,+eT.value);
+      const ms=performance.now()-t0;
+      g.clearRect(0,0,cv.width,cv.height);
+      spDraw(g,R,40,60,1.85,'raw','superpixel boundaries','they stop at the animal outline');
+      spDraw(g,R,340,60,1.85,'mean','each region = its mean colour','the mid-level representation');
+      spDraw(g,R,640,60,1.85,'dist','geodesic distance field D','red dots = the K seeds');
+      ro.innerHTML='K requested = <b>'+eK.value+'</b> → S = √(N/K) = <b>'+R.S+'</b> px → seeds placed = <b>'+
+        R.Ks+'</b> &nbsp;·&nbsp; γ = <b>'+((+eG.value)/10).toFixed(1)+'</b> &nbsp;·&nbsp; '+
+        eT.value+' Lloyd iterations in <b>'+ms.toFixed(0)+' ms</b>.<br>'+
+        (+eG.value===0
+          ? '<b style="color:#ffcb6b">γ = 0:</b> the metric is pure Euclidean — the tiles are a regular grid and completely ignore the animal. This is the boundary-blind baseline.'
+          : 'Notice the distance field on the right: it is <b>dark inside each region and jumps at the outline</b> — the ripples cannot cross the wall cheaply, which is why the tiles align with it.');
+    },20);
+  };
+})();
+
+/* ---------- DEMO 2 ---------- */
+(function(){
+  const cv=document.getElementById('cvB'), g=cv.getContext('2d'), ro=document.getElementById('Bro');
+  const eG=document.getElementById('Bg'), vG=document.getElementById('vBg');
+  eG.oninput=()=>vG.textContent=eG.value;
+  document.getElementById('Bgo').onclick=()=>{
+    ro.innerHTML='computing…';
+    setTimeout(()=>{
+      const A=spRun(140,0,6), B=spRun(140,(+eG.value)/10,6);
+      g.clearRect(0,0,cv.width,cv.height);
+      spDraw(g,A,60,60,2.3,'raw','γ = 0  —  Euclidean','compact, but cuts straight through the animal');
+      spDraw(g,B,470,60,2.3,'raw','γ = '+((+eG.value)/10).toFixed(1)+'  —  geodesic','tiles snap onto the outline');
+      // boundary-recall style score: fraction of strong-gradient pixels that are on a superpixel border
+      function recall(R){
+        const {W,H,C,px}=SP; let hit=0,tot=0;
+        for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+          let s=0; for(let c=0;c<C;c++){ const d=px[((y)*W+x+1)*C+c]-px[((y)*W+x-1)*C+c]; s+=d*d; }
+          if(Math.sqrt(s)<0.25) continue;
+          tot++;
+          let bd=false;
+          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++)
+            if(R.L[(y+dy)*W+(x+dx)]!==R.L[y*W+x]) bd=true;
+          if(bd) hit++;
+        }
+        return tot? hit/tot : 0;
+      }
+      ro.innerHTML='boundary recall (fraction of strong image edges that lie on a superpixel border): '+
+        '<b>γ=0 → '+(100*recall(A)).toFixed(0)+'%</b> vs <b style="color:#7fdbca">γ='+((+eG.value)/10).toFixed(1)+
+        ' → '+(100*recall(B)).toFixed(0)+'%</b>. '+
+        'That number is the standard way superpixel algorithms are compared, and it is exactly what the geodesic '+
+        'metric is buying you. The price is compactness: the right-hand tiles are less regular.';
+    },20);
+  };
+})();
+</script>
+
+</body>
+</html>

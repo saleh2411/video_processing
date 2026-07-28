@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q2 — Am I in the middle of the corridor?</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q2</b> · Optic flow, corridor centring</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">‹ Chapter 2</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_3_inpainting_bds.html">Q3 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 2 &amp; 3 · Exam 8/7/2020, question 2 · 12 points</div>
+    <h1>The wall you are closer to whooshes past faster</h1>
+    <p class="lede">A robot drives down a corridor and wants to know if it is centred. It has no ruler, no depth
+    sensor, no idea of its own speed — only optic flow. The answer is three lines long and every unknown quantity
+    cancels out.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 2 · 12 points · OPTIC FLOW</span>
+    <p>A robot equipped with a forward facing camera is moving down a straight and long corridor. The floor, walls
+    and ceiling of the corridor are textured, so optic flow algorithms work well. Let $A$ denote the distance from
+    the camera center of projection to the left wall and let $B$ denote the distance from the camera center of
+    projection to the right wall. <strong>Suggest a way to use optic flow to determine if $A = B$.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    Under pure forward translation the flow is radial from the FOE, and for a pixel at image column $x$ looking at
+    a side wall,
+    $\;|u(x)| = \dfrac{x^2 T_z}{f\,A}$.
+    <br><br>So take <b>two pixels symmetric about the FOE</b>, $x=+x_0$ and $x=-x_0$, and compare flow magnitudes:
+    $$\frac{|u(-x_0)|}{|u(+x_0)|}=\frac{B}{A}.$$
+    Equal flow ⟺ $A=B$. Speed $T_z$ and focal length $f$ cancel — you never need to know them.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">The bike ride between two hedges</span>
+    <p>You are riding your bike down a path. On your left is a hedge, on your right is another hedge. You want to
+    know: am I in the middle, or am I closer to one of them? You are not allowed to look down, not allowed to
+    measure anything, and you don't even know how fast you're going.</p>
+    <p>Here is the thing every kid already knows: <strong>things that are close whoosh past fast; things that are
+    far away crawl.</strong> The moon “follows you” in the car because it is enormously far away. The fence right
+    next to the window is a blur.</p>
+    <p>So: <em>listen to the whoosh on each side.</em></p>
+    <ul>
+      <li>Left hedge whooshing faster than the right one → you are hugging the left hedge → <b>A &lt; B</b>.</li>
+      <li>Right one faster → you are hugging the right one → <b>B &lt; A</b>.</li>
+      <li>Both the same → you are dead centre → <b>A = B</b>. </li>
+    </ul>
+    <p>“Whoosh speed” is exactly what optic flow measures. That's the whole question. The only care needed is
+    <em>where</em> you listen: you have to compare the same place on each side — same distance out from the middle
+    of your view — because the whoosh is faster at the edges of your vision than straight ahead, on <em>both</em>
+    sides.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Why the “same place on each side” part matters</span>
+    Straight ahead — the point you are driving into — nothing moves at all. That point is the <b>Focus of
+    Expansion</b> (FOE). Everything streams <em>away</em> from it, faster and faster as you look further out to the
+    side. Compare a pixel near the edge on the left with a pixel near the centre on the right and you learn
+    nothing. Compare mirror-image pixels and the geometry does the rest.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the corridor, top view + what the camera sees</h4><span class="tag">slide A and B</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Top: the top view from the exam figure. Middle: the image the camera
+      records, with the true flow vectors drawn — the classic radial expansion away from the <span
+      style="color:#f07178"><b>FOE</b></span>. Bottom: flow magnitude $|u|$ plotted against image column $x$, with
+      the symmetric test pair marked.</p>
+      <canvas id="cvC" width="900" height="560"></canvas>
+      <div class="controls">
+        <div class="control"><label>A — distance to LEFT wall <span class="val" id="vCa">2.00</span> m</label><input type="range" id="Ca" min="60" max="400" step="2" value="200"></div>
+        <div class="control"><label>B — distance to RIGHT wall <span class="val" id="vCb">2.00</span> m</label><input type="range" id="Cb" min="60" max="400" step="2" value="200"></div>
+        <div class="control"><label>test column ±x₀ <span class="val" id="vCx">100</span> px</label><input type="range" id="Cx" min="30" max="150" step="5" value="100"></div>
+      </div>
+      <div class="readout" id="Cro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The math, from the two formulas you already know</h2>
+
+  <div class="explain">
+    <span class="explain-label">Ingredient 1 — perspective projection</span>
+    <p>Camera frame: $Z$ forward along the corridor, $X$ to the right, $Y$ down. A 3-D point $(X,Y,Z)$ lands at</p>
+  </div>
+
+  <div class="eq">$$ x = f\frac{X}{Z}, \qquad y = f\frac{Y}{Z} $$</div>
+
+  <div class="explain">
+    <span class="explain-label">Ingredient 2 — the motion field of a translating camera</span>
+    <p>For a camera translating with $T=(T_x,T_y,T_z)$ and <em>no rotation</em>, differentiating the projection
+    equations gives the standard motion field</p>
+  </div>
+
+  <div class="eq">$$ u = \frac{-f\,T_x + x\,T_z}{Z}, \qquad v = \frac{-f\,T_y + y\,T_z}{Z} $$</div>
+
+  <div class="explain">
+    <p>The robot drives straight down the corridor, so $T_x=T_y=0$, $T_z>0$, and this collapses to</p>
+  </div>
+
+  <div class="eq">$$ (u,v) = \frac{T_z}{Z}\,(x,\,y) $$</div>
+
+  <div class="explain">
+    <p>Read that out loud: <strong>the flow points radially away from the image origin, its length grows linearly
+    with distance from the origin, and it is inversely proportional to depth.</strong> The origin is the FOE (here
+    the principal point, because the motion is along the optical axis). Two facts fall out immediately:</p>
+    <ul>
+      <li>you cannot get $Z$ on its own — only the ratio $T_z/Z$. Absolute scale is unobservable from one camera.
+        That is fine: the question asks for a <em>comparison</em>, not a distance.</li>
+      <li>flow grows with $|x|$, so “where you sample” matters (this is the point of the callout above).</li>
+    </ul>
+    <h4 class="mini">Ingredient 3 — the walls turn depth into image position</h4>
+    <p>The left wall is the plane $X=-A$; the right wall is $X=+B$. Both run parallel to the direction of travel.
+    For a point on the left wall at depth $Z$,</p>
+  </div>
+
+  <div class="eq">$$ x = f\frac{-A}{Z} \;\;\Longrightarrow\;\; Z = \frac{f\,A}{|x|} \qquad (x<0) $$</div>
+
+  <div class="explain">
+    <p>This is the crucial substitution: <em>on a side wall, image column tells you depth.</em> Feed it back into
+    the flow:</p>
+  </div>
+
+  <div class="eq">$$ |u(x)| \;=\; \frac{|x|\,T_z}{Z} \;=\; \frac{|x|\,T_z}{f A/|x|} \;=\; \boxed{\;\frac{x^2\,T_z}{f\,A}\;}
+      \qquad\text{(left wall)},\qquad
+      |u(x)| = \frac{x^2\,T_z}{f\,B}\quad\text{(right wall)} $$</div>
+
+  <div class="callout key"><span class="lbl">The test</span>
+    Evaluate both at the <b>same</b> $|x| = x_0$ and divide. Everything except the two distances cancels:
+    $$\frac{|u(-x_0)|}{|u(+x_0)|} \;=\; \frac{x_0^2T_z/(fA)}{x_0^2T_z/(fB)} \;=\; \frac{B}{A}$$
+    So: ratio $=1 \iff A=B$. Ratio $>1$ → left flow faster → $A<B$ → the robot is too close to the left wall.
+    <br><br>You get the <b>ratio of the distances for free</b>, not just the yes/no answer — enough to steer.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Making it robust — what a good answer adds</h2>
+
+  <div class="explain">
+    <p>One pixel pair works on paper. In a real robot you would do all of the following, and each is worth a line
+    in the answer:</p>
+    <h4 class="mini">a. Find the FOE instead of assuming it</h4>
+    <p>If the camera is even slightly misaligned or the robot yaws, the flow is not centred on the principal
+    point. Estimate the FOE as the point where the flow field vanishes (least-squares intersection of the flow
+    vectors' lines), and take your symmetric pairs about <em>that</em> point. If the robot is also rotating, the
+    rotational component of the flow is <em>depth-independent</em>, so it adds the same bias to both sides only
+    after de-rotation — either estimate and subtract it, or rely on the fact that pure yaw adds a constant
+    horizontal term which you can cancel by using the <b>ceiling and floor</b> instead (see c).</p>
+
+    <h4 class="mini">b. Fit a curve rather than trust two pixels</h4>
+    <p>Both walls give $|u| = c\,x^2$ with $c_L = T_z/(fA)$ and $c_R = T_z/(fB)$. Take <em>all</em> flow vectors on
+    each wall and least-squares fit the coefficient:
+    $\hat c = \sum x_i^2|u_i| / \sum x_i^4$. Then $A/B = \hat c_R/\hat c_L$. Averaging over thousands of pixels
+    kills noise and the effect of individual bad matches.</p>
+
+    <h4 class="mini">c. A cheaper symmetric statistic</h4>
+    <p>Since $|u|$ is an even function of $x$ when $A=B$, you can simply test whether the flow-magnitude image is
+    <b>left–right symmetric about the FOE</b>:
+    $\;S=\sum_{x_0}\big(|u(-x_0)|-|u(+x_0)|\big)$. $S=0$ ⟺ centred; the sign of $S$ tells you which way to steer.
+    This is the classic biologically-inspired “balance the optic flow” corridor-centring rule (bees do exactly
+    this).</p>
+
+    <h4 class="mini">d. Use only wall pixels</h4>
+    <p>The formula $|u|=x^2T_z/(fA)$ is derived for the <em>side wall plane</em>. Pixels on the far end of the
+    corridor, on the floor, or on a passing person have different depth laws, so segment them out — e.g. keep only
+    pixels whose flow follows the $x^2$ law (RANSAC on the fit in b), which simultaneously rejects outliers.</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the steering controller</h4><span class="tag">let it drive</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The robot measures only the two flow magnitudes and steers with
+      $\dot X \propto |u_{\text{left}}|-|u_{\text{right}}|$. Press <b>Run</b> and drag the start position: it
+      centres itself without ever knowing the corridor's width.</p>
+      <canvas id="cvS" width="900" height="240"></canvas>
+      <div class="controls">
+        <div class="control"><label>start offset from centre <span class="val" id="vSo">+0.70</span> m</label><input type="range" id="So" min="-90" max="90" step="1" value="70"></div>
+        <div class="control"><label>gain <span class="val" id="vSg">0.60</span></label><input type="range" id="Sg" min="5" max="150" step="5" value="60"></div>
+      </div>
+      <div class="controls"><button class="chk" id="Sgo">▶ Run / reset</button></div>
+      <div class="readout" id="Sro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Model.</strong> Put the camera frame with $Z$ along the corridor, $X$ to the right, $Y$ down; then
+    $x=fX/Z$, $y=fY/Z$. The robot translates with $T=(0,0,T_z)$ and no rotation, so the motion field
+    $u=\frac{-fT_x+xT_z}{Z},\ v=\frac{-fT_y+yT_z}{Z}$ reduces to</p>
+    <div class="eq">$$ (u,v)=\frac{T_z}{Z}(x,y) $$</div>
+    <p>i.e. flow is purely radial, expanding away from the FOE, which for motion along the optical axis is the
+    principal point $(0,0)$.</p>
+
+    <p><strong>Key substitution.</strong> The left wall is the plane $X=-A$, so a wall point imaged at column $x<0$
+    has depth $Z=fA/|x|$. Substituting,</p>
+    <div class="eq">$$ |u(x)| = \frac{|x|T_z}{Z} = \frac{x^2T_z}{fA}\quad(\text{left wall}),\qquad
+                       |u(x)| = \frac{x^2T_z}{fB}\quad(\text{right wall}). $$</div>
+
+    <p><strong>The test.</strong> Compute optic flow between consecutive frames. Pick a pair of pixels symmetric
+    about the FOE, one on each wall, at columns $-x_0$ and $+x_0$. Then</p>
+    <div class="eq">$$ \frac{|u(-x_0)|}{|u(+x_0)|} \;=\; \frac{B}{A} $$</div>
+    <p>Therefore $A=B$ <b>iff</b> the two flow magnitudes are equal. If the left flow is larger, $A<B$ (too close
+    to the left wall) and vice versa — so the measurement also gives the ratio $A/B$ and hence a steering signal.
+    Note that $T_z$ and $f$ cancel: neither the robot's speed nor the calibration is needed, and no absolute
+    distance is recoverable (nor required).</p>
+
+    <p><strong>Practical version.</strong> (i) estimate the FOE from the flow field rather than assuming the
+    principal point, so small yaw/misalignment does not bias the comparison; (ii) instead of a single pair,
+    least-squares fit $|u| = c\,x^2$ separately on each wall — $\hat c=\sum x_i^2|u_i|/\sum x_i^4$ — and use
+    $A/B=\hat c_R/\hat c_L$; use RANSAC on this fit to reject pixels that are not on the walls (far end of the
+    corridor, floor, moving people); (iii) equivalently, test the left–right symmetry of the flow-magnitude image
+    about the FOE, $S=\sum_{x_0}(|u(-x_0)|-|u(+x_0)|)$, and steer to drive $S$ to zero. This requires texture on
+    the walls, which the question grants.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why can't you just compute the depth $Z$ of each wall and compare?</summary>
+    <p>Because a single translating camera only ever gives you $T_z/Z$ — the flow equations contain the translation
+    and the depth as a product/quotient, never separately. This is the classic <b>scale ambiguity</b> of
+    monocular structure-from-motion: a slow robot in a narrow corridor and a fast robot in a wide corridor produce
+    exactly the same video. The question is well-posed precisely because a <em>ratio</em> of two depths is
+    scale-free, so the unknown $T_z$ cancels.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Where does the $x^2$ come from? It feels suspicious.</summary>
+    <p>Two effects multiply. (1) Flow grows linearly with distance from the FOE: $|u|\propto|x|$. (2) On a wall
+    parallel to your motion, looking further sideways means looking at a <em>nearer</em> part of the wall, so
+    $Z\propto 1/|x|$, i.e. $1/Z\propto|x|$ — another factor of $|x|$. Multiply: $|u|\propto x^2$. Physically: the
+    wall texture is nearly frozen far ahead near the FOE, and it blurs violently at the image edge.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What if the robot is also rotating (yaw)?</summary>
+    <p>Then the full flow has a rotational part which is <b>independent of depth</b> — it adds the same vector
+    field to every pixel regardless of what is being looked at. That breaks the naive symmetry test, because a
+    constant horizontal bias makes one side look faster. Fixes: subtract the rotational component (estimated e.g.
+    from a gyro, or from distant points whose translational flow $\approx0$); or move the FOE to where the flow
+    actually vanishes and measure symmetry about it; or use the vertical flow on the <b>ceiling and floor</b>,
+    which yaw affects only weakly.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The corridor's far wall is also in view. Does it corrupt the test?</summary>
+    <p>Yes if you include it. The far wall is a plane perpendicular to the motion, $Z=Z_0$ constant, so its flow is
+    $|u|=|x|T_z/Z_0$ — <em>linear</em> in $|x|$, not quadratic, and it is symmetric about the FOE no matter where
+    the robot is. Including it biases the comparison toward “centred”. That is exactly why step (d) — fit the
+    $x^2$ law and reject everything that does not obey it — is part of a good answer.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Which pixels give the most reliable measurement?</summary>
+    <p>Ones far from the FOE (large $|x|$): the flow is large there, so the signal-to-noise ratio of the flow
+    estimate is best, and $|u|\propto x^2$ makes the difference between $A$ and $B$ maximally visible. Near the FOE
+    all flow vanishes and any difference is swamped by noise. The trade-off is that large $|x|$ means nearby wall
+    → large displacement per frame → the linearised brightness-constancy assumption may break, so use a
+    coarse-to-fine pyramid, or a faster frame rate.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Sketch how you'd get $A$ and $B$ in metres, not just the ratio.</summary>
+    <p>You need one extra piece of metric information, because vision alone is scale-blind. Any of: wheel odometry
+    or an IMU giving $T_z$ (then $A = x^2T_z/(f|u|)$ directly from the same formula); a known-size object in view;
+    or a second camera (stereo baseline). This is worth mentioning in an exam answer because it shows you know
+    <em>why</em> the question was phrased as “is $A=B$” rather than “what is $A$”.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>motion field, pure $T_z$</td><td>$(u,v)=\frac{T_z}{Z}(x,y)$ — radial expansion from the FOE</td></tr>
+      <tr><td>FOE</td><td>the point you are driving into; flow $=0$ there</td></tr>
+      <tr><td>side wall $X=-A$</td><td>$Z=fA/|x|$ — image column <em>is</em> depth</td></tr>
+      <tr><td>flow on a side wall</td><td>$|u| = x^2T_z/(fA)$</td></tr>
+      <tr><td>the test</td><td>$\dfrac{|u(-x_0)|}{|u(+x_0)|}=\dfrac{B}{A}$ &nbsp;→&nbsp; equal ⟺ centred</td></tr>
+      <tr><td>what cancels</td><td>$T_z$ and $f$ — no speed, no calibration needed</td></tr>
+      <tr><td>robust version</td><td>fit $|u|=cx^2$ per wall + RANSAC; compare $c_R/c_L$</td></tr>
+      <tr><td>traps</td><td>far wall (linear, not quadratic); rotation (depth-independent bias); FOE not at the principal point</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_1_cycle_consistency.html"><span class="dir">Previous</span><span class="ttl">Q1 · Cycle consistency</span></a>
+    <a class="next" href="e20_3_inpainting_bds.html"><span class="dir">Next question</span><span class="ttl">Q3 · BDS inpainting ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO 1 — corridor top view + image view + flow profile
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvC'), g=cv.getContext('2d'), ro=document.getElementById('Cro');
+  const eA=document.getElementById('Ca'), eB=document.getElementById('Cb'), eX=document.getElementById('Cx');
+  const vA=document.getElementById('vCa'), vB=document.getElementById('vCb'), vX=document.getElementById('vCx');
+  const F=200, TZ=0.35, HH=1.3;      // focal px, forward speed m/frame, half wall height m
+
+  function flowMag(x,D){ return x*x*TZ/(F*D); }   // |u| on a wall at lateral distance D
+
+  function draw(){
+    const A=(+eA.value)/100, B=(+eB.value)/100, x0=+eX.value;
+    vA.textContent=A.toFixed(2); vB.textContent=B.toFixed(2); vX.textContent=x0;
+    g.clearRect(0,0,cv.width,cv.height);
+    g.font='12px system-ui';
+
+    /* ---------------- top view ---------------- */
+    const TX=60, TW=780, TY=95, MPP=46;          // metres->px
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui';
+    g.fillText('TOP VIEW — the exam figure',TX,30);
+    g.font='12px system-ui';
+    // walls
+    g.strokeStyle='#82aaff'; g.lineWidth=5;
+    g.beginPath(); g.moveTo(TX,TY-A*MPP); g.lineTo(TX+TW,TY-A*MPP); g.stroke();
+    g.beginPath(); g.moveTo(TX,TY+B*MPP); g.lineTo(TX+TW,TY+B*MPP); g.stroke();
+    g.fillStyle='#82aaff'; g.fillText('Left Wall',TX+TW-70,TY-A*MPP-9);
+    g.fillText('Right Wall',TX+TW-74,TY+B*MPP+18);
+    // camera
+    g.fillStyle='#7fdbca'; g.beginPath();
+    g.moveTo(TX+120,TY); g.lineTo(TX+95,TY-16); g.lineTo(TX+95,TY+16); g.closePath(); g.fill();
+    g.fillStyle='#f07178'; g.beginPath(); g.arc(TX+95,TY,5,0,7); g.fill();
+    g.fillStyle='#9fb0cc'; g.fillText('camera',TX+108,TY-24);
+    // A / B measuring bars
+    g.strokeStyle='#c792ea'; g.lineWidth=1.5; g.setLineDash([4,3]);
+    g.beginPath(); g.moveTo(TX+95,TY); g.lineTo(TX+95,TY-A*MPP); g.stroke();
+    g.beginPath(); g.moveTo(TX+95,TY); g.lineTo(TX+95,TY+B*MPP); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#c792ea';
+    g.fillText('A = '+A.toFixed(2)+' m',TX+40,TY-A*MPP/2);
+    g.fillText('B = '+B.toFixed(2)+' m',TX+40,TY+B*MPP/2+4);
+    // motion arrow
+    g.strokeStyle='#7fdbca'; g.lineWidth=3;
+    g.beginPath(); g.moveTo(TX+180,TY); g.lineTo(TX+330,TY); g.stroke();
+    g.beginPath(); g.moveTo(TX+330,TY); g.lineTo(TX+318,TY-6); g.lineTo(TX+318,TY+6); g.closePath();
+    g.fillStyle='#7fdbca'; g.fill();
+    g.fillText('driving this way',TX+200,TY-10);
+
+    /* ---------------- image view with flow vectors ---------------- */
+    const IX=450, IY=310, IW=340, IH=150;         // centre + half sizes of image rect
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui';
+    g.fillText('WHAT THE CAMERA SEES  (flow vectors, radial from the FOE)',110,195);
+    g.font='12px system-ui';
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(IX-IW/2,IY-IH/2,IW,IH);
+    g.save(); g.beginPath(); g.rect(IX-IW/2,IY-IH/2,IW,IH); g.clip();
+
+    const SC=8;                                    // arrow length scale
+    for(const side of [-1,1]){
+      const D = side<0 ? A : B;
+      g.strokeStyle = side<0 ? '#7fdbca' : '#ffcb6b';
+      g.fillStyle   = side<0 ? '#7fdbca' : '#ffcb6b';
+      for(let k=1;k<=9;k++){
+        const Z = 1.0 + k*k*0.30;                 // depths along the wall
+        const xi = side*F*D/Z;                    // image column of the wall at that depth
+        if(Math.abs(xi)>IW/2-4) continue;
+        for(const Yw of [-HH/2,0,HH/2]){
+          const yi = F*Yw/Z;
+          if(Math.abs(yi)>IH/2-4) continue;
+          const ux = xi*TZ/Z*SC, uy = yi*TZ/Z*SC;
+          const X0=IX+xi, Y0=IY+yi;
+          g.beginPath(); g.arc(X0,Y0,1.8,0,7); g.fill();
+          g.lineWidth=1.6; g.beginPath(); g.moveTo(X0,Y0); g.lineTo(X0+ux,Y0+uy); g.stroke();
+          const a=Math.atan2(uy,ux), L=Math.hypot(ux,uy);
+          if(L>5){ g.beginPath(); g.moveTo(X0+ux,Y0+uy);
+            g.lineTo(X0+ux-6*Math.cos(a-.45),Y0+uy-6*Math.sin(a-.45));
+            g.lineTo(X0+ux-6*Math.cos(a+.45),Y0+uy-6*Math.sin(a+.45)); g.closePath(); g.fill(); }
+        }
+      }
+    }
+    // FOE + the two test columns
+    g.fillStyle='#f07178'; g.beginPath(); g.arc(IX,IY,4,0,7); g.fill();
+    g.strokeStyle='#f07178'; g.setLineDash([3,3]); g.lineWidth=1;
+    g.beginPath(); g.moveTo(IX,IY-IH/2); g.lineTo(IX,IY+IH/2); g.stroke(); g.setLineDash([]);
+    g.strokeStyle='#c792ea'; g.lineWidth=1.5;
+    [-x0,x0].forEach(xx=>{ g.beginPath(); g.moveTo(IX+xx,IY-IH/2); g.lineTo(IX+xx,IY+IH/2); g.stroke(); });
+    g.restore();
+    g.fillStyle='#f07178'; g.fillText('FOE',IX+6,IY-IH/2+14);
+    g.fillStyle='#c792ea'; g.fillText('−x₀',IX-x0-10,IY+IH/2+16); g.fillText('+x₀',IX+x0-10,IY+IH/2+16);
+
+    /* ---------------- flow profile ---------------- */
+    const PX=IX, PY0=420, PY1=540, PW=IW;
+    const uL=flowMag(x0,A), uR=flowMag(x0,B);
+    const mx=Math.max(flowMag(IW/2,Math.min(A,B)),1e-6);
+    const yP=u=>PY1-(PY1-PY0)*Math.min(1,u/mx);
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui';
+    g.fillText('|u(x)|  — flow magnitude vs image column',110,410); g.font='12px system-ui';
+    g.strokeStyle='#2c3650'; g.beginPath(); g.moveTo(PX-PW/2,PY1); g.lineTo(PX+PW/2,PY1); g.stroke();
+    for(const side of [-1,1]){
+      const D=side<0?A:B;
+      g.strokeStyle=side<0?'#7fdbca':'#ffcb6b'; g.lineWidth=2.4; g.beginPath();
+      for(let i=0;i<=60;i++){ const xx=side*(i/60)*PW/2, Y=yP(flowMag(xx,D));
+        i?g.lineTo(PX+xx,Y):g.moveTo(PX+xx,Y); }
+      g.stroke();
+    }
+    g.strokeStyle='#c792ea'; g.lineWidth=1.5; g.setLineDash([3,3]);
+    g.beginPath(); g.moveTo(PX-x0,PY1); g.lineTo(PX-x0,yP(uL)); g.stroke();
+    g.beginPath(); g.moveTo(PX+x0,PY1); g.lineTo(PX+x0,yP(uR)); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#7fdbca'; g.beginPath(); g.arc(PX-x0,yP(uL),4,0,7); g.fill();
+    g.fillStyle='#ffcb6b'; g.beginPath(); g.arc(PX+x0,yP(uR),4,0,7); g.fill();
+    g.fillStyle='#7fdbca'; g.fillText('left wall',PX-PW/2+4,PY0+8);
+    g.fillStyle='#ffcb6b'; g.fillText('right wall',PX+PW/2-58,PY0+8);
+
+    const ratio=uL/uR, d=Math.abs(A-B);
+    ro.innerHTML='|u(−x₀)| = <b>'+uL.toFixed(3)+'</b> px &nbsp;·&nbsp; |u(+x₀)| = <b>'+uR.toFixed(3)+
+      '</b> px &nbsp;·&nbsp; ratio = <b>'+ratio.toFixed(3)+'</b> &nbsp; (and B/A = '+(B/A).toFixed(3)+' — the same number)<br>'+
+      (d<0.02
+        ? '<b style="color:#7fdbca">Equal flow ⇒ A = B.</b> The robot is centred. Notice the two parabolas coincide.'
+        : (A<B ? 'Left flow is <b>larger</b> ⇒ the left wall is <b>closer</b> ⇒ A &lt; B. Steer right.'
+               : 'Right flow is <b>larger</b> ⇒ the right wall is <b>closer</b> ⇒ B &lt; A. Steer left.'))+
+      ' &nbsp;Speed T_z and focal f never entered the comparison.';
+  }
+  [eA,eB,eX].forEach(e=>e.oninput=draw);
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — the balance-the-flow steering controller
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvS'), g=cv.getContext('2d'), ro=document.getElementById('Sro');
+  const eO=document.getElementById('So'), eG=document.getElementById('Sg'), btn=document.getElementById('Sgo');
+  const vO=document.getElementById('vSo'), vG=document.getElementById('vSg');
+  const HALF=2.0, F=200, TZ=0.35, x0=100;
+  let off=0.7, t=0, running=false, trail=[], raf=null;
+
+  function step(){
+    const A=HALF-off, B=HALF+off;                    // lateral distances
+    const uL=x0*x0*TZ/(F*A), uR=x0*x0*TZ/(F*B);
+    const gain=(+eG.value)/100;
+    off += -gain*(uL-uR)*0.9;                        // steer away from the faster side
+    trail.push(off); if(trail.length>760) trail.shift();
+    t++;
+    return {uL,uR,A,B};
+  }
+  function draw(m){
+    g.clearRect(0,0,cv.width,cv.height);
+    const TX=60,TW=780,TY=110,MPP=46;
+    g.strokeStyle='#82aaff'; g.lineWidth=5;
+    g.beginPath(); g.moveTo(TX,TY-HALF*MPP); g.lineTo(TX+TW,TY-HALF*MPP); g.stroke();
+    g.beginPath(); g.moveTo(TX,TY+HALF*MPP); g.lineTo(TX+TW,TY+HALF*MPP); g.stroke();
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.setLineDash([5,5]);
+    g.beginPath(); g.moveTo(TX,TY); g.lineTo(TX+TW,TY); g.stroke(); g.setLineDash([]);
+    // trail
+    g.strokeStyle='#c792ea'; g.lineWidth=2; g.beginPath();
+    trail.forEach((o,i)=>{ const X=TX+i, Y=TY-o*MPP; i?g.lineTo(X,Y):g.moveTo(X,Y); });
+    g.stroke();
+    const X=TX+Math.max(0,trail.length-1), Y=TY-off*MPP;
+    g.fillStyle='#7fdbca'; g.beginPath();
+    g.moveTo(X+16,Y); g.lineTo(X-9,Y-11); g.lineTo(X-9,Y+11); g.closePath(); g.fill();
+    g.fillStyle='#9fb0cc'; g.font='12px system-ui';
+    g.fillText('the robot only ever compares two flow numbers — it never learns the corridor width',TX,32);
+    ro.innerHTML='offset from centre = <b>'+off.toFixed(3)+'</b> m &nbsp;·&nbsp; |u_left| = <b>'+m.uL.toFixed(3)+
+      '</b>, |u_right| = <b>'+m.uR.toFixed(3)+'</b> &nbsp;·&nbsp; difference = <b>'+(m.uL-m.uR).toFixed(4)+
+      '</b> &nbsp;→&nbsp; '+(Math.abs(off)<0.02?'<b style="color:#7fdbca">centred: A = B</b>':'still correcting');
+  }
+  function loop(){ if(!running) return; const m=step(); draw(m);
+    if(trail.length>=760) running=false; raf=requestAnimationFrame(loop); }
+  function reset(){ running=false; if(raf) cancelAnimationFrame(raf);
+    off=(+eO.value)/100; trail=[off]; t=0; draw({uL:0,uR:0}); }
+  eO.oninput=()=>{ vO.textContent=((+eO.value)/100).toFixed(2); reset(); };
+  eG.oninput=()=>{ vG.textContent=((+eG.value)/100).toFixed(2); };
+  btn.onclick=()=>{ reset(); running=true; loop(); };
+  reset();
+})();
+</script>
+
+</body>
+</html>

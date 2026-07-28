@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eulerian Video Magnification — explained like you are five</title>
+<link rel="stylesheet" href="styles.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  .story { margin:18px 0; padding:16px 20px; border-radius:12px; background:#191d33;
+           border:1px solid var(--line); border-left:4px solid #c792ea; }
+  .story .story-label { display:block; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+           color:#c792ea; font-weight:700; margin-bottom:6px; }
+  .steps { counter-reset:st; list-style:none; padding:0; margin:14px 0; }
+  .steps li { counter-increment:st; position:relative; padding:12px 14px 12px 54px; margin-bottom:10px;
+           background:var(--card); border:1px solid var(--line); border-radius:11px; }
+  .steps li::before { content:counter(st); position:absolute; left:14px; top:12px; width:28px; height:28px;
+           border-radius:8px; background:var(--accent); color:#07221f; font-weight:800;
+           display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .steps li b { color:var(--accent-2); }
+  details.qa { background:var(--card); border:1px solid var(--line); border-radius:11px;
+           padding:12px 16px; margin:10px 0; }
+  details.qa summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  details.qa summary::marker { color:var(--accent-3); }
+  details.qa p, details.qa ul { color:var(--ink-dim); margin:10px 0 0; }
+  .kv { width:100%; border-collapse:collapse; font-size:14.5px; margin-top:8px; }
+  .kv td, .kv th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .kv th { color:var(--accent); }
+  .kv td:first-child { color:var(--accent-2); font-weight:600; white-space:nowrap; }
+  .kv code { background:#0d1424; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px; }
+  .io { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:16px 0; }
+  .io div { padding:13px 15px; border-radius:11px; border:1px solid var(--line); background:var(--card); }
+  .io div b { display:block; font-size:12px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
+  .io .in b { color:var(--good); } .io .out b { color:var(--accent-3); }
+  .io ul { margin:0; padding-left:18px; color:var(--ink-dim); font-size:14px; }
+  .pipe { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:16px 0; }
+  .pipe .box { flex:1; min-width:126px; padding:10px 12px; border-radius:10px; background:#131a2b;
+           border:1px solid var(--line); font-size:13.5px; color:var(--ink-dim); text-align:center; }
+  .pipe .box b { display:block; color:var(--accent-2); font-size:14px; margin-bottom:3px; }
+  .pipe .box.hot { border-color:var(--accent-3); background:#2a2113; }
+  .pipe .box.hot b { color:var(--accent-3); }
+  .pipe .arw { color:var(--ink-faint); font-size:20px; }
+  .ing { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin:14px 0; }
+  .ing div { padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:var(--card); font-size:14px; }
+  .ing div b { display:block; margin-bottom:4px; }
+  .sw { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:baseline; }
+  pre.code { background:#0a0f1c; border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+         overflow-x:auto; color:var(--accent); font-size:13.5px; line-height:1.55; margin:12px 0; }
+  pre.code .cm { color:var(--ink-faint); }
+  canvas { display:block; width:100%; max-width:100%; border-radius:9px; background:#0a0f1c; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Extra</b> · Eulerian Video Magnification, from zero</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch07_video_magnification.html">‹ Chapter 7</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="ch08_background_subtraction.html">Chapter 8 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 7 · the whole algorithm, one piece at a time</div>
+    <h1>Eulerian Video Magnification, explained like you are five</h1>
+    <p class="lede">A pulse in someone's neck. A skyscraper swaying by a millimetre. A crisp packet vibrating to
+    the sound of a voice. All invisible — all already recorded in an ordinary video. This page builds the whole
+    method from zero: why it never estimates motion, why a <em>slope</em> is what makes it possible, what the
+    band-pass is really doing, and exactly where it falls apart. Six demos you can press.</p>
+  </header>
+
+  <div class="io">
+    <div class="in"><b>What goes in</b>
+      <ul>
+        <li>A video from a <strong>steady</strong> camera (tripod).</li>
+        <li>An amplification factor $\alpha$ (typically 5–50).</li>
+        <li>A temporal frequency band $[f_{lo}, f_{hi}]$ — the speed of the thing you want to see.</li>
+        <li>Optionally: a spatial pyramid, if motions exceed about a pixel.</li>
+      </ul>
+    </div>
+    <div class="out"><b>What comes out</b>
+      <ul>
+        <li>The same video, same length, same size — with motions in that band amplified by $\alpha$.</li>
+        <li>Nothing else changes: the picture, the colours and the lighting stay put.</li>
+        <li>No motion vectors, no tracks, no segmentation. Those are never computed.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="pipe">
+    <div class="box"><b>1 · Read</b>each pixel's value over all frames</div>
+    <div class="arw">→</div>
+    <div class="box"><b>2 · Band-pass</b>keep only the wiggle speed you want → $B$</div>
+    <div class="arw">→</div>
+    <div class="box"><b>3 · Amplify</b>multiply $B$ by $\alpha$</div>
+    <div class="arw">→</div>
+    <div class="box"><b>4 · Add back</b>$\tilde I = I + \alpha B$</div>
+  </div>
+  <p class="muted">That is the entire algorithm. Four steps, no iteration, no optimisation, no linear system.
+  The rest of this page is <em>why each step is what it is</em>.</p>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story — two ways to watch a river</h2>
+
+  <div class="story">
+    <span class="story-label">The leaf and the bridge</span>
+    <p>You want to know how a river moves. Two options.</p>
+    <p><strong>Option A — be a leaf.</strong> Drop a leaf in the water and run along the bank following it. You
+    now know exactly where <em>that piece of water</em> went. To describe the whole river you need to follow
+    thousands of leaves and never lose one. This is the <span class="term">Lagrangian</span> view — and in video
+    it means <strong>optical flow</strong>: track every pixel, chapter 2, hard and fragile.</p>
+    <p><strong>Option B — stand on the bridge.</strong> Do not follow anything. Stare at one fixed spot in the
+    water and watch <em>how the water at that spot changes</em>. Do the same at a thousand fixed spots and you
+    know the river just as well. This is the <span class="term">Eulerian</span> view — you never track anything,
+    you only watch things change under a fixed window.</p>
+    <p>Eulerian magnification stands on the bridge. Every pixel is one fixed spot. It never asks
+    <em>“where did this go?”</em>, only <em>“how did the value here change?”</em> — and that question is
+    answered by subtraction, not by search.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">The one sentence to remember</span>
+    Lagrangian = follow the pixel (needs motion estimation). Eulerian = stand still and watch the value
+    (needs only a subtraction). <strong>Eulerian magnification amplifies motion without ever computing
+    motion.</strong>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the leaf vs the bridge</h4><span class="tag">press play</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Top: the Lagrangian view — a tracker chasing the moving edge, drawing
+      its displacement arrow. It needs to <em>find</em> the edge every frame. Bottom: the Eulerian view — a fixed
+      probe that never moves, just recording its own brightness. The scrolling line on the right is that probe's
+      recording. Both see the same wobble; only the bottom one is free.</p>
+      <canvas id="cvA" width="920" height="290"></canvas>
+      <div class="btnrow">
+        <button class="btn" id="a_play">pause</button>
+        <button class="btn" id="a_big">big wobble (4 px)</button>
+        <button class="btn" id="a_small">tiny wobble (0.15 px)</button>
+      </div>
+      <div class="readout" id="rdA" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Try “tiny wobble” and watch what happens</span>
+    At 0.15 pixels the tracker on top is useless — the edge never visibly moves, and Lucas–Kanade's own Taylor
+    approximation drowns in sensor noise. But the probe at the bottom <em>still records a real change</em>,
+    because a 0.15-pixel shift across a steep edge still changes that pixel's brightness by a few grey levels.
+    <strong>The motion was always in the data. Only the Eulerian view can reach it.</strong>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The core trick — a slope turns motion into brightness</h2>
+
+  <div class="explain">
+    <span class="explain-label">The single idea the whole method rests on</span>
+    <p>Take one pixel sitting on the edge of a dark object against a bright wall. The image there is a
+    <strong>ramp</strong>: brightness climbs as you move right.</p>
+    <p>Now shift the whole object right by a tiny $\delta$. The pixel does not move — but the ramp slid under it,
+    so the pixel now reports a <em>different height on the ramp</em>. How much different?
+    <strong>$\delta$ times the steepness of the ramp.</strong></p>
+    <p>That is it. That is the whole conversion: <em>a small motion becomes a small brightness change,
+    and the exchange rate is the spatial gradient.</em></p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — where does the brightness change come from?</h4><span class="tag">drag δ and the probe</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The curve is a 1-D slice of an image: a dark region, a soft edge, a
+      bright region. The vertical line is your probe pixel. Slide $\delta$ to shift the picture, and watch the two
+      readings on the probe. Then <strong>drag the probe into the flat area</strong> and slide $\delta$ again.</p>
+      <canvas id="cvB" width="920" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>displacement $\delta$ (px) <span class="readout" id="v_dl">0.60</span></label>
+          <input type="range" id="s_dl" min="-2" max="2" step="0.05" value="0.6"></div>
+        <div class="control"><label>probe position (px) <span class="readout" id="v_px">46</span></label>
+          <input type="range" id="s_px" min="8" max="112" step="1" value="46"></div>
+        <div class="control"><label>edge softness <span class="readout" id="v_sf">6.0</span></label>
+          <input type="range" id="s_sf" min="1.5" max="16" step="0.5" value="6"></div>
+      </div>
+      <div class="readout" id="rdB" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">Two consequences you can state in an exam</span>
+    <ul style="margin:6px 0 0">
+      <li><strong>Flat regions cannot be magnified.</strong> Gradient zero means brightness change zero, no matter
+      how much the object moved. Eulerian magnification only ever works <em>at edges and texture</em>. A blank
+      wall that is genuinely swaying produces literally nothing.</li>
+      <li><strong>The exchange rate is a constant per pixel.</strong> $\partial f/\partial x$ does not change over
+      time (the picture is still). So filtering the brightness signal in time is the same as filtering the
+      displacement in time — which is why you can clean up $\delta$ without ever knowing $\delta$.</li>
+    </ul>
+  </div>
+
+  <h3>The derivation, symbol by symbol</h3>
+  <p>Model the video as one fixed picture $f$ being shifted by a tiny time-varying amount:</p>
+  <div class="eq">$$I(x,t)=f\big(x+\delta(t)\big),\qquad I(x,0)=f(x)$$</div>
+  <p>First-order Taylor expansion around $x$:</p>
+  <div class="eq">$$I(x,t)\;\approx\; f(x)\;+\;\underbrace{\delta(t)\,\frac{\partial f(x)}{\partial x}}_{B(x,t)}$$</div>
+  <p><em>where:</em></p>
+  <table class="kv">
+    <tr><td>$f(x)$</td><td>the still picture — the <strong>DC part</strong>, constant in time. This is what the
+      video looks like when nothing moves.</td></tr>
+    <tr><td>$\delta(t)$</td><td>the invisible sub-pixel displacement. <strong>The thing you want, and the thing
+      you will never compute.</strong></td></tr>
+    <tr><td>$\partial f(x)/\partial x$</td><td>the <strong>spatial</strong> gradient at this pixel — the ramp's
+      steepness. Fixed per pixel; zero on flat regions.</td></tr>
+    <tr><td>$B(x,t)$</td><td>everything that varies in time at this pixel. In words: <strong>the pixel's
+      brightness signal with its average removed.</strong> This is the object the algorithm actually manipulates.</td></tr>
+  </table>
+
+  <p>Now add $\alpha$ extra copies of $B$ back onto the video:</p>
+  <div class="eq">$$\tilde I(x,t)=I(x,t)+\alpha B(x,t)\;\approx\;f(x)+(1+\alpha)\,\delta(t)\frac{\partial f(x)}{\partial x}
+  \;\approx\;f\Big(x+(1+\alpha)\delta(t)\Big)$$</div>
+  <p>Read the last step backwards: a signal equal to <em>picture plus $(1{+}\alpha)\delta$ times slope</em> is,
+  by the very same Taylor expansion, what you would have recorded if the object had moved
+  $(1{+}\alpha)$ times further. <strong>The motion has been multiplied by $\alpha$ and $\delta$ was never
+  estimated, searched for, or even named in the computation.</strong></p>
+
+  <div class="callout key"><span class="lbl">Why this feels like cheating (and why it is not)</span>
+    You did not create information. The 0.15-pixel motion was <em>already</em> encoded in the pixel as a
+    few-grey-level change. All you did was rescale that change so a human eye can see it. That is why the method
+    is called magnification and not reconstruction — and it is also why it amplifies noise just as happily,
+    which is what the band-pass exists to prevent.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · Adding it back — and the limit of $\alpha$</h2>
+
+  <p>The approximation is first-order. It holds while the shift is small compared to how fast the picture changes
+  in space. Push $(1{+}\alpha)\delta$ past about one pixel and $I+\alpha B$ stops being a shifted copy of $f$ —
+  it starts overshooting near edges. That overshoot is the <strong>ringing / halo</strong> artefact.</p>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 3 — push α until it breaks</h4><span class="tag">watch the halo appear</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">White = what the algorithm outputs, $I+\alpha B$. Dashed teal = the
+      <strong>truth</strong>, the picture genuinely shifted by $(1{+}\alpha)\delta$. While they sit on top of each
+      other the magnification is honest. Raise $\alpha$ (or $\delta$, or sharpen the edge) and watch them
+      separate — the white curve grows ears the truth does not have.</p>
+      <canvas id="cvC" width="920" height="300"></canvas>
+      <div class="controls">
+        <div class="control"><label>amplification $\alpha$ <span class="readout" id="v_al3">10</span></label>
+          <input type="range" id="s_al3" min="0" max="60" step="1" value="10"></div>
+        <div class="control"><label>true motion $\delta$ (px) <span class="readout" id="v_dl3">0.05</span></label>
+          <input type="range" id="s_dl3" min="0.01" max="0.6" step="0.01" value="0.05"></div>
+        <div class="control"><label>edge softness <span class="readout" id="v_sf3">6.0</span></label>
+          <input type="range" id="s_sf3" min="1.5" max="16" step="0.5" value="6"></div>
+      </div>
+      <div class="readout" id="rdC" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">The rule of thumb, derived</span>
+    Keep $(1+\alpha)\,\delta \lesssim 1$ pixel — or, more precisely, small compared to the width over which the
+    image changes. Two knobs give you room: <strong>lower $\alpha$</strong>, or <strong>blur the image</strong> so
+    the edge is wider and the linear approximation stays valid further. That second option is exactly what the
+    pyramid does.
+  </div>
+
+  <h3>The pyramid fix</h3>
+  <p>Build a spatial pyramid (repeatedly blur and downsample). At a coarse level the picture is smooth, so its
+  gradients are gentle and Taylor stays valid for much larger shifts. So:</p>
+  <ol class="steps">
+    <li><b>Decompose</b> each frame into spatial scales — a Laplacian/Gaussian pyramid.</li>
+    <li><b>Filter and amplify each scale separately</b>, with its <em>own</em> $\alpha$: large $\alpha$ for the
+    coarse, smooth levels where the approximation is safe; small (or zero) $\alpha$ for the finest level where
+    edges are sharpest and ringing appears first.</li>
+    <li><b>Collapse</b> the pyramid back into a frame.</li>
+  </ol>
+  <p class="muted">Same trick, same reason as the coarse-to-fine pyramid in Lucas–Kanade (chapter 2): a linear
+  approximation to motion is only valid at a scale where the image is smooth relative to the displacement.</p>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The missing ingredient — band-passing the temporal signal</h2>
+
+  <p>Everything so far assumed $B$ contains <em>only</em> the motion you care about. It does not. Step 2 of the
+  pipeline is where that gets fixed, and it is the step that decides whether the method produces a heartbeat or
+  a strobing mess.</p>
+
+  <div class="story">
+    <span class="story-label">The pixel keeps a diary</span>
+    <p>Pick one pixel, say $(120,87)$ on someone's forehead. Every frame it writes one number in its diary:
+    <em>“my brightness was 141.”</em> Next frame: <em>“142.”</em> After 300 frames it has 300 numbers.</p>
+    <p>Plot them left to right and you get a wiggly line. That line is
+    <span class="term">the per-pixel temporal signal</span> — that is the whole term. A pixel's diary, drawn.
+    It is exactly $B$ plus a constant.</p>
+    <p>The heartbeat is inside that wiggle. But so are three other things, and they are all bigger.</p>
+  </div>
+
+  <div class="ing">
+    <div><b><span class="sw" style="background:#6b7a99"></span>The average level (DC)</b>
+      The pixel's base colour, $f(x)$. Speed: <strong>zero</strong>. This is the picture itself and must
+      <em>never</em> be amplified.</div>
+    <div><b><span class="sw" style="background:#ffb454"></span>Slow drift</b>
+      A cloud passes, the sun moves, auto-exposure breathes. Speed: <strong>one cycle per 10–60 s</strong>.</div>
+    <div><b><span class="sw" style="background:#41d8c9"></span>The thing you want</b>
+      Heartbeat ≈ 1 Hz. Breathing ≈ 0.2 Hz. A swaying building ≈ 0.5 Hz. An engine, tens of Hz.</div>
+    <div><b><span class="sw" style="background:#ff6b81"></span>Noise</b>
+      Sensor noise, compression flicker. Speed: <strong>as fast as possible</strong> — completely different
+      every frame.</div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Why separating them is possible at all</span>
+    The target is the <em>smallest</em> of the four, so you cannot separate them by size. But each one lives at
+    its own speed, with nothing else nearby: drift is ~10× slower, noise ~15× faster.
+    <strong>Separation by speed is exactly what a band-pass filter does.</strong>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 4 — build a pixel's diary yourself</h4><span class="tag">drag the sliders</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">The four coloured lines are the ingredients; the white line is what the
+      camera records — their sum. Turn the pulse up alone and you see it clearly. Now set drift and noise to
+      realistic levels and watch it <strong>vanish</strong>. That is the real problem.</p>
+      <canvas id="cv1" width="920" height="340"></canvas>
+      <div class="controls">
+        <div class="control"><label>drift amplitude <span class="readout" id="v_dr">6.0</span></label>
+          <input type="range" id="s_dr" min="0" max="20" step="0.5" value="6"></div>
+        <div class="control"><label>pulse amplitude <span class="readout" id="v_pu">1.2</span></label>
+          <input type="range" id="s_pu" min="0" max="8" step="0.1" value="1.2"></div>
+        <div class="control"><label>pulse rate (Hz) <span class="readout" id="v_fp">1.10</span></label>
+          <input type="range" id="s_fp" min="0.5" max="2.5" step="0.05" value="1.1"></div>
+        <div class="control"><label>noise amplitude <span class="readout" id="v_no">2.0</span></label>
+          <input type="range" id="s_no" min="0" max="8" step="0.1" value="2"></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:#6b7a99"></i>DC level</span>
+        <span><i style="background:#ffb454"></i>drift ≈0.08 Hz</span>
+        <span><i style="background:#41d8c9"></i>pulse</span>
+        <span><i style="background:#ff6b81"></i>noise</span>
+        <span><i style="background:#e6ecf7"></i>what the camera records</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Frequency, in three sentences</h3>
+  <p>A <strong>frequency</strong> is how many times per second something repeats, in hertz. A heart at 66 bpm is
+  $66/60=1.1$ Hz. Any wiggly line can be written as a <strong>sum of pure sines</strong> at different frequencies
+  — Demo 4 is literally that sum, built by hand. A <strong>band-pass filter</strong> keeps the sines between
+  $f_{lo}$ and $f_{hi}$ and deletes the rest.</p>
+
+  <div class="callout warn"><span class="lbl">Nyquist — free exam points</span>
+    To see a wiggle at frequency $f$ you need a frame rate of at least $2f$:
+    $$f_{\max}=\frac{\text{fps}}{2}$$
+    At 30 fps nothing above 15 Hz is reachable. A 20 Hz engine vibration is not merely missed — it
+    <em>aliases</em>, appearing as a completely fake slow wiggle. Always check the target frequency against half
+    the frame rate first.
+  </div>
+
+  <table class="kv">
+    <tr><th>Target</th><th>Frequency</th><th>Frames per cycle @30 fps</th><th>Sensible band</th></tr>
+    <tr><td>breathing</td><td>≈ 0.2 Hz</td><td>150</td><td>0.1 – 0.4 Hz</td></tr>
+    <tr><td>building sway</td><td>≈ 0.5 Hz</td><td>60</td><td>0.3 – 0.8 Hz</td></tr>
+    <tr><td>heart rate</td><td>≈ 1.0 – 1.5 Hz</td><td>20 – 30</td><td>0.8 – 2.0 Hz</td></tr>
+    <tr><td>sun / auto-exposure drift</td><td>&lt; 0.05 Hz</td><td>600+</td><td><em>always excluded</em></td></tr>
+    <tr><td>sensor noise</td><td>up to fps/2</td><td>2</td><td><em>always excluded</em></td></tr>
+  </table>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 5 — move the band, watch what survives</h4><span class="tag">real DFT, computed live</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left: the <strong>spectrum</strong> — one bar per frequency, showing how
+      much of that speed is in the diary. Three lumps: drift far left, the pulse as a spike, noise smeared across
+      everything. The lit region is your band. Right: the diary, what survives the filter ($B$), and the final
+      output $I+\alpha B$.</p>
+      <canvas id="cv2" width="920" height="296"></canvas>
+      <div class="controls">
+        <div class="control"><label>band low $f_{lo}$ (Hz) <span class="readout" id="v_lo">0.10</span></label>
+          <input type="range" id="s_lo" min="0" max="6" step="0.05" value="0.1"></div>
+        <div class="control"><label>band high $f_{hi}$ (Hz) <span class="readout" id="v_hi">15.00</span></label>
+          <input type="range" id="s_hi" min="0.1" max="15" step="0.05" value="15"></div>
+        <div class="control"><label>amplification $\alpha$ <span class="readout" id="v_al">20</span></label>
+          <input type="range" id="s_al" min="0" max="60" step="1" value="20"></div>
+        <div class="control"><label>pulse rate (Hz) <span class="readout" id="v_fp2">1.10</span></label>
+          <input type="range" id="s_fp2" min="0.5" max="2.5" step="0.05" value="1.1"></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="b_all">no filter (everything passes)</button>
+        <button class="btn" id="b_tight">tight band on the pulse</button>
+        <button class="btn" id="b_wrong">band in the wrong place</button>
+      </div>
+      <div class="readout" id="rd2" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">What the three buttons prove</span>
+    <ul style="margin:6px 0 0">
+      <li><strong>No filter</strong> → the output is dominated by drift and noise. The pulse is present and still
+      invisible. This is the naive $B \approx I_2-I_1$ failure mode.</li>
+      <li><strong>Tight band</strong> → $B$ becomes a clean sine at the pulse rate. Amplifying by 30 is now safe,
+      because nothing else is left to amplify.</li>
+      <li><strong>Wrong band</strong> → match with the true pulse falls to ~0%. The output is not empty (which
+      would be harmless) — it is <em>pure noise, amplified 20×</em>.</li>
+    </ul>
+  </div>
+
+  <h3>Three real implementations of step 2</h3>
+
+  <p><strong>Way 1 — ideal band-pass by DFT along the time axis.</strong> Per pixel, DFT down the time axis, zero
+  every bin outside the band, inverse. This is what Demo 5 computes.</p>
+<pre class="code"><span class="cm"># X has shape (T frames, H, W) — one diary per pixel, down axis 0</span>
+F     = np.fft.rfft(X, axis=0)              <span class="cm"># DFT along TIME, not space</span>
+freqs = np.fft.rfftfreq(T, d=1.0/fps)       <span class="cm"># which Hz each bin means</span>
+F[(freqs &lt; f_lo) | (freqs &gt; f_hi)] = 0      <span class="cm"># kill everything outside the band</span>
+B     = np.fft.irfft(F, n=T, axis=0)        <span class="cm"># B = the band-passed change signal</span>
+out   = X + alpha * B                       <span class="cm"># amplify and add back</span></pre>
+  <p class="muted">Sharpest possible band, but offline: you must hold all $T$ frames before emitting frame 1.</p>
+
+  <p><strong>Way 2 — difference of two running averages (the online one).</strong> A moving average is a low-pass.
+  Subtract a slower one from a faster one and what remains is the middle band.</p>
+  <div class="eq">
+  $$L_1[n]=L_1[n-1]+a_1\big(x[n]-L_1[n-1]\big),\qquad
+    L_2[n]=L_2[n-1]+a_2\big(x[n]-L_2[n-1]\big),\qquad
+    B[n]=L_1[n]-L_2[n]$$
+  </div>
+  <p><em>where:</em> $x[n]$ = this frame's pixel value; $L_1$ = fast-following average, cutoff $\approx f_{hi}$;
+  $L_2$ = slow-following average, cutoff $\approx f_{lo}$, so $a_2<a_1$; each $a\approx 2\pi f_c/\text{fps}$.
+  $L_1$ holds everything slower than $f_{hi}$, $L_2$ everything slower than $f_{lo}$, so the difference is
+  what lies <strong>between</strong>. Two numbers of state per pixel, $O(1)$ per frame, no history stored — the
+  same “replace storage with a running statistic” move as Weiss's 256-bin histogram and the GMM's incremental
+  update.</p>
+
+  <p><strong>Way 3 — the plain frame difference $B\approx I_2-I_1$.</strong> What the chapter writes. It is a
+  filter too: the crudest temporal <strong>high-pass</strong>. It removes anything constant (the DC picture drops
+  to exactly zero) and passes fast changes. It has no upper edge, so noise — the fastest component — comes
+  through at full gain.</p>
+
+  <div class="callout note"><span class="lbl">How to say this in an exam</span>
+    $B=I_2-I_1$ is the minimal temporal high-pass: it kills the DC term, which is the one thing the Taylor
+    derivation strictly requires (you must not amplify the still picture). It is not a band-pass — it rejects
+    neither drift's neighbours nor noise — so a real implementation replaces it with an actual band-pass around
+    the target frequency.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 6 — the three implementations on the same diary</h4><span class="tag">compare</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Same input in all four rows. The dashed teal line is the
+      <strong>true</strong> pulse. Judge each method by how close its output sits to that dashed line, then push
+      the noise slider up.</p>
+      <canvas id="cv3" width="920" height="440"></canvas>
+      <div class="controls">
+        <div class="control"><label>noise amplitude <span class="readout" id="v_no3">2.0</span></label>
+          <input type="range" id="s_no3" min="0" max="8" step="0.1" value="2"></div>
+        <div class="control"><label>drift amplitude <span class="readout" id="v_dr3">6.0</span></label>
+          <input type="range" id="s_dr3" min="0" max="20" step="0.5" value="6"></div>
+      </div>
+      <div class="readout" id="rd3" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The whole algorithm, written out</h2>
+
+<pre class="code"><span class="cm">INPUT : frames I[0..T-1], amplification α, band [f_lo, f_hi], fps</span>
+<span class="cm">OUTPUT: magnified frames Ĩ[0..T-1]</span>
+
+<span class="cm"># optional but recommended: work per spatial scale</span>
+for each pyramid level ℓ (coarse → fine):
+    L[ℓ] = spatial_decompose(I, ℓ)
+
+    for each pixel x independently:                 <span class="cm"># no neighbours are ever consulted</span>
+        diary = L[ℓ][0..T-1][x]                     <span class="cm"># the per-pixel temporal signal</span>
+        B[x]  = bandpass(diary, f_lo, f_hi, fps)    <span class="cm"># step 2 — removes DC, drift and noise</span>
+
+    Ĩ[ℓ] = L[ℓ] + α(ℓ) · B                          <span class="cm"># steps 3+4; α smaller on fine levels</span>
+
+Ĩ = collapse_pyramid(Ĩ[·])</pre>
+
+  <p>Properties worth naming out loud:</p>
+  <ul>
+    <li><strong>Embarrassingly parallel.</strong> Every pixel is an independent 1-D filter. A million of them,
+    no communication.</li>
+    <li><strong>No optimisation.</strong> No least squares, no linear system, no iteration to convergence.
+    Compare with Horn–Schunck, which solves a $2N\times2N$ system for the same physical phenomenon.</li>
+    <li><strong>Linear.</strong> The output is a linear function of the input, which is why it can be pushed
+    through a pyramid and recombined safely.</li>
+  </ul>
+
+  <h3>Lagrangian vs Eulerian, side by side</h3>
+  <table class="kv">
+    <tr><th></th><th>Lagrangian (optical flow)</th><th>Eulerian (this method)</th></tr>
+    <tr><td>tracks</td><td>each pixel through time</td><td>each fixed location's value through time</td></tr>
+    <tr><td>needs motion estimation?</td><td>yes — LK / HS</td><td>no</td></tr>
+    <tr><td>sub-pixel motion</td><td>fails (drowns in noise)</td><td>shines</td></tr>
+    <tr><td>large motion</td><td>handles it (with a pyramid)</td><td>breaks — ringing</td></tr>
+    <tr><td>cost</td><td>high</td><td>very low, fully parallel</td></tr>
+    <tr><td>best for</td><td>large, sparse motions</td><td>tiny, dense changes</td></tr>
+  </table>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Every knob, and what it does to the output</h2>
+
+  <table class="kv">
+    <tr><th>Knob</th><th>Turn it up</th><th>Turn it down</th></tr>
+    <tr><td>$\alpha$</td><td>reveals smaller motion; past $(1{+}\alpha)\delta\approx1$ px you get ringing and
+      halos at edges</td><td>safe, but the motion stays invisible</td></tr>
+    <tr><td>$f_{lo}$</td><td>more drift rejected, cleaner — until you cut into your own signal and it vanishes</td>
+      <td>lighting drift and auto-exposure breathing leak in and get amplified</td></tr>
+    <tr><td>$f_{hi}$</td><td>sensor noise leaks in; the output shimmers frame to frame</td>
+      <td>the sharp part of the motion is smoothed away; the result looks sluggish</td></tr>
+    <tr><td>band <em>width</em></td><td>tolerant of a target whose rate varies (a heart is not a metronome)</td>
+      <td>maximum noise rejection, but a slightly-off rate falls outside and disappears</td></tr>
+    <tr><td>pyramid levels</td><td>larger motions become safe to amplify (coarse levels are smooth)</td>
+      <td>only sub-pixel motion is safe; fine levels ring first</td></tr>
+    <tr><td>frame rate</td><td>raises $f_{\max}=\text{fps}/2$, so faster targets become reachable</td>
+      <td>below $2f$ the target aliases into a fake slow wiggle</td></tr>
+    <tr><td>clip length $T$</td><td>finer frequency resolution $\Delta f=\text{fps}/T$, so a tighter band is
+      possible</td><td>short clips cannot resolve 1.0 Hz from 1.2 Hz at all</td></tr>
+  </table>
+
+  <div class="callout warn"><span class="lbl">Four ways the whole thing fails</span>
+    <ul style="margin:6px 0 0">
+      <li><strong>Camera shake.</strong> Shake sits in the same frequency band as most targets, so no filter
+      removes it — and $\alpha$ multiplies it. Tripod, always.</li>
+      <li><strong>Motion beyond ~1 pixel.</strong> The Taylor step, not the filter, is what breaks. Fix with the
+      pyramid or a smaller $\alpha$.</li>
+      <li><strong>Flat regions.</strong> Zero gradient, zero output, however much the surface moved.</li>
+      <li><strong>Target drifts out of the band.</strong> The pulse moves from 1.1 to 1.9 Hz, the band stays at
+      0.9–1.3, and the output silently becomes nothing.</li>
+    </ul>
+  </div>
+
+  <h3>Where it is actually used</h3>
+  <ul>
+    <li><strong>Medicine</strong> — contactless pulse and respiration from a webcam.</li>
+    <li><strong>Civil engineering</strong> — micro-vibrations of bridges, dams and buildings with no attached
+    sensors.</li>
+    <li><strong>Manufacturing</strong> — diagnosing machine faults from video of a housing.</li>
+    <li><strong>The visual microphone</strong> — recovering sound from the vibration of a crisp packet.</li>
+  </ul>
+
+  <!-- ==================================================================== -->
+  <h2>7 · Drill</h2>
+
+  <details class="qa"><summary>Lagrangian vs Eulerian in one sentence each.</summary>
+    <p>Lagrangian: follow each pixel through the image plane, which requires motion estimation (LK/HS).
+    Eulerian: fix a location and observe how its value changes over time, which requires only temporal
+    filtering. The chapter's phrasing: Lagrangian works in the image plane, Eulerian works in the time domain.</p></details>
+
+  <details class="qa"><summary>Where does the amplification actually come from? Why does adding $\alpha B$ move anything?</summary>
+    <p>Because $B=\delta(t)\,\partial f/\partial x$ is a brightness change that is <em>proportional</em> to the
+    displacement. Adding $\alpha$ copies gives $(1+\alpha)\delta\,\partial f/\partial x$, which by the same Taylor
+    expansion is what the pixel would have read if the object had moved $(1+\alpha)\delta$. The pixel never moves;
+    its value is set to what a bigger motion would have produced.</p></details>
+
+  <details class="qa"><summary>A perfectly uniform wall is swaying. What does the method output?</summary>
+    <p>Nothing. $\partial f/\partial x = 0$ there, so $B=0$ regardless of $\delta$. Eulerian magnification only
+    produces signal at edges and texture. Whatever appears on the wall in the output is amplified noise.</p></details>
+
+  <details class="qa"><summary>Why band-pass instead of amplifying all temporal change?</summary>
+    <p>The diary holds four things at different speeds: DC (the picture), slow lighting drift, the target, and
+    fast sensor noise — and the target is the smallest. Multiplying the whole signal by $\alpha$ multiplies drift
+    and noise too, so the target stays buried and the output strobes. The band-pass deletes the competition so
+    the amplification is spent entirely on the wanted signal.</p></details>
+
+  <details class="qa"><summary>Why does the DC term have to be removed, specifically?</summary>
+    <p>$f(x)$ is the still picture, not motion. Amplifying it would multiply the brightness of the whole image by
+    $(1+\alpha)$ and blow out the exposure, while adding nothing. Removing DC is the one thing even the crude
+    $I_2-I_1$ gets right.</p></details>
+
+  <details class="qa"><summary>Your target is a 20 Hz engine vibration at 30 fps. What happens?</summary>
+    <p>$f_{\max}=\text{fps}/2=15$ Hz, so 20 Hz is above Nyquist: it aliases and shows up as a fake ~10 Hz wiggle.
+    No band recovers it. You need a camera faster than 40 fps.</p></details>
+
+  <details class="qa"><summary>Give an online implementation with $O(1)$ memory per pixel.</summary>
+    <p>Two exponential moving averages with rates $a_1>a_2$: $L_i[n]=L_i[n-1]+a_i(x[n]-L_i[n-1])$, output
+    $B[n]=L_1[n]-L_2[n]$. Each average is a low-pass; their difference is a band-pass. Two numbers of state per
+    pixel, $O(1)$ work per frame, no stored frames.</p></details>
+
+  <details class="qa"><summary>You band-pass perfectly and still get halos around edges. Cause and fix?</summary>
+    <p>Not a filtering problem: the motion exceeded the first-order Taylor validity of about a pixel, so
+    $I+\alpha B$ is no longer a shifted copy of $f$. Fix by lowering $\alpha$, or by decomposing into a spatial
+    pyramid and amplifying each scale with its own smaller $\alpha$ — coarse levels are smooth, so large shifts
+    stay linear there.</p></details>
+
+  <details class="qa"><summary>Why is filtering the brightness in time the same as filtering the displacement in time?</summary>
+    <p>Because $B(x,t)=\delta(t)\,\partial f(x)/\partial x$ and, for a fixed pixel, the spatial gradient is a
+    constant. A linear filter along $t$ passes straight through a constant factor, so filtering $B$ equals
+    filtering $\delta$ and re-multiplying. This is precisely why $\delta$ never has to be computed.</p></details>
+
+  <details class="qa"><summary>Compare the cost of this with Horn–Schunck for the same goal.</summary>
+    <p>Horn–Schunck estimates dense flow by solving a sparse $2N\times2N$ system iteratively over the whole image,
+    coupling every pixel to its neighbours. Eulerian magnification runs one independent 1-D filter per pixel with
+    no coupling, no system and no iteration — and it succeeds on sub-pixel motion, where HS's own brightness
+    constancy linearisation is swamped by noise.</p></details>
+
+  <div class="callout key"><span class="lbl">Take it away in one line</span>
+    A shift of $\delta$ across a slope changes a pixel's value by $\delta\times$slope. Clean that change with a
+    band-pass, multiply it by $\alpha$, add it back — and the picture moves as if by $(1+\alpha)\delta$.
+    <strong>Motion amplified, motion never estimated.</strong>
+  </div>
+
+  <div class="pager">
+    <a href="ch07_video_magnification.html">‹ Prev<span>7 · Video Magnification</span></a>
+    <a href="ch08_background_subtraction.html">Next ›<span>8 · Background Subtraction</span></a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const FPS = 30, N = 256;
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  const RNG = (function(){const r=mulberry32(20260727);const a=new Float64Array(N);for(let i=0;i<N;i++)a[i]=r()*2-1;return a;})();
+  const DC = 141;
+
+  // ---------- shared drawing helpers ----------
+  function clear(ctx,c){ ctx.fillStyle='#0a0f1c'; ctx.fillRect(0,0,c.width,c.height); }
+  function label(ctx,txt,x,y,col){ ctx.fillStyle=col||'#6b7a99'; ctx.font='12.5px "Segoe UI",system-ui,sans-serif'; ctx.fillText(txt,x,y); }
+  function frame(ctx,x0,y0,w,h){ ctx.strokeStyle='#243049'; ctx.lineWidth=1; ctx.strokeRect(x0+.5,y0+.5,w,h); }
+  function midline(ctx,x0,y0,w,h){ ctx.strokeStyle='#1b2336'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,y0+h/2); ctx.lineTo(x0+w,y0+h/2); ctx.stroke(); }
+  function plot(ctx,sig,x0,y0,w,h,col,ctr,scale,dash){
+    ctx.save(); if(dash) ctx.setLineDash(dash);
+    ctx.strokeStyle=col; ctx.lineWidth=dash?1.8:2.2; ctx.beginPath();
+    for(let n=0;n<sig.length;n++){
+      const X=x0+w*n/(sig.length-1);
+      let Y=y0+h/2-(sig[n]-ctr)*scale;
+      Y=Math.max(y0+1,Math.min(y0+h-1,Y));
+      n?ctx.lineTo(X,Y):ctx.moveTo(X,Y);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+
+  // ---------- the 1-D image used by demos 2 and 3 ----------
+  const PW = 120;                                    // profile width in pixels
+  function prof(x, soft){ return 70 + 110*(0.5+0.5*Math.tanh((x-58)/soft)); }
+  function profSlope(x, soft){ const h=1e-3; return (prof(x+h,soft)-prof(x-h,soft))/(2*h); }
+  function drawProfile(ctx,fn,x0,y0,w,h,col,dash,lw){
+    ctx.save(); if(dash) ctx.setLineDash(dash);
+    ctx.strokeStyle=col; ctx.lineWidth=lw||2.2; ctx.beginPath();
+    for(let i=0;i<=PW;i++){
+      const X=x0+w*i/PW, Y=y0+h-(fn(i)/255)*h;
+      i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+  function strip(ctx,fn,x0,y0,w,h){                  // render the profile as an actual grey strip
+    for(let i=0;i<PW;i++){
+      const v=Math.max(0,Math.min(255,fn(i)))|0;
+      ctx.fillStyle='rgb('+v+','+v+','+v+')';
+      ctx.fillRect(x0+w*i/PW, y0, w/PW+1, h);
+    }
+    frame(ctx,x0,y0,w,h);
+  }
+
+  // =================== DEMO 1 — Lagrangian vs Eulerian ===================
+  const cA=document.getElementById('cvA'), xA=cA.getContext('2d');
+  let playing=true, tA=0, amp=4.0, trace=[];
+  function drawA(){
+    const soft=5, delta=amp*Math.sin(tA*0.055);
+    clear(xA,cA);
+    const X=54, W=430, H=78;
+    const shifted = i=>prof(i+delta,soft);
+
+    // ---- top: Lagrangian ----
+    label(xA,'LAGRANGIAN — follow the edge (needs motion estimation)',X,20,'#ff6b81');
+    strip(xA,shifted,X,28,W,52);
+    const edgeX = X + W*(58-delta)/PW;               // where the edge currently is
+    xA.strokeStyle='#ff6b81'; xA.lineWidth=2;
+    xA.beginPath(); xA.moveTo(edgeX,28); xA.lineTo(edgeX,80); xA.stroke();
+    const homeX = X + W*58/PW;
+    xA.strokeStyle='#6b7a99'; xA.setLineDash([3,3]);
+    xA.beginPath(); xA.moveTo(homeX,28); xA.lineTo(homeX,80); xA.stroke(); xA.setLineDash([]);
+    xA.strokeStyle='#ff6b81'; xA.beginPath(); xA.moveTo(homeX,88); xA.lineTo(edgeX,88); xA.stroke();
+    label(xA,'tracked displacement = '+(-delta).toFixed(2)+' px',X,104,'#ff6b81');
+
+    // ---- bottom: Eulerian ----
+    const py=130;
+    label(xA,'EULERIAN — one fixed probe, never moves',X,py-8,'#41d8c9');
+    strip(xA,shifted,X,py,W,52);
+    const probeI=52, probeX=X+W*probeI/PW;
+    xA.strokeStyle='#41d8c9'; xA.lineWidth=2;
+    xA.beginPath(); xA.moveTo(probeX,py-4); xA.lineTo(probeX,py+56); xA.stroke();
+    const val=shifted(probeI);
+    label(xA,'probe reads '+val.toFixed(1),probeX-34,py+72,'#41d8c9');
+
+    // ---- the recording ----
+    trace.push(val); if(trace.length>230) trace.shift();
+    const RX=X+W+46, RW=cA.width-RX-16;
+    frame(xA,RX,28,RW,180); midline(xA,RX,28,RW,180);
+    label(xA,'the probe\'s recording  =  its diary',RX+8,20,'#e6ecf7');
+    const base=prof(probeI,soft);
+    plot(xA,trace,RX,28,RW,180,'#41d8c9',base,3.4,null);
+    label(xA,'time →',RX+RW-52,204,'#6b7a99');
+
+    const spread=(Math.max(...trace)-Math.min(...trace));
+    document.getElementById('rdA').innerHTML =
+      'wobble amplitude = <b>'+amp.toFixed(2)+' px</b> &nbsp;·&nbsp; slope at the probe = <b>'+
+      profSlope(probeI,soft).toFixed(1)+'</b> grey levels per pixel &nbsp;·&nbsp; probe swings by <b style="color:#41d8c9">'+
+      spread.toFixed(1)+' grey levels</b>'+
+      (amp<0.3?' <span style="color:#ffb454">— the tracker above sees nothing at this scale, the probe still does</span>':'');
+  }
+  // pre-fill the recording so the panel is meaningful even before the animation ticks
+  function fillTrace(){ trace=[]; for(let k=230;k>0;k--) trace.push(prof(52+amp*Math.sin((tA-k)*0.055),5)); }
+  function loopA(){ if(playing) tA+=1; drawA(); requestAnimationFrame(loopA); }
+  document.getElementById('a_play').onclick=function(){ playing=!playing; this.textContent=playing?'pause':'play'; };
+  document.getElementById('a_big').onclick  =()=>{ amp=4.0;  fillTrace(); drawA(); };
+  document.getElementById('a_small').onclick=()=>{ amp=0.15; fillTrace(); drawA(); };
+
+  // =================== DEMO 2 — slope turns motion into brightness ===================
+  const cB=document.getElementById('cvB'), xB=cB.getContext('2d');
+  function drawB(){
+    const d=+s_dl.value, pi=+s_px.value, soft=+s_sf.value;
+    v_dl.textContent=d.toFixed(2); v_px.textContent=pi; v_sf.textContent=soft.toFixed(1);
+    clear(xB,cB);
+    const X=54, W=cB.width-X-190, Y=30, H=210;
+    const f0=i=>prof(i,soft), f1=i=>prof(i+d,soft);
+
+    strip(xB,f0,X,Y-22,W,16);
+    frame(xB,X,Y,W,H);
+    drawProfile(xB,f0,X,Y,W,H,'#6b7a99',[5,4],1.8);
+    drawProfile(xB,f1,X,Y,W,H,'#e6ecf7',null,2.2);
+    label(xB,'dashed = before   ·   solid = after a shift of δ',X+8,Y+16,'#9fb0cc');
+
+    const px=X+W*pi/PW;
+    xB.strokeStyle='#41d8c9'; xB.lineWidth=2;
+    xB.beginPath(); xB.moveTo(px,Y); xB.lineTo(px,Y+H); xB.stroke();
+    const v0=f0(pi), v1=f1(pi), slope=profSlope(pi,soft);
+    const y0=Y+H-(v0/255)*H, y1=Y+H-(v1/255)*H;
+    xB.fillStyle='#6b7a99'; xB.beginPath(); xB.arc(px,y0,4,0,7); xB.fill();
+    xB.fillStyle='#ffb454'; xB.beginPath(); xB.arc(px,y1,4.5,0,7); xB.fill();
+    // the change, drawn as a bar
+    xB.strokeStyle='#ffb454'; xB.lineWidth=3;
+    xB.beginPath(); xB.moveTo(px+7,y0); xB.lineTo(px+7,y1); xB.stroke();
+    label(xB,'probe',px-16,Y-6,'#41d8c9');
+
+    // numbers panel
+    const NX=X+W+22;
+    label(xB,'at the probe pixel',NX,Y+14,'#e6ecf7');
+    const rows=[
+      ['before  f(x)', v0.toFixed(1), '#6b7a99'],
+      ['after   f(x+δ)', v1.toFixed(1), '#ffb454'],
+      ['change  ΔI', (v1-v0).toFixed(2), '#ffb454'],
+      ['slope  ∂f/∂x', slope.toFixed(2), '#41d8c9'],
+      ['δ × slope', (d*slope).toFixed(2), '#41d8c9']
+    ];
+    rows.forEach((r,k)=>{ label(xB,r[0],NX,Y+42+k*24,'#9fb0cc'); label(xB,r[1],NX+108,Y+42+k*24,r[2]); });
+
+    const err=Math.abs((v1-v0)-d*slope);
+    const flat=Math.abs(slope)<0.35;
+    document.getElementById('rdB').innerHTML = flat
+      ? '<b style="color:#ff6b81">slope ≈ 0 here.</b> The picture shifted by '+d.toFixed(2)+' px and the pixel barely changed ('+(v1-v0).toFixed(2)+' grey levels). <b>A flat region cannot be magnified — there is nothing to amplify.</b>'
+      : 'ΔI = <b style="color:#ffb454">'+(v1-v0).toFixed(2)+'</b> &nbsp;vs&nbsp; the Taylor prediction δ·slope = <b style="color:#41d8c9">'+(d*slope).toFixed(2)+'</b> &nbsp;·&nbsp; gap = '+err.toFixed(3)+
+        (err>2?' <span style="color:#ff6b81">— δ is too big for a first-order approximation here</span>':' <span style="color:#7ee787">— the linear approximation holds</span>');
+  }
+  ['s_dl','s_px','s_sf'].forEach(id=>document.getElementById(id).addEventListener('input',drawB));
+
+  // =================== DEMO 3 — α until it breaks ===================
+  const cC=document.getElementById('cvC'), xC=cC.getContext('2d');
+  function drawC(){
+    const al=+s_al3.value, d=+s_dl3.value, soft=+s_sf3.value;
+    v_al3.textContent=al; v_dl3.textContent=d.toFixed(2); v_sf3.textContent=soft.toFixed(1);
+    clear(xC,cC);
+    const X=54, W=cC.width-X-16, Y=54, H=200;
+
+    const f0=i=>prof(i,soft), f1=i=>prof(i+d,soft);
+    const out  = i=>f1(i)+al*(f1(i)-f0(i));          // I + αB, exactly what the algorithm computes
+    const truth= i=>prof(i+(1+al)*d,soft);           // what a genuine (1+α)δ shift looks like
+
+    label(xC,'output  I + α·B',X,20,'#e6ecf7');
+    label(xC,'truth  f(x + (1+α)δ)',X+170,20,'#41d8c9');
+    strip(xC,out,X,28,W,18);
+    frame(xC,X,Y,W,H);
+    drawProfile(xC,f0,X,Y,W,H,'#3b4763',[3,3],1.5);
+    drawProfile(xC,truth,X,Y,W,H,'#41d8c9',[6,4],2.0);
+    drawProfile(xC,out,X,Y,W,H,'#e6ecf7',null,2.2);
+    label(xC,'faint dashed = the original, unmagnified picture',X+8,Y+H-10,'#3b4763');
+
+    let maxerr=0; for(let i=0;i<=PW;i+=0.25) maxerr=Math.max(maxerr,Math.abs(out(i)-truth(i)));
+    const shift=(1+al)*d;
+    const ok = maxerr<6;
+    document.getElementById('rdC').innerHTML =
+      'effective shift (1+α)·δ = <b style="color:'+(shift>1?'#ff6b81':'#7ee787')+'">'+shift.toFixed(2)+' px</b>'+
+      ' &nbsp;·&nbsp; worst gap between output and truth = <b style="color:'+(ok?'#7ee787':'#ff6b81')+'">'+maxerr.toFixed(1)+'</b> grey levels &nbsp;·&nbsp; '+
+      (ok ? '<span style="color:#7ee787">honest magnification — the two curves coincide</span>'
+          : '<span style="color:#ff6b81">Taylor has broken: the white curve overshoots the truth. That overshoot IS the halo you see around edges.</span>');
+  }
+  ['s_al3','s_dl3','s_sf3'].forEach(id=>document.getElementById(id).addEventListener('input',drawC));
+
+  // =================== the diary machinery (demos 4,5,6) ===================
+  function parts(p){
+    const dc=new Float64Array(N), dr=new Float64Array(N), pu=new Float64Array(N), no=new Float64Array(N), tot=new Float64Array(N);
+    for(let n=0;n<N;n++){
+      const t=n/FPS;
+      dc[n]=DC;
+      dr[n]=p.drift*Math.sin(2*Math.PI*0.08*t+0.7);
+      pu[n]=p.pulse*Math.sin(2*Math.PI*p.fp*t);
+      no[n]=p.noise*RNG[n];
+      tot[n]=dc[n]+dr[n]+pu[n]+no[n];
+    }
+    return {dc,dr,pu,no,tot};
+  }
+  function dft(x){
+    const n=x.length, re=new Float64Array(n), im=new Float64Array(n);
+    for(let k=0;k<n;k++){ let sr=0,si=0;
+      for(let i=0;i<n;i++){const a=-2*Math.PI*k*i/n; sr+=x[i]*Math.cos(a); si+=x[i]*Math.sin(a);}
+      re[k]=sr; im[k]=si; }
+    return {re,im};
+  }
+  function idft(re,im){
+    const n=re.length, out=new Float64Array(n);
+    for(let i=0;i<n;i++){ let s=0;
+      for(let k=0;k<n;k++){const a=2*Math.PI*k*i/n; s+=re[k]*Math.cos(a)-im[k]*Math.sin(a);}
+      out[i]=s/n; }
+    return out;
+  }
+  const binFreq = k => (k<=N/2 ? k : N-k)*FPS/N;
+  function bandpass(x,flo,fhi){
+    const {re,im}=dft(x);
+    for(let k=0;k<N;k++){ const f=binFreq(k); if(f<flo||f>fhi){re[k]=0;im[k]=0;} }
+    return idft(re,im);
+  }
+  function spectrum(x){
+    const {re,im}=dft(x), half=N/2, m=new Float64Array(half);
+    for(let k=0;k<half;k++) m[k]=Math.hypot(re[k],im[k])*2/N;
+    return m;
+  }
+  function matchPct(a,b){ let c=0,na=0,nb=0; for(let n=0;n<N;n++){c+=a[n]*b[n];na+=a[n]*a[n];nb+=b[n]*b[n];}
+    return 100*c/Math.sqrt(Math.max(1e-9,na*nb)); }
+
+  // =================== DEMO 4 — the diary ===================
+  const c1=document.getElementById('cv1'), x1=c1.getContext('2d');
+  function draw1(){
+    const p={drift:+s_dr.value, pulse:+s_pu.value, fp:+s_fp.value, noise:+s_no.value};
+    v_dr.textContent=p.drift.toFixed(1); v_pu.textContent=p.pulse.toFixed(1);
+    v_fp.textContent=p.fp.toFixed(2);   v_no.textContent=p.noise.toFixed(1);
+    const P=parts(p);
+    clear(x1,c1);
+    const X=54, W=c1.width-X-16;
+    const rows=[[P.dc,'#6b7a99','DC level (the picture) — must never be amplified',DC,0.9],
+                [P.dr,'#ffb454','slow drift ≈ 0.08 Hz',0,2.2],
+                [P.pu,'#41d8c9','the pulse — what you want',0,7],
+                [P.no,'#ff6b81','sensor noise',0,2.2]];
+    let y=14;
+    rows.forEach(r=>{ frame(x1,X,y,W,44); midline(x1,X,y,W,44);
+      plot(x1,r[0],X,y,W,44,r[3],r[4],null); label(x1,r[2],X+8,y+14,r[1]); y+=52; });
+    y+=8;
+    frame(x1,X,y,W,96); midline(x1,X,y,W,96);
+    plot(x1,P.tot,X,y,W,96,DC,2.2,null);
+    label(x1,'what the camera records  =  sum of all four',X+8,y+16,'#e6ecf7');
+    label(x1,'time  →  '+(N/FPS).toFixed(1)+' s at '+FPS+' fps',X+8,y+90,'#6b7a99');
+    const snr=p.pulse/Math.max(1e-6,p.drift+p.noise);
+    label(x1,'pulse / (drift+noise) = '+snr.toFixed(2)+(snr<0.3?'   ← hopeless by eye':''),X+W-260,y+16,snr<0.3?'#ff6b81':'#7ee787');
+  }
+  ['s_dr','s_pu','s_fp','s_no'].forEach(id=>document.getElementById(id).addEventListener('input',draw1));
+
+  // =================== DEMO 5 — the band ===================
+  const c2=document.getElementById('cv2'), x2=c2.getContext('2d');
+  function draw2(){
+    let flo=+s_lo.value, fhi=+s_hi.value;
+    if(fhi<=flo){ fhi=flo+0.05; s_hi.value=fhi; }
+    const al=+s_al.value, fp=+s_fp2.value;
+    v_lo.textContent=flo.toFixed(2); v_hi.textContent=fhi.toFixed(2);
+    v_al.textContent=al; v_fp2.textContent=fp.toFixed(2);
+
+    const P=parts({drift:6,pulse:1.2,fp:fp,noise:2});
+    const centred=new Float64Array(N); for(let n=0;n<N;n++) centred[n]=P.tot[n]-DC;
+    const B=bandpass(centred,flo,fhi);
+    const mag=spectrum(centred);
+    const out=new Float64Array(N); for(let n=0;n<N;n++) out[n]=P.tot[n]+al*B[n];
+
+    clear(x2,c2);
+    const SX=48, SY=26, SW=330, SH=170, maxf=FPS/2, half=N/2;
+    frame(x2,SX,SY,SW,SH);
+    label(x2,'magnitude spectrum of the diary',SX,SY-8,'#e6ecf7');
+    const bx0=SX+SW*Math.min(flo,maxf)/maxf, bx1=SX+SW*Math.min(fhi,maxf)/maxf;
+    x2.fillStyle='rgba(65,216,201,.13)'; x2.fillRect(bx0,SY+1,Math.max(1,bx1-bx0),SH-2);
+    x2.strokeStyle='#41d8c9'; x2.lineWidth=1; x2.setLineDash([4,3]);
+    x2.beginPath(); x2.moveTo(bx0,SY); x2.lineTo(bx0,SY+SH); x2.moveTo(bx1,SY); x2.lineTo(bx1,SY+SH); x2.stroke();
+    x2.setLineDash([]);
+    let mmax=0; for(let k=1;k<half;k++) mmax=Math.max(mmax,mag[k]);
+    for(let k=1;k<half;k++){
+      const f=k*FPS/N, X=SX+SW*f/maxf, h=(mag[k]/mmax)*(SH-14), inb=(f>=flo&&f<=fhi);
+      x2.strokeStyle=inb?'#41d8c9':'#3b4763'; x2.lineWidth=1.4;
+      x2.beginPath(); x2.moveTo(X,SY+SH-1); x2.lineTo(X,SY+SH-1-h); x2.stroke();
+    }
+    for(let f=0;f<=15;f+=5) label(x2,f+' Hz',SX+SW*f/maxf-10,SY+SH+15);
+    label(x2,'drift',SX+4,SY+SH-6,'#ffb454');
+    label(x2,'noise floor',SX+SW-92,SY+SH-6,'#ff6b81');
+    label(x2,'↓ pulse',SX+SW*fp/maxf-16,SY+16,'#41d8c9');
+
+    const RX=SX+SW+52, RW=c2.width-RX-16;
+    let y=SY;
+    frame(x2,RX,y,RW,74); midline(x2,RX,y,RW,74);
+    plot(x2,P.tot,RX,y,RW,74,DC,2.0,null);
+    label(x2,'1 · the diary, as recorded',RX+8,y+15,'#e6ecf7');
+    y+=88;
+    frame(x2,RX,y,RW,74); midline(x2,RX,y,RW,74);
+    plot(x2,P.pu,RX,y,RW,74,0,10,[5,4]);
+    plot(x2,B,RX,y,RW,74,0,10,null);
+    label(x2,'2 · after the band-pass  =  B',RX+8,y+15,'#41d8c9');
+    label(x2,'dashed = the true pulse',RX+RW-150,y+15,'#6b7a99');
+    y+=88;
+    frame(x2,RX,y,RW,74); midline(x2,RX,y,RW,74);
+    plot(x2,out,RX,y,RW,74,DC,0.55,null);
+    label(x2,'3 · output  I + α·B   (α = '+al+')',RX+8,y+15,'#ffb454');
+
+    const corr=matchPct(P.pu,B)/100;
+    let verdict,col;
+    if(corr>0.8)       { verdict='clean extraction — B is essentially the pulse itself'; col='#7ee787'; }
+    else if(corr>0.45) { verdict='partly clean — some drift or noise is still riding along'; col='#ffb454'; }
+    else               { verdict='no pulse in this band — B is pure drift and noise, and α just amplifies that'; col='#ff6b81'; }
+    document.getElementById('rd2').innerHTML =
+      'band = ['+flo.toFixed(2)+', '+fhi.toFixed(2)+'] Hz &nbsp;·&nbsp; match with true pulse = <b style="color:'+col+'">'+
+      (corr*100).toFixed(0)+'%</b> &nbsp;·&nbsp; <span style="color:'+col+'">'+verdict+'</span>';
+  }
+  ['s_lo','s_hi','s_al','s_fp2'].forEach(id=>document.getElementById(id).addEventListener('input',draw2));
+  document.getElementById('b_all').onclick   =()=>{s_lo.value=0; s_hi.value=15; draw2();};
+  document.getElementById('b_tight').onclick =()=>{const f=+s_fp2.value; s_lo.value=Math.max(0,f-0.15).toFixed(2); s_hi.value=(f+0.15).toFixed(2); draw2();};
+  document.getElementById('b_wrong').onclick =()=>{s_lo.value=4; s_hi.value=7; draw2();};
+
+  // =================== DEMO 6 — three implementations ===================
+  const c3=document.getElementById('cv3'), x3=c3.getContext('2d');
+  function ema(x,a){ const o=new Float64Array(x.length); o[0]=x[0];
+    for(let n=1;n<x.length;n++) o[n]=o[n-1]+a*(x[n]-o[n-1]); return o; }
+  function draw3(){
+    const noise=+s_no3.value, drift=+s_dr3.value, fp=1.1;
+    v_no3.textContent=noise.toFixed(1); v_dr3.textContent=drift.toFixed(1);
+    const P=parts({drift:drift,pulse:1.2,fp:fp,noise:noise});
+    const centred=new Float64Array(N); for(let n=0;n<N;n++) centred[n]=P.tot[n]-DC;
+
+    const bIdeal=bandpass(centred,0.8,1.4);
+    const L1=ema(centred,2*Math.PI*1.4/FPS), L2=ema(centred,2*Math.PI*0.8/FPS);
+    const bEma=new Float64Array(N); for(let n=0;n<N;n++) bEma[n]=L1[n]-L2[n];
+    const bDiff=new Float64Array(N); bDiff[0]=0;
+    for(let n=1;n<N;n++) bDiff[n]=centred[n]-centred[n-1];
+
+    clear(x3,c3);
+    const X=54, W=c3.width-X-16;
+    const rows=[
+      [P.tot,'#e6ecf7','the diary, as recorded',DC,1.8,null,null],
+      [bIdeal,'#7ee787','way 1 · ideal DFT band-pass 0.8–1.4 Hz',0,11,P.pu,'offline, needs all frames'],
+      [bEma,'#6ea8ff','way 2 · difference of two running averages',0,11,P.pu,'online, 2 numbers per pixel'],
+      [bDiff,'#ff6b81','way 3 · plain frame difference I₂−I₁',0,11,P.pu,'online, but noise passes at full gain']
+    ];
+    let y=16;
+    rows.forEach(r=>{
+      frame(x3,X,y,W,88); midline(x3,X,y,W,88);
+      if(r[5]) plot(x3,r[5],X,y,W,88,0,11,[5,4]);
+      plot(x3,r[0],X,y,W,88,r[3],r[4],null);
+      label(x3,r[2],X+8,y+16,r[1]);
+      if(r[6]) label(x3,r[6],X+W-230,y+16,'#6b7a99');
+      y+=104;
+    });
+    document.getElementById('rd3').innerHTML =
+      'match with the true pulse — &nbsp;<b style="color:#7ee787">ideal '+matchPct(P.pu,bIdeal).toFixed(0)+'%</b>'+
+      ' &nbsp;·&nbsp; <b style="color:#6ea8ff">running averages '+matchPct(P.pu,bEma).toFixed(0)+'%</b>'+
+      ' &nbsp;·&nbsp; <b style="color:#ff6b81">frame difference '+matchPct(P.pu,bDiff).toFixed(0)+'%</b>'+
+      '<br><span class="muted">Push the noise slider up: the first two barely move, the frame difference collapses. '+
+      'That is the whole argument for band-passing instead of differencing.</span>';
+  }
+  ['s_no3','s_dr3'].forEach(id=>document.getElementById(id).addEventListener('input',draw3));
+
+  drawB(); drawC(); draw1(); draw2(); draw3(); fillTrace(); loopA();
+})();
+</script>
+</body>
+</html>

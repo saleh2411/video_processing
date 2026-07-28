@@ -92,6 +92,14 @@
     everything. Instead they band-pass the temporal signal first (e.g., keep only 1–2 Hz for heart-rate) and
     amplify just that band. The result: heart rate visualized, ambient lighting unchanged.</p>
 
+    <div class="callout key"><span class="lbl">Deep-dive companion</span>
+      The whole algorithm has its own page, built from zero: the leaf vs the bridge, why a <em>slope</em> is what
+      turns motion into brightness, the Taylor derivation symbol by symbol, α pushed until the halo appears, the
+      pyramid fix, and this band-pass step in full — the four wiggles inside a pixel's diary, a live DFT band you
+      slide onto the pulse, Nyquist, and the three real implementations of $B$ scored against each other.
+      <a href="video_magnification_for_kids.html"><strong>Eulerian Magnification, from zero →</strong></a>
+    </div>
+
     <h4 class="mini">Why this matters in real life</h4>
     <ul>
       <li><strong>Medicine:</strong> contactless pulse and respiration measurement from a webcam.</li>

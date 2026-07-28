@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q3 — Why the hole filled with grass</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q3</b> · Bidirectional similarity, inpainting</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch11_retargeting_patchmatch.html">‹ Chapter 11</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_4_concentric_mosaics.html">Q4 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 11 · Exam 8/7/2020, question 3 · 13 points</div>
+    <h1>The building vanished and the lawn grew into the sky</h1>
+    <p class="lede">A hole over a dome gets filled with grass, trees and a chunk of crowd. Not a bug — the
+    algorithm did exactly what it was told. The interesting part is that <em>the correct answer and the wrong
+    answer have almost the same cost</em>, so nothing in the objective could have preferred the right one.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 3 · 13 points · IMAGE INPAINTING</span>
+    <p style="margin-bottom:0">Consider Figure 2. The user tried to inpaint the marked rectangle using the
+    <strong>Bidirectional similarity</strong> measure and got this result.
+    <strong>Explain how this can happen and propose a solution to fix this problem.</strong>
+    <br><span class="muted">(Figure 2: left — the MIT dome with a blue rectangle covering the building and sky;
+    right — the “filled” result, in which the hole now contains lawn, trees and people, and the roof line does not
+    continue.)</span></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    <b>Two causes, and the answer wants both.</b>
+    <br><b>(1) The wrong half of the measure.</b> BDS is completeness + coherence. For hole filling only
+    <em>coherence</em> is meaningful. Keeping <em>completeness</em> asks that every patch of the source appear
+    somewhere in the output — and the only free canvas is the hole, so the lawn, the trees and the crowd get
+    <b>pushed into the hole</b>. That is precisely what the figure shows.
+    <br><b>(2) Coherence alone is degenerate + non-convex.</b> A hole full of grass has essentially <em>zero</em>
+    coherence cost, exactly like the correct building continuation. The objective cannot tell them apart, so the
+    result is decided by initialisation, and the iterative EM optimisation is stuck in a local minimum.
+    <br><b>Fix:</b> coherence-only, with a hole-restricted search, coarse-to-fine with structure-aware fill order,
+    and explicit structure/user constraints.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">The jigsaw puzzle with a missing corner</span>
+    <p>Imagine a jigsaw of a castle with grass in front of it. Someone loses a few pieces from the middle of the
+    castle. You hand the box to a robot and say: <em>“fill the gap so that every piece you put down looks like
+    some piece that already exists on the table.”</em></p>
+    <p>The robot looks around. There are 4 pieces of castle wall, and there are <strong>500 pieces of grass</strong>,
+    which all look the same as each other. So it fills the gap with grass. Every single piece it laid down does
+    look like a piece that already exists. <em>It obeyed you perfectly.</em> Grass is the cheapest, safest, most
+    repeatable thing in the box.</p>
+    <p>Now the second problem. You <em>also</em> told it: <em>“and make sure nothing on the table gets left out of
+    the gap.”</em> Now it is not just allowed to shove grass and people into the hole — it is <b>required</b> to.
+    The hole is the only empty space, so everything gets crammed in there.</p>
+    <p>The robot did not fail. The instructions were wrong. You never once said “the castle wall must keep going
+    in a straight line,” because a rule about <em>lines</em> cannot be written as a rule about <em>little
+    squares</em>.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The measure, written out — and which half hurts</h2>
+
+  <div class="explain">
+    <span class="explain-label">Bidirectional similarity (Simakov et al.)</span>
+    <p>For a source $S$ and a target $T$, over all patches $s\subset S$, $t\subset T$:</p>
+  </div>
+
+  <div class="eq">$$ d_{\text{BDS}}(S,T) \;=\;
+     \underbrace{\frac{1}{N_S}\sum_{s\subset S}\ \min_{t\subset T} D(s,t)}_{\textstyle d_{\text{complete}}}
+     \;+\;
+     \underbrace{\frac{1}{N_T}\sum_{t\subset T}\ \min_{s\subset S} D(s,t)}_{\textstyle d_{\text{cohere}}} $$</div>
+
+  <div class="explain">
+    <p>Read each half in words:</p>
+    <ul>
+      <li><b>Completeness</b> — “<em>nothing from the input is missing in the output.</em>” Every source patch must
+      find a home in $T$. This is what stops a summarisation from dropping objects.</li>
+      <li><b>Coherence</b> — “<em>nothing new was invented in the output.</em>” Every output patch must come from
+      somewhere in $S$. This is what stops the output from containing garbage.</li>
+    </ul>
+    <h4 class="mini">Now apply that to hole filling</h4>
+    <p>In inpainting, $S$ = the image outside the hole (known pixels), $T$ = the hole. What do you actually want?
+    Only that <em>the stuff you paint into the hole is real image content</em> — that is coherence, and only
+    coherence. You emphatically do <b>not</b> want “every patch of the surrounding image must appear inside the
+    hole”: the hole is small, the image is large, and the demand is not just unnecessary, it is actively harmful —
+    it turns the hole into a <b>dumping ground for a summary of the whole photo</b>.</p>
+  </div>
+
+  <div class="callout warn"><span class="lbl">This is the observable signature in the figure</span>
+    The filled region contains <b>people and trees that were nowhere near the hole</b>. Coherence alone would never
+    invent that: it would happily copy the immediate surroundings, because those are the closest matches to the
+    hole's boundary conditions. Content teleporting in from across the image is the fingerprint of the
+    <b>completeness</b> term being included in an inpainting objective.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the two fills nobody can tell apart</h4><span class="tag">click the tabs</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A toy “MIT dome”: sky, a building with a roof line and columns, lawn,
+      and two people. The hole covers part of the building. Below each candidate fill is its
+      <b>coherence energy</b> $d_{\text{cohere}}$ and its per-patch cost map (brighter = more expensive).</p>
+      <div class="stagebar" id="Dtabs">
+        <div class="st on" data-k="gt">the true content</div>
+        <div class="st" data-k="grass">filled with lawn</div>
+        <div class="st" data-k="sky">filled with sky</div>
+        <div class="st" data-k="noise">filled with noise</div>
+      </div>
+      <canvas id="cvD" width="900" height="290"></canvas>
+      <div class="readout" id="Dro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">The point of Demo 1</span>
+    Compare the energies. The <b>correct</b> fill and the <b>lawn</b> fill both score near zero — the lawn often
+    scores <em>better</em>, because lawn is the most repetitive texture in the image and therefore the easiest to
+    match. Only the noise fill is expensive. So the objective genuinely <b>cannot distinguish right from
+    wrong here</b>; it can only reject nonsense. Whatever the optimiser happens to walk into first, it will keep.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The second cause: it is a non-convex optimisation</h2>
+
+  <div class="explain">
+    <p>Minimising $d_{\text{cohere}}$ over the unknown pixels is solved by an <b>EM-style alternation</b> (the
+    same loop as in the retargeting chapter):</p>
+  </div>
+
+  <ol class="steps">
+    <li><b>E-step (search).</b> For every patch overlapping the hole, find its nearest neighbour in the source
+    — with <b>PatchMatch</b>, because exhaustive search is hopeless.</li>
+    <li><b>M-step (vote).</b> Each hole pixel is covered by many patches; set it to the (weighted) average of the
+    corresponding pixels of all the matched source patches.</li>
+    <li>Repeat, inside a <b>coarse-to-fine pyramid</b>: solve at low resolution, upsample, refine.</li>
+  </ol>
+
+  <div class="explain">
+    <p>Three consequences, all of them causes of the observed result:</p>
+    <ul>
+      <li><b>Local minima.</b> The objective is non-convex; the alternation only ever descends. Whatever content
+      the hole is initialised with steers the whole thing. A random or mean-colour initialisation at the coarsest
+      level essentially <em>picks the semantics of the fill by coin flip</em>.</li>
+      <li><b>The coarsest level decides everything.</b> At the top of the pyramid the hole is a handful of pixels;
+      a decision made there ("this region is greenish") is then merely refined — later levels can add detail but
+      cannot revisit "it should have been a building".</li>
+      <li><b>Voting blurs and washes out structure.</b> Averaging many candidate patches produces a smooth,
+      texture-less fill, which then attracts even more smooth matches. Straight edges (the roof line) are the first
+      casualty, because an edge in the wrong place costs only a few patches, while a whole region of the wrong
+      texture costs almost nothing at all.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — a real patch-based inpainter you can sabotage</h4><span class="tag">press Run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">This actually runs the EM loop (nearest-neighbour search + voting) on
+      the toy image. Turn the switches on and off and watch the hole fill with lawn or with a building.</p>
+      <canvas id="cvE" width="900" height="250"></canvas>
+      <div class="controls" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+        <label class="chk"><input type="checkbox" id="Ecomp"> include the <b>completeness</b> term (the bug)</label>
+        <label class="chk"><input type="checkbox" id="Epyr" checked> coarse-to-fine pyramid</label>
+        <label class="chk"><input type="checkbox" id="Eloc" checked> restrict the search near the hole</label>
+      </div>
+      <div class="controls"><button class="chk" id="Ego">▶ Run the inpainter</button></div>
+      <div class="readout" id="Ero">Press <b>Run</b>. Tick “completeness” to reproduce the exam figure; untick the
+      other two to see the local-minimum failure.</div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The fixes</h2>
+
+  <div class="explain">
+    <span class="explain-label">Ranked — the first two are the ones that must be in your answer</span>
+    <h4 class="mini">1. Use coherence only (drop completeness)</h4>
+    <p>Minimise, over the unknown pixels $T_{\text{hole}}$,</p>
+  </div>
+
+  <div class="eq">$$ E(T) \;=\; \sum_{t \,\cap\, \text{hole} \neq \emptyset}\ \min_{s\subset S} D(s,t),
+      \qquad S=\text{image}\setminus\text{hole} $$</div>
+
+  <div class="explain">
+    <p>Every patch that touches the hole must look like a real patch of the image; nothing forces source content
+    <em>into</em> the hole. Patches straddling the hole boundary carry the known pixels, and that is what makes the
+    fill agree with its surroundings.</p>
+
+    <h4 class="mini">2. Constrain the search space</h4>
+    <p>Do not let the whole image compete. Options, all cheap: restrict candidate patches to a window around the
+    hole; weight the patch distance by spatial distance, $D'(s,t)=D(s,t)+\mu\|pos(s)-pos(t)\|$; or forbid patches
+    whose <em>segment/label</em> differs from the label continuing into the hole (sky patches for the sky part,
+    facade patches for the facade part). This directly kills “people teleport into the dome”.</p>
+
+    <h4 class="mini">3. Better optimisation, not just a better objective</h4>
+    <p>Coarse-to-fine with a <em>sensible</em> initialisation (e.g. onion-peel inward from the boundary, or
+    diffusion/PDE inpainting as the coarse-level seed), several random restarts keeping the lowest energy, and a
+    fill order driven by <b>Criminisi-style priority</b> $P=C(p)\,D(p)$ — confidence × the strength of the isophote
+    hitting the boundary — so strong edges are continued <em>first</em>, before the flat texture takes over.</p>
+
+    <h4 class="mini">4. Give the objective a notion of structure</h4>
+    <p>Since patches cannot express “lines continue”, add it explicitly: user-drawn structure curves that the
+    algorithm must follow (structure propagation), line/vanishing-point detection to extend the roof line and the
+    columns, or matching on gradients as well as colours. Allowing transformed patches (scale + rotation, and a
+    gain/bias on brightness) also helps a perspective facade match itself.</p>
+
+    <h4 class="mini">5. Cosmetics that stop the giveaway artefacts</h4>
+    <p>Use a robust vote (weighted median / EM with a Gaussian weight $e^{-D/2\sigma^2}$) instead of a plain mean,
+    so the fill does not blur; composite the result in the <b>gradient domain</b> (Poisson blending) so the hole
+    boundary is seamless.</p>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Symptom → cause → fix</span>
+    <table>
+      <tr><th>What you see</th><th>Cause</th><th>Fix</th></tr>
+      <tr><td>People and trees from elsewhere inside the hole</td><td>completeness term included</td>
+          <td>coherence-only objective</td></tr>
+      <tr><td>Hole full of the image's dominant texture</td><td>coherence is degenerate — lawn costs ≈ 0</td>
+          <td>restrict/weight the search; segment labels</td></tr>
+      <tr><td>Roof line and columns do not continue</td><td>patches cannot express long-range structure</td>
+          <td>structure propagation, priority fill order, gradient matching</td></tr>
+      <tr><td>Result changes if you re-run it</td><td>non-convex EM, initialisation-dependent</td>
+          <td>coarse-to-fine + good init + restarts, keep min energy</td></tr>
+      <tr><td>Fill is blurry / seams at the boundary</td><td>mean voting; RGB compositing</td>
+          <td>robust weighted vote; Poisson blending</td></tr>
+    </table>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>What BDS says.</strong>
+    $d_{\text{BDS}}(S,T)=\frac{1}{N_S}\sum_{s\subset S}\min_{t\subset T}D(s,t)+\frac{1}{N_T}\sum_{t\subset
+    T}\min_{s\subset S}D(s,t)$: completeness (nothing from the input is lost) plus coherence (nothing new is
+    invented).</p>
+
+    <p><strong>Why this happened — reason 1: the wrong term.</strong> For hole filling, $S$ is the known image and
+    $T$ is the filled hole, and only <em>coherence</em> is desired. Keeping the completeness term demands that
+    <em>every</em> patch of the surrounding image be represented inside the output; since the hole is the only
+    region free to change, the optimiser satisfies it by packing unrelated source content — lawn, trees, people —
+    into the hole. That is exactly the artefact in Figure 2.</p>
+
+    <p><strong>Why this happened — reason 2: the objective is degenerate, and the optimisation is non-convex.</strong>
+    Coherence is a purely local, patch-level statistic with no notion of long-range structure or semantics. A hole
+    filled entirely with the image's most repetitive texture (grass) has near-zero coherence cost — as low as, or
+    lower than, the correct continuation of the building, because grass patches match each other exactly.
+    So the objective cannot prefer the correct answer. The minimisation is an EM alternation (PatchMatch NN search
+    ↔ voting) inside a coarse-to-fine pyramid; it only descends, so the semantics of the fill are effectively
+    chosen by the initialisation at the coarsest level and can never be revisited. Averaging in the vote step
+    additionally smooths away edges, so the roof line is not continued.</p>
+
+    <p><strong>Proposed fix.</strong></p>
+    <p>(i) <em>Objective:</em> minimise coherence only,
+    $E(T)=\sum_{t\cap\text{hole}\neq\emptyset}\min_{s\subset S}D(s,t)$, with $S$ the image outside the hole;
+    patches straddling the boundary enforce agreement with the surroundings.</p>
+    <p>(ii) <em>Search space:</em> restrict candidate patches to a neighbourhood of the hole, or add a spatial
+    penalty $D'(s,t)=D(s,t)+\mu\|pos(s)-pos(t)\|$, or forbid matches across segmentation labels — so distant
+    lawn/crowd patches cannot win.</p>
+    <p>(iii) <em>Optimisation:</em> coarse-to-fine with a sensible initialisation (onion-peel from the boundary or
+    a diffusion-based seed) rather than random; several restarts keeping the lowest energy; a Criminisi-style
+    priority fill order $P(p)=C(p)D(p)$ so strong isophotes are propagated before flat texture; robust
+    (weighted-median) voting instead of the mean.</p>
+    <p>(iv) <em>Structure:</em> because patches cannot encode “this line continues”, add it explicitly — user-drawn
+    structure curves / detected lines that the fill must follow, matching on gradients as well as colour, and
+    allowing scaled and rotated patches so a perspective facade can match itself. Composite with Poisson blending
+    to remove seams.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. In one sentence: what is completeness <em>for</em>, if it is wrong here?</summary>
+    <p>Summarisation and retargeting. When you shrink an image, the danger is that whole objects silently
+    disappear, and completeness is precisely the term that forbids that. Inpainting has the opposite geometry: the
+    output is a <em>subset</em> of the scene, not a summary of it, so demanding that everything be represented is
+    a category error. Same measure, different task, different half.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Would a bigger patch size fix it?</summary>
+    <p>It helps with structure — a larger patch spans more of a straight line, so breaking the roof line becomes
+    more expensive — but it does not fix the degeneracy: a big patch of lawn still matches another big patch of
+    lawn at zero cost. It also costs you: large patches match fewer places, the fill becomes a visible
+    copy-paste of one large region, and the search gets slower. Multi-scale patches (or the pyramid, which is the
+    same idea) is the usable version of “bigger patches”.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why does the vote step blur, and why does that matter?</summary>
+    <p>Each hole pixel sits under $p^2$ overlapping patches, each proposing its own colour; the M-step averages
+    them. Early on those proposals disagree, so the average is a smear. A smeared region has weak gradients, and
+    weak gradients match <em>other</em> smooth regions best — so the blur is self-reinforcing and the fill drifts
+    towards the flattest texture available. Fixes: weight the vote by match quality, $w=e^{-D/2\sigma^2}$, or take
+    a weighted median; both let a strong minority of confident patches win over a mushy majority.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The hole boundary is the only real constraint. Make that precise.</summary>
+    <p>Patches centred inside the hole but overlapping known pixels have part of their cost determined by pixels
+    you cannot change. Those partial matches are the entire link between the fill and the rest of the photo — and
+    their influence reaches only $p/2$ pixels inward. So for a hole much larger than the patch, the <em>interior</em>
+    is essentially unconstrained: it only has to be self-consistent, which is why big holes fail much worse than
+    thin scratches, and why the pyramid matters (at coarse scale, $p/2$ covers a bigger fraction of the hole).</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does PatchMatch cause this failure?</summary>
+    <p>No — PatchMatch is only the accelerator for the E-step, an approximate nearest-neighbour field found by
+    random initialisation, propagation and random search. It can add its own randomness to which local minimum you
+    land in, but the failure in the figure is a property of the <em>objective</em>, not of the search: an
+    exhaustive, exact nearest-neighbour search would give the lawn fill an equally good score.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How would you evaluate whether your fix worked, without eyeballing it?</summary>
+    <p>Hold-out: take intact images, punch synthetic holes, inpaint, and measure against the known ground truth —
+    PSNR/SSIM inside the hole, plus a structural check such as the fraction of ground-truth edge pixels recovered.
+    Report the final coherence energy too: if your “better” result has a <em>higher</em> energy than the lawn fill,
+    that is direct evidence that the objective, not the optimiser, was the problem — which is the whole point of
+    this question.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>completeness</td><td>nothing from the input is missing — for <em>summarisation</em></td></tr>
+      <tr><td>coherence</td><td>nothing new is invented — the only half inpainting needs</td></tr>
+      <tr><td>the bug</td><td>completeness pushes the whole photo into the hole</td></tr>
+      <tr><td>the degeneracy</td><td>a hole full of lawn costs ≈ 0, same as the right answer</td></tr>
+      <tr><td>the optimiser</td><td>EM (PatchMatch search ↔ vote), non-convex, init decides</td></tr>
+      <tr><td>the blur</td><td>mean voting smooths → attracts even smoother matches</td></tr>
+      <tr><td>fix A</td><td>coherence only</td></tr>
+      <tr><td>fix B</td><td>restrict / penalise distant matches, use labels</td></tr>
+      <tr><td>fix C</td><td>coarse-to-fine, good init, restarts, priority fill order</td></tr>
+      <tr><td>fix D</td><td>explicit structure constraints; robust vote; Poisson blend</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_2_corridor_flow.html"><span class="dir">Previous</span><span class="ttl">Q2 · The corridor</span></a>
+    <a class="next" href="e20_4_concentric_mosaics.html"><span class="dir">Next question</span><span class="ttl">Q4 · Rotating arm ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Shared toy image + patch machinery
+   ========================================================= */
+const IMG = (function(){
+  const W=64,H=44,C=3;
+  const px=new Float32Array(W*H*C);
+  function set(x,y,r,g,b){ const i=(y*W+x)*C; px[i]=r; px[i+1]=g; px[i+2]=b; }
+  let seed=12345; const rnd=()=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; };
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(y<12){                                  // sky
+      const t=y/12; set(x,y,0.42+0.18*t,0.62+0.16*t,0.88+0.08*t);
+    } else if(y<28){                           // building: roof line + columns
+      let v=0.62;
+      if(y===12||y===13) v=0.30;               // the roof line
+      else if((x%6)<2)   v=0.44;               // columns
+      v+=0.03*(rnd()-0.5);
+      set(x,y,v*1.02,v*0.98,v*0.92);
+    } else {                                   // lawn
+      const n=0.10*(rnd()-0.5);
+      set(x,y,0.20+n,0.46+n,0.18+n);
+    }
+  }
+  // two "people" on the lawn
+  for(const cx of [12,50]) for(let y=30;y<38;y++) for(let x=cx-2;x<=cx+2;x++)
+      set(x,y, y<33?0.85:0.12, y<33?0.72:0.12, y<33?0.62:0.16);
+  const hole={x0:26,y0:8,x1:48,y1:26};
+  return {W,H,C,px,hole};
+})();
+
+function drawImg(g, arr, ox, oy, cell, mask, title, sub){
+  const {W,H,C}=IMG;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=(y*W+x)*C;
+    let r=arr[i],gg=arr[i+1],b=arr[i+2];
+    if(mask && mask[y*W+x]){ r=0.28; gg=0.45; b=0.78; }
+    g.fillStyle='rgb('+(r*255|0)+','+(gg*255|0)+','+(b*255|0)+')';
+    g.fillRect(ox+x*cell, oy+y*cell, cell+.4, cell+.4);
+  }
+  g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(ox-.5,oy-.5,W*cell+1,H*cell+1);
+  if(title){ g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText(title,ox,oy-20); }
+  if(sub){ g.fillStyle='#6b7a99'; g.font='11px system-ui'; g.fillText(sub,ox,oy-6); }
+}
+
+/* patch distance between patch centred at (ax,ay) in A and (bx,by) in B, size p */
+function patchD(A,B,ax,ay,bx,by,h){
+  const {W,C}=IMG; let s=0;
+  for(let dy=-h;dy<=h;dy++) for(let dx=-h;dx<=h;dx++){
+    const ia=((ay+dy)*W+(ax+dx))*C, ib=((by+dy)*W+(bx+dx))*C;
+    for(let c=0;c<C;c++){ const d=A[ia+c]-B[ib+c]; s+=d*d; }
+  }
+  return s;
+}
+
+/* =========================================================
+   DEMO 1 — four candidate fills, all scored by coherence
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvD'), g=cv.getContext('2d'), ro=document.getElementById('Dro');
+  const {W,H,C,px,hole}=IMG;
+  const holeMask=new Uint8Array(W*H);
+  for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++) holeMask[y*W+x]=1;
+
+  function copy(){ return Float32Array.from(px); }
+  const fills={};
+  fills.gt = copy();                                            // the truth
+  fills.grass = copy();                                          // paste lawn
+  for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++){
+    const sy=30+((y-hole.y0)%12), sx=2+((x-hole.x0)%20);
+    for(let c=0;c<C;c++) fills.grass[(y*W+x)*C+c]=px[(sy*W+sx)*C+c];
+  }
+  fills.sky = copy();
+  for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++){
+    const sy=1+((y-hole.y0)%10), sx=2+((x-hole.x0)%20);
+    for(let c=0;c<C;c++) fills.sky[(y*W+x)*C+c]=px[(sy*W+sx)*C+c];
+  }
+  fills.noise = copy();
+  let s=7; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+  for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++)
+    for(let c=0;c<C;c++) fills.noise[(y*W+x)*C+c]=rnd();
+
+  const P=5, h=(P-1)/2;
+  // source centres: patch fully inside AND not touching the hole
+  const src=[];
+  for(let y=h;y<H-h;y++) for(let x=h;x<W-h;x++){
+    let ok=true;
+    for(let dy=-h;dy<=h&&ok;dy++) for(let dx=-h;dx<=h;dx++) if(holeMask[(y+dy)*W+(x+dx)]){ok=false;break;}
+    if(ok) src.push([x,y]);
+  }
+  // target centres: patches that overlap the hole
+  const tgt=[];
+  for(let y=h;y<H-h;y++) for(let x=h;x<W-h;x++){
+    let any=false;
+    for(let dy=-h;dy<=h&&!any;dy++) for(let dx=-h;dx<=h;dx++) if(holeMask[(y+dy)*W+(x+dx)]){any=true;break;}
+    if(any) tgt.push([x,y]);
+  }
+
+  const cache={};
+  function score(key){
+    if(cache[key]) return cache[key];
+    const T=fills[key];
+    const costs=new Float32Array(W*H); let tot=0;
+    for(const [tx,ty] of tgt){
+      let best=1e9;
+      for(const [sx,sy] of src){ const d=patchD(T,px,tx,ty,sx,sy,h); if(d<best) best=d; }
+      best/=(P*P*C);
+      costs[ty*W+tx]=best; tot+=best;
+    }
+    return cache[key]={costs, mean:tot/tgt.length};
+  }
+
+  const LABEL={gt:['the true content','what should have been there'],
+               grass:['filled with lawn','copy-pasted from the grass'],
+               sky:['filled with sky','copy-pasted from the sky'],
+               noise:['filled with noise','not real image content']};
+  let cur='gt';
+
+  function draw(){
+    g.clearRect(0,0,cv.width,cv.height);
+    const CELL=4.4, OY=60;
+    const S=score(cur), Sg=score('gt'), Sl=score('grass'), Sn=score('noise');
+    drawImg(g,px,40,OY,CELL,holeMask,'the input, with the hole','known pixels only');
+    drawImg(g,fills[cur],380,OY,CELL,null,LABEL[cur][0],LABEL[cur][1]);
+    // cost map
+    let mx=0; for(let i=0;i<S.costs.length;i++) mx=Math.max(mx,S.costs[i]);
+    const ox=720;
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText('per-patch coherence cost',ox,OY-20);
+    g.fillStyle='#6b7a99'; g.font='11px system-ui'; g.fillText('brighter = worse match',ox,OY-6);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const v=Math.min(1,S.costs[y*W+x]/(mx||1));
+      const c=Math.round(255*Math.pow(v,0.6));
+      g.fillStyle='rgb('+c+','+Math.round(c*0.75)+','+Math.round(c*0.5)+')';
+      g.fillRect(ox+x*2.2,OY+y*2.2,2.6,2.6);
+    }
+    g.strokeStyle='#2c3650'; g.strokeRect(ox-.5,OY-.5,W*2.2+1,H*2.2+1);
+
+    // bars
+    const by=OY+H*CELL+22, bw=200;
+    const vals=[['true',Sg.mean,'#7fdbca'],['lawn',Sl.mean,'#c3e88d'],['noise',Sn.mean,'#f07178']];
+    const mxv=Math.max(...vals.map(v=>v[1]));
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText('mean coherence cost per patch',40,by-6);
+    vals.forEach(([n,v,c],i)=>{
+      const y=by+i*22;
+      g.fillStyle=c; g.fillRect(120,y,Math.max(2,bw*v/mxv),13);
+      g.fillStyle='#9fb0cc'; g.font='11px system-ui'; g.fillText(n,40,y+11);
+      g.fillText(v.toFixed(5),126+bw*v/mxv,y+11);
+    });
+
+    ro.innerHTML='mean coherence cost — <b>true content: '+Sg.mean.toFixed(5)+'</b> &nbsp;·&nbsp; '+
+      '<b>lawn: '+Sl.mean.toFixed(5)+'</b> &nbsp;·&nbsp; <b>noise: '+Sn.mean.toFixed(5)+'</b>.<br>'+
+      'The first two are in the same ballpark — often the lawn is the <b>cheaper</b> of the two, because lawn '+
+      'patches match other lawn patches almost exactly. Only the noise fill is clearly rejected. '+
+      'So coherence can veto nonsense, but it <b>cannot choose between grass and a building</b>.';
+  }
+  document.querySelectorAll('#Dtabs .st').forEach(el=>{
+    el.onclick=()=>{ document.querySelectorAll('#Dtabs .st').forEach(e=>e.classList.remove('on'));
+      el.classList.add('on'); cur=el.dataset.k; draw(); };
+  });
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — the actual EM inpainter
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvE'), g=cv.getContext('2d'), ro=document.getElementById('Ero');
+  const {W,H,C,px,hole}=IMG;
+  const holeMask=new Uint8Array(W*H);
+  for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++) holeMask[y*W+x]=1;
+  const P=5,h=2;
+  let seed=99; const rnd=()=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; };
+
+  const srcAll=[], srcNear=[];
+  for(let y=h;y<H-h;y++) for(let x=h;x<W-h;x++){
+    let ok=true;
+    for(let dy=-h;dy<=h&&ok;dy++) for(let dx=-h;dx<=h;dx++) if(holeMask[(y+dy)*W+(x+dx)]){ok=false;break;}
+    if(!ok) continue;
+    srcAll.push([x,y]);
+    const dxh=Math.max(hole.x0-x,x-hole.x1,0), dyh=Math.max(hole.y0-y,y-hole.y1,0);
+    if(Math.hypot(dxh,dyh)<10) srcNear.push([x,y]);
+  }
+  const tgt=[];
+  for(let y=h;y<H-h;y++) for(let x=h;x<W-h;x++){
+    let any=false;
+    for(let dy=-h;dy<=h&&!any;dy++) for(let dx=-h;dx<=h;dx++) if(holeMask[(y+dy)*W+(x+dx)]){any=true;break;}
+    if(any) tgt.push([x,y]);
+  }
+
+  function initFill(T,blur){
+    // random init (what a naive coarse level does) or a smooth boundary-diffusion init
+    if(!blur){
+      for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++){
+        const [sx,sy]=srcAll[(rnd()*srcAll.length)|0];
+        for(let c=0;c<C;c++) T[(y*W+x)*C+c]=px[(sy*W+sx)*C+c];
+      }
+    } else {
+      // crude coarse level: average of the 4 nearest known boundary pixels, per row/column
+      for(let y=hole.y0;y<hole.y1;y++) for(let x=hole.x0;x<hole.x1;x++){
+        const wL=(hole.x1-x), wR=(x-hole.x0+1), wT=(hole.y1-y), wB=(y-hole.y0+1);
+        for(let c=0;c<C;c++){
+          const l=px[(y*W+hole.x0-1)*C+c], r=px[(y*W+hole.x1)*C+c];
+          const t=px[((hole.y0-1)*W+x)*C+c], b=px[((hole.y1)*W+x)*C+c];
+          T[(y*W+x)*C+c]=(l*wL+r*wR+t*wT+b*wB)/(wL+wR+wT+wB);
+        }
+      }
+    }
+  }
+
+  function run(useComplete,pyramid,local){
+    const T=Float32Array.from(px);
+    initFill(T,pyramid);
+    const src = local ? srcNear : srcAll;
+    const iters = 8;
+    let energy=0;
+    for(let it=0;it<iters;it++){
+      const acc=new Float32Array(W*H*C), cnt=new Float32Array(W*H);
+      energy=0;
+      // ---- coherence: every target patch pulls its NN source patch in
+      for(const [tx,ty] of tgt){
+        let best=1e9,bx=0,by=0;
+        for(const [sx,sy] of src){ const d=patchD(T,px,tx,ty,sx,sy,h); if(d<best){best=d;bx=sx;by=sy;} }
+        energy+=best/(P*P*C);
+        const wgt=Math.exp(-best/(P*P*C*0.02));      // robust weight
+        for(let dy=-h;dy<=h;dy++) for(let dx=-h;dx<=h;dx++){
+          const it2=((ty+dy)*W+(tx+dx));
+          if(!holeMask[it2]) continue;
+          const is=((by+dy)*W+(bx+dx))*C;
+          for(let c=0;c<C;c++) acc[it2*C+c]+=wgt*px[is+c];
+          cnt[it2]+=wgt;
+        }
+      }
+      // ---- completeness: every source patch demands a home inside the hole
+      if(useComplete){
+        for(let k=0;k<src.length;k+=3){
+          const [sx,sy]=src[k];
+          let best=1e9,bx=0,by=0;
+          for(const [tx,ty] of tgt){ const d=patchD(px,T,sx,sy,tx,ty,h); if(d<best){best=d;bx=tx;by=ty;} }
+          for(let dy=-h;dy<=h;dy++) for(let dx=-h;dx<=h;dx++){
+            const it2=((by+dy)*W+(bx+dx));
+            if(!holeMask[it2]) continue;
+            const is=((sy+dy)*W+(sx+dx))*C;
+            for(let c=0;c<C;c++) acc[it2*C+c]+=1.4*px[is+c];
+            cnt[it2]+=1.4;
+          }
+        }
+      }
+      for(let i=0;i<W*H;i++) if(holeMask[i]&&cnt[i]>0)
+        for(let c=0;c<C;c++) T[i*C+c]=acc[i*C+c]/cnt[i];
+    }
+    return {T,energy:energy/tgt.length};
+  }
+
+  function paint(res,msg){
+    g.clearRect(0,0,cv.width,cv.height);
+    const CELL=4.4,OY=50;
+    drawImg(g,px,60,OY,CELL,holeMask,'input + hole','');
+    drawImg(g,res?res.T:px,380,OY,CELL,null,'the inpainted result','');
+    drawImg(g,px,700,OY,CELL,null,'ground truth','for comparison only');
+    ro.innerHTML=msg;
+  }
+  paint(null,'Press <b>Run</b>. Tick “completeness” to reproduce the exam figure; untick the other two to see the local-minimum failure.');
+
+  document.getElementById('Ego').onclick=()=>{
+    const uc=document.getElementById('Ecomp').checked;
+    const py=document.getElementById('Epyr').checked;
+    const lo=document.getElementById('Eloc').checked;
+    ro.innerHTML='computing…';
+    setTimeout(()=>{
+      const res=run(uc,py,lo);
+      let msg='final mean coherence energy = <b>'+res.energy.toFixed(5)+'</b>. ';
+      if(uc) msg+='<b style="color:#f07178">Completeness on:</b> source content is being forced into the hole — '+
+                  'material appears where a building should be. This is the exam figure.'+
+                  (lo?' <b>Now also untick “restrict the search”</b>: the lawn and the people, which live far from the hole, start teleporting in.':'');
+      else if(!py) msg+='<b style="color:#ffcb6b">Random initialisation, no pyramid:</b> the EM loop locks onto '+
+                  'whatever it started with. Re-run it — you get a different answer each time, at a similar energy.';
+      else if(!lo) msg+='<b style="color:#ffcb6b">Unrestricted search:</b> distant patches (lawn, sky, people) '+
+                  'compete on equal terms with the immediate surroundings and often win, because they are more repetitive.';
+      else msg+='<b style="color:#7fdbca">Coherence only + boundary-aware init + restricted search:</b> the fill '+
+                  'now continues the facade. Notice the energy is not dramatically lower than the bad runs — the '+
+                  'improvement came from the <b>constraints</b>, not from finding a better minimum.';
+      paint(res,msg);
+    },30);
+  };
+})();
+</script>
+
+</body>
+</html>

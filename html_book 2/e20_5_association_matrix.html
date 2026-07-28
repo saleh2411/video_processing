@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q5 — Which dot belongs to which person?</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+<style>
+  table.mat { border-collapse:collapse; font-size:13px; margin-top:10px; width:100%; }
+  table.mat th, table.mat td { border:1px solid var(--line); padding:6px 8px; text-align:center; }
+  table.mat th { color:var(--accent); background:#131a2b; }
+  table.mat td.pick { background:#12332c; color:#7fdbca; font-weight:700; }
+  table.mat td.gated { color:#4b5670; }
+  table.mat td small { display:block; color:#6b7a99; font-size:11px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q5</b> · Tracking, data association</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch04_kalman_particle.html">‹ Chapter 4</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_6_covid_kalman.html">Q6 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 4 · Exam 8/7/2020, question 5 · 13 points</div>
+    <h1>Not “which is closest”, but “which is closest <em>in units of my own uncertainty</em>”</h1>
+    <p class="lede">The Kalman filter already hands you everything you need: a prediction and a covariance. The
+    association score is just the Gaussian that those two define, evaluated at the measurement. One formula, plus
+    three details that separate a 9 from a 13.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 5 · 13 points · TRACKING</span>
+    <p>Consider a multi-person tracking system. At each time step you have $n$ targets. Target $i$ is tracked using
+    a Kalman Filter with state vector $X_i$ and covariance matrix $P_i$. At each time step you obtain $m$
+    measurements $Z_1,...,Z_m$ (say by running a person detector). Both the state $X$ and the measurement $Z$ are
+    2D vectors that represent the 2D position of a target. See Figure 4.
+    <strong>Design an association matrix $\Omega$ of size $n\times m$, where $\Omega(i,j)$ determines how likely is
+    measurement $j$ to belong to target $i$. Express $\Omega(i,j)$ in terms of the Kalman filter parameters.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    $$\Omega(i,j)\;=\;\mathcal N\big(Z_j;\,H\hat X_i^-,\,S_i\big)
+      \;=\;\frac{1}{2\pi\sqrt{|S_i|}}\exp\!\Big(-\tfrac12\,\nu_{ij}^{\!\top}S_i^{-1}\nu_{ij}\Big)$$
+    with the <b>innovation</b> $\nu_{ij}=Z_j-H\hat X_i^-$ and the <b>innovation covariance</b>
+    $S_i=HP_i^-H^{\!\top}+R$. Since here $X$ and $Z$ are both 2-D positions, $H=I$ and this is just
+    $\nu_{ij}=Z_j-\hat X_i^-$, $\;S_i=P_i^-+R$.
+    <br><br>Then: <b>gate</b> with $\nu^{\!\top}S^{-1}\nu\le\chi^2_{2,0.95}=5.99$, and <b>assign</b> by running
+    Hungarian on the cost $C(i,j)=-\log\Omega(i,j)$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">Three kids and four footprints</span>
+    <p>It snowed last night. This morning you find <b>four fresh footprints</b> in the yard, and you know
+    <b>three kids</b> live on your street. Which footprint belongs to which kid? (One footprint might belong to the
+    postman — that's why there are four prints and three kids.)</p>
+    <p>The obvious rule is: <em>give each kid the footprint nearest to where you last saw them.</em> That is usually
+    right, and sometimes badly wrong. Here is why.</p>
+    <p><strong>Kid 1 — Noa.</strong> You watched her walk down the path one second ago. You know almost exactly
+    where she should be. If a footprint is even one metre off, it is probably not hers.</p>
+    <p><strong>Kid 2 — Adam.</strong> You last saw him ten minutes ago and he was running. He could be anywhere in a
+    huge area. A footprint five metres from your guess is completely believable for him.</p>
+    <p>So “one metre away” is a <em>big</em> deal for Noa and a <em>tiny</em> deal for Adam. You must not measure
+    distance in metres. <strong>You must measure distance in units of “how surprised am I?”</strong></p>
+    <p>And there is a third wrinkle. <strong>Kid 3 — Maya</strong> is on a bicycle going fast down the road. You are
+    confident about which <em>side</em> of the road she is on, but not at all confident about how <em>far along</em>
+    it she got. Her cloud of uncertainty is not a circle — it is a long thin cigar pointing down the road. A
+    footprint 3 m ahead of the guess is fine; a footprint 3 m sideways is not.</p>
+    <p>The Kalman filter has already computed that cloud for you. It is called $P$. The whole answer to this
+    question is: <b>score each footprint by how well it fits inside that kid's own cloud.</b></p>
+  </div>
+
+  <div class="callout note"><span class="lbl">What “the cloud” actually is</span>
+    After the <em>predict</em> step, the Kalman filter believes the target's position is Gaussian with mean
+    $\hat X_i^-$ and covariance $P_i^-$. The detector adds its own noise $R$. So the position of the
+    <em>measurement you expect to see</em> is Gaussian with mean $H\hat X_i^-$ and covariance
+    $S_i=HP_i^-H^\top+R$. Drawing that as an ellipse is exactly the cloud in the story — and it is exactly the blue
+    ellipses in the demo below.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Building $\Omega$ from the Kalman parameters</h2>
+
+  <div class="explain">
+    <span class="explain-label">Step 1 — predict, because association happens before update</span>
+    <p>At time $t$ you first run the prediction step for every target:</p>
+  </div>
+
+  <div class="eq">$$ \hat X_i^- = F\hat X_i^{+}, \qquad P_i^- = F P_i^{+} F^{\!\top} + Q $$</div>
+
+  <div class="explain">
+    <p>You must associate against the <em>predicted</em> state — the previous corrected state is one time step
+    stale, and the whole point of a motion model is that it tells you where to look.</p>
+
+    <h4 class="mini">Step 2 — what would the measurement look like?</h4>
+    <p>Measurement model $Z = HX + \eta$, $\eta\sim\mathcal N(0,R)$. So, conditioned on target $i$, the
+    measurement is Gaussian:</p>
+  </div>
+
+  <div class="eq">$$ Z \mid \text{target }i \;\sim\; \mathcal N\big(\underbrace{H\hat X_i^-}_{\text{predicted measurement}},\;
+      \underbrace{HP_i^-H^{\!\top}+R}_{\textstyle S_i\;=\;\text{innovation covariance}}\big) $$</div>
+
+  <div class="explain">
+    <p>Note that $S_i$ adds <b>two</b> uncertainties: how unsure I am about the target ($P$, mapped into
+    measurement space by $H$) and how unsure I am about the detector ($R$). Both matter, and both are quantities
+    the Kalman filter already carries.</p>
+
+    <h4 class="mini">Step 3 — the entry</h4>
+    <p>Define the innovation (residual) of the pair, and score the measurement by the density:</p>
+  </div>
+
+  <div class="eq">$$ \nu_{ij} \;=\; Z_j - H\hat X_i^-, \qquad
+     d^2_{ij} \;=\; \nu_{ij}^{\!\top}S_i^{-1}\nu_{ij}\quad\text{(squared \textbf{Mahalanobis} distance)} $$</div>
+
+  <div class="eq">$$ \boxed{\;\Omega(i,j) \;=\; p(Z_j\mid \text{target }i)
+      \;=\;\frac{1}{(2\pi)^{d/2}\sqrt{|S_i|}}\;\exp\!\left(-\tfrac12\,d^2_{ij}\right)\;}
+      \qquad d=2\ \Rightarrow\ (2\pi)^{d/2}=2\pi $$</div>
+
+  <div class="explain">
+    <p>For this question $X$ and $Z$ are both the 2-D position, so $H=I_{2\times2}$ and everything simplifies:</p>
+  </div>
+
+  <div class="eq">$$ \nu_{ij}=Z_j-\hat X_i^-,\qquad S_i=P_i^-+R,\qquad
+     \Omega(i,j)=\frac{1}{2\pi\sqrt{|P_i^-+R|}}\exp\!\left(-\tfrac12(Z_j-\hat X_i^-)^{\!\top}(P_i^-+R)^{-1}(Z_j-\hat X_i^-)\right) $$</div>
+
+  <div class="callout key"><span class="lbl">Why the $1/\sqrt{|S_i|}$ factor is not optional</span>
+    It is what makes entries <b>comparable across different rows</b>. A target with a huge uncertainty ellipse
+    gives a broad, <em>flat</em> Gaussian: it accepts far-away measurements, but its peak value is low. Drop the
+    normaliser and every measurement would look wonderfully likely for the most uncertain target, so a lost track
+    would greedily steal detections from well-tracked ones. Keep it, and a confident target with a small ellipse
+    correctly outbids a vague one for a measurement that fits them both.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the exam figure, live</h4><span class="tag">drag the red measurements</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Blue stars = predicted targets $H\hat X_i^-$, with their
+      $S_i$ ellipses at the 95% gate. Red circles = measurements $Z_j$ — <b>drag them</b>. The matrix below is
+      $\Omega$, recomputed live; green cells are the assignment chosen by minimising $\sum -\log\Omega$.</p>
+      <canvas id="cvA" width="900" height="360"></canvas>
+      <div class="controls">
+        <div class="control"><label>uncertainty of T1 (tight) <span class="val" id="v1">0.6</span></label><input type="range" id="s1" min="2" max="40" step="1" value="6"></div>
+        <div class="control"><label>uncertainty of T2 (vague) <span class="val" id="v2">2.6</span></label><input type="range" id="s2" min="2" max="40" step="1" value="26"></div>
+        <div class="control"><label>T3 elongation (cigar) <span class="val" id="v3">4.0</span>×</label><input type="range" id="s3" min="10" max="80" step="1" value="40"></div>
+      </div>
+      <div class="controls" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+        <label class="chk"><input type="checkbox" id="kEuc"> score with plain <b>Euclidean</b> distance instead</label>
+        <label class="chk"><input type="checkbox" id="kNorm" checked> keep the $1/\sqrt{|S_i|}$ normaliser</label>
+        <label class="chk"><input type="checkbox" id="kGate" checked> apply the $\chi^2$ gate</label>
+      </div>
+      <div id="Atab"></div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Three experiments worth 5 marks each</span>
+    <b>1.</b> Drag a measurement so it is slightly nearer T2 in metres but well inside T1's tight ellipse — then
+    tick “Euclidean”. The assignment flips, and the Euclidean one is wrong.
+    <br><b>2.</b> Untick the normaliser and watch the vague target T2 start winning measurements it should lose.
+    <br><b>3.</b> Drag a measurement far away from everything: with the gate on it is declared <b>clutter / new
+    track</b> instead of being force-fitted to the least-bad target.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The three details that finish the answer</h2>
+
+  <div class="explain">
+    <h4 class="mini">a. Gating — refuse the absurd matches</h4>
+    <p>$d^2_{ij}$ is a sum of 2 squared standard normals, so under the correct-association hypothesis it is
+    $\chi^2$ with $d=2$ degrees of freedom. Accept a pair only if</p>
+  </div>
+
+  <div class="eq">$$ d^2_{ij} \;\le\; \chi^2_{d,\,1-\alpha}
+      \qquad(\,d=2,\ \alpha=0.05 \;\Rightarrow\; 5.991\,) $$</div>
+
+  <div class="explain">
+    <p>and set $\Omega(i,j)=0$ otherwise. This is not cosmetic: it is what lets the system say <em>“this detection
+    belongs to nobody”</em> (a new person entering the scene, or a false detection) and <em>“this target was not
+    detected this frame”</em> (occlusion) instead of always forcing $\min(n,m)$ matches. Gating also cuts the
+    search cost.</p>
+
+    <h4 class="mini">b. Turning likelihoods into an assignment</h4>
+    <p>$\Omega$ is a score matrix, not yet a decision. Two standard ways to finish:</p>
+    <ul>
+      <li><b>Hard assignment (GNN).</b> Build the cost matrix $C(i,j) = -\log\Omega(i,j)$ (and $+\infty$ for gated
+      pairs), then solve the linear assignment problem $\min_\pi\sum_i C(i,\pi(i))$ with the <b>Hungarian
+      algorithm</b> in $O(n^3)$. Maximising $\prod_j\Omega$ under a one-to-one constraint is exactly minimising
+      $\sum -\log\Omega$. Pad the matrix with dummy rows/columns priced at the gate threshold so “no match” is a
+      legal choice.</li>
+      <li><b>Soft assignment (PDA/JPDA).</b> Do not commit: give target $i$ a weighted mixture of all the
+      measurements in its gate, with normalised weights
+      $\;\beta_{ij}= \dfrac{P_D\,\Omega(i,j)}{\lambda(1-P_D)\;+\;P_D\sum_{k}\Omega(i,k)}\;$
+      where $P_D$ is the detection probability and $\lambda$ the clutter density; $\beta_{i0}$ is the
+      "missed-detection" weight. Then update the Kalman filter with the combined innovation
+      $\sum_j\beta_{ij}\nu_{ij}$. Robust in clutter, at the price of a covariance inflation term.</li>
+    </ul>
+
+    <h4 class="mini">c. Use more than position, if you have it</h4>
+    <p>A person detector also gives you an appearance patch and a box size. Since the cues are conditionally
+    independent given the association, the likelihoods simply multiply:</p>
+  </div>
+
+  <div class="eq">$$ \Omega(i,j) \;=\; \underbrace{\mathcal N(Z_j;H\hat X_i^-,S_i)}_{\text{motion}}\;\cdot\;
+     \underbrace{\exp\!\big(-\gamma\,d_{\text{app}}(a_i,a_j)\big)}_{\text{appearance (colour histogram, embedding)}} $$</div>
+
+  <div class="explain">
+    <p>This is what saves you when two people cross: their motion gates overlap, and only appearance can break the
+    tie. (Same trick as the observation model in the particle-filter chapter.)</p>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — the crossing pair</h4><span class="tag">press Run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Two people walk towards each other and cross. Watch the two gates
+      overlap in the middle. With motion only, the tracker swaps identities; add the appearance term and it
+      survives.</p>
+      <canvas id="cvB" width="900" height="250"></canvas>
+      <div class="controls" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+        <label class="chk"><input type="checkbox" id="kApp"> add the appearance term</label>
+        <button class="chk" id="Bgo">▶ Run / reset</button>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Predict first.</strong> At time $t$, run the Kalman prediction for each target $i$:
+    $\hat X_i^-=F\hat X_i^+$, $P_i^-=FP_i^+F^{\!\top}+Q$. Association is done against the <em>predicted</em>
+    state.</p>
+
+    <p><strong>Predicted measurement and its covariance.</strong> With measurement model $Z=HX+\eta$,
+    $\eta\sim\mathcal N(0,R)$, the measurement expected from target $i$ is Gaussian with mean $H\hat X_i^-$ and
+    innovation covariance</p>
+    <div class="eq">$$ S_i \;=\; H P_i^- H^{\!\top} + R. $$</div>
+    <p>Here $X,Z\in\mathbb R^2$ are both positions, so $H=I$ and $S_i = P_i^- + R$.</p>
+
+    <p><strong>The association matrix.</strong> With the innovation $\nu_{ij}=Z_j-H\hat X_i^-$ and the squared
+    Mahalanobis distance $d^2_{ij}=\nu_{ij}^{\!\top}S_i^{-1}\nu_{ij}$, define</p>
+    <div class="eq">$$ \Omega(i,j)\;=\;p(Z_j\mid i)\;=\;\frac{1}{2\pi\sqrt{|S_i|}}
+       \exp\!\Big(-\tfrac12\,\nu_{ij}^{\!\top}S_i^{-1}\nu_{ij}\Big). $$</div>
+    <p>Every quantity is a Kalman filter parameter: $\hat X_i^-,P_i^-$ from the predict step, $H,R$ from the
+    measurement model. The Mahalanobis form is essential — it measures the residual in units of the target's own
+    uncertainty, so a confident track demands a close measurement while an uncertain one tolerates a distant
+    one, and an elongated $P$ (e.g. along the direction of motion) tolerates error along that direction only. The
+    $1/\sqrt{|S_i|}$ normaliser makes entries comparable <em>between rows</em>, preventing uncertain targets from
+    capturing every measurement.</p>
+
+    <p><strong>Gating.</strong> Under the correct hypothesis $d^2_{ij}\sim\chi^2_2$, so accept only pairs with
+    $d^2_{ij}\le\chi^2_{2,0.95}=5.99$ and set $\Omega(i,j)=0$ otherwise. Gating lets a measurement be declared
+    clutter / a new target, and a target be declared undetected (occluded), instead of forcing $\min(n,m)$
+    matches.</p>
+
+    <p><strong>From $\Omega$ to a decision.</strong> Either (a) hard assignment: build $C(i,j)=-\log\Omega(i,j)$
+    ($\infty$ if gated) and solve the linear assignment problem with the <b>Hungarian algorithm</b>, which
+    maximises $\prod\Omega$ under a one-to-one constraint, padding with dummy rows/columns for “no match”; or (b)
+    soft assignment (PDA/JPDA): update target $i$ with the weighted innovation $\sum_j\beta_{ij}\nu_{ij}$ where
+    $\beta_{ij}\propto P_D\,\Omega(i,j)$, normalised together with a missed-detection term
+    $\propto\lambda(1-P_D)$. Finally, if the detector also supplies appearance, multiply in
+    $\exp(-\gamma\,d_{\text{app}})$, which is what disambiguates targets whose gates overlap during a crossing.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why $S=HPH^\top+R$ and not just $P$ or just $R$?</summary>
+    <p>Two independent sources of error separate the prediction from the observation. $HPH^\top$ is the target's
+    own positional uncertainty pushed through the measurement map — how wrong my prediction of the <em>state</em>
+    may be, expressed in measurement units. $R$ is how wrong the <em>detector</em> is even about a perfectly known
+    target. The residual $\nu = Z-H\hat X^-$ contains both errors, and for independent errors variances add. Using
+    only $P$ would make a perfect tracker reject every noisy detection; using only $R$ would make a lost track
+    reject everything.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is a $\chi^2$ table the right thing for the gate?</summary>
+    <p>If measurement $j$ really does come from target $i$, then $\nu\sim\mathcal N(0,S)$, so
+    $S^{-1/2}\nu\sim\mathcal N(0,I)$ and $d^2=\|S^{-1/2}\nu\|^2$ is the sum of $d$ independent squared standard
+    normals — the definition of $\chi^2_d$. So $d^2\le\chi^2_{d,0.95}$ is a hypothesis test at the 5% level: it
+    keeps 95% of true associations. For $d=2$ the threshold is $5.991$; the ellipse $d^2=5.991$ is exactly the
+    one drawn in Demo 1.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Give a concrete case where nearest-neighbour in Euclidean distance fails.</summary>
+    <p>Target A is a pedestrian tracked for 50 frames, standing still: $P_A$ is a tiny circle of radius 0.2 m.
+    Target B just entered the scene: $P_B$ is 3 m across. A detection lands 0.9 m from A and 0.8 m from B.
+    Euclidean picks B. Mahalanobis: for A, $d^2=(0.9/0.2)^2\approx20$ — outside the gate; for B,
+    $d^2=(0.8/1.5)^2\approx0.3$ — a fine match. Here they agree. Now move the detection to 0.25 m from A and
+    0.20 m from B: Euclidean still picks B, but Mahalanobis gives A a $d^2\approx1.6$ against B's $\approx0.02$
+    — B still wins on $d^2$, yet after the $1/\sqrt{|S|}$ factor A's density is far higher, because a tight
+    Gaussian is <em>tall</em>. That factor is what encodes "a confident tracker's opinion counts for more".</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. $n \ne m$. What do the leftover rows and columns mean?</summary>
+    <p>An unmatched <b>column</b> (measurement) is either clutter (a false detection) or a person entering the
+    scene — in the latter case you initialise a new Kalman filter from it, typically with a large initial $P$.
+    An unmatched <b>row</b> (target) means a missed detection: skip the update step, keep only the prediction, so
+    $P_i$ grows and the gate widens for next frame; delete the track after $k$ consecutive misses. Implement both
+    by padding the cost matrix with dummy entries priced at the gate threshold before running Hungarian.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why Hungarian rather than just picking the max of each row?</summary>
+    <p>Row-wise maxima are greedy and inconsistent: two targets can claim the same measurement, and the resolution
+    order changes the outcome. Hungarian solves the <em>global</em> problem — the one-to-one assignment maximising
+    the joint likelihood $\prod_i\Omega(i,\pi(i))$, i.e. minimising $\sum_i-\log\Omega(i,\pi(i))$ — in $O(n^3)$.
+    The log turns the product into a sum, which is exactly the additive form the assignment algorithm needs.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. When should you prefer JPDA over a hard assignment?</summary>
+    <p>In heavy clutter, or when targets are close enough that several measurements fall in several gates
+    simultaneously — precisely the crossing case. A hard decision there is a coin flip that, if wrong, corrupts
+    the state permanently (identity switch). JPDA never commits: it updates with the probability-weighted average
+    innovation, so a wrong guess degrades gracefully rather than catastrophically. The cost is an inflated
+    covariance (the spread-of-innovations term) and combinatorial complexity in the number of joint hypotheses,
+    which is why practical systems gate aggressively first.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>predict first</td><td>$\hat X^-=F\hat X^+$, $P^-=FP^+F^\top+Q$</td></tr>
+      <tr><td>innovation</td><td>$\nu_{ij}=Z_j-H\hat X_i^-$ &nbsp;(here $H=I$)</td></tr>
+      <tr><td>innovation covariance</td><td>$S_i=HP_i^-H^\top+R$ &nbsp;(here $P_i^-+R$)</td></tr>
+      <tr><td>Mahalanobis</td><td>$d^2_{ij}=\nu^\top S_i^{-1}\nu$ — distance in units of uncertainty</td></tr>
+      <tr><td>$\Omega(i,j)$</td><td>$\frac{1}{2\pi\sqrt{|S_i|}}e^{-d^2/2}$</td></tr>
+      <tr><td>why $1/\sqrt{|S|}$</td><td>makes rows comparable; a confident target outbids a vague one</td></tr>
+      <tr><td>gate</td><td>$d^2\le\chi^2_{2,0.95}=5.99$, else $\Omega=0$</td></tr>
+      <tr><td>decide</td><td>Hungarian on $-\log\Omega$, or JPDA weights $\beta_{ij}$</td></tr>
+      <tr><td>extras</td><td>multiply in appearance likelihood; dummy rows/cols for birth/death</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_4_concentric_mosaics.html"><span class="dir">Previous</span><span class="ttl">Q4 · Rotating arm</span></a>
+    <a class="next" href="e20_6_covid_kalman.html"><span class="dir">Next question</span><span class="ttl">Q6 · COVID-19 ›</span></a>
+  </div>
+</div>
+
+<script>
+/* ---------- small 2x2 helpers ---------- */
+function inv2(M){ const d=M[0]*M[3]-M[1]*M[2]; return [M[3]/d,-M[1]/d,-M[2]/d,M[0]/d]; }
+function det2(M){ return M[0]*M[3]-M[1]*M[2]; }
+function quad(Minv,v){ return v[0]*(Minv[0]*v[0]+Minv[1]*v[1]) + v[1]*(Minv[2]*v[0]+Minv[3]*v[1]); }
+function ellipse(g,cx,cy,M,k,col,dash){
+  // draw {v : v' M^-1 v = k} using eigen-decomposition of the 2x2 symmetric M
+  const a=M[0],b=M[1],c=M[3];
+  const tr=a+c, dt=a*c-b*b;
+  const l1=tr/2+Math.sqrt(Math.max(0,tr*tr/4-dt)), l2=tr/2-Math.sqrt(Math.max(0,tr*tr/4-dt));
+  let ang;
+  if(Math.abs(b)>1e-9) ang=Math.atan2(l1-a,b); else ang=(a>=c)?0:Math.PI/2;
+  g.save(); g.translate(cx,cy); g.rotate(-ang);
+  g.strokeStyle=col; g.lineWidth=1.6; if(dash) g.setLineDash(dash);
+  g.beginPath(); g.ellipse(0,0,Math.sqrt(k*l1),Math.sqrt(k*l2),0,0,7); g.stroke();
+  g.setLineDash([]); g.restore();
+}
+
+/* =========================================================
+   DEMO 1 — the association matrix, live
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvA'), g=cv.getContext('2d');
+  const tab=document.getElementById('Atab'), ro=document.getElementById('Aro');
+  const s1=document.getElementById('s1'), s2=document.getElementById('s2'), s3=document.getElementById('s3');
+  const v1=document.getElementById('v1'), v2=document.getElementById('v2'), v3=document.getElementById('v3');
+  const kE=document.getElementById('kEuc'), kN=document.getElementById('kNorm'), kG=document.getElementById('kGate');
+  const CHI=5.991, SCALE=42;                       // px per metre
+  const T=[{x:250,y:130},{x:470,y:210},{x:640,y:110}];
+  let Z=[{x:300,y:170},{x:455,y:150},{x:600,y:170},{x:690,y:265}];
+  let drag=-1;
+
+  function covs(){
+    const a=(+s1.value)/10, b=(+s2.value)/10, e=(+s3.value)/10;
+    v1.textContent=a.toFixed(1); v2.textContent=b.toFixed(1); v3.textContent=e.toFixed(1);
+    const th=-0.5;                                  // T3's cigar direction
+    const lx=1.1*e, ly=0.5;
+    const ct=Math.cos(th), st=Math.sin(th);
+    const S3=[ lx*ct*ct+ly*st*st, (lx-ly)*ct*st, (lx-ly)*ct*st, lx*st*st+ly*ct*ct ];
+    return [[a*a,0,0,a*a],[b*b,0,0,b*b],S3];
+  }
+
+  function compute(){
+    const S=covs(), euc=kE.checked, nrm=kN.checked, gate=kG.checked;
+    const O=[], D2=[];
+    for(let i=0;i<3;i++){
+      O.push([]); D2.push([]);
+      const Si=S[i], Sinv=inv2(Si), dt=det2(Si);
+      for(let j=0;j<Z.length;j++){
+        const nu=[(Z[j].x-T[i].x)/SCALE,(Z[j].y-T[i].y)/SCALE];
+        const d2 = euc ? (nu[0]*nu[0]+nu[1]*nu[1]) : quad(Sinv,nu);
+        D2[i].push(d2);
+        let w = Math.exp(-0.5*d2);
+        if(nrm && !euc) w /= (2*Math.PI*Math.sqrt(dt));
+        else if(!euc)   w /= (2*Math.PI);
+        if(gate && !euc && d2>CHI) w=0;
+        O[i].push(w);
+      }
+    }
+    // best one-to-one assignment by brute force over injections
+    let best=null, bestC=-1;
+    const m=Z.length;
+    const perm=(arr,k,used,cur)=>{
+      if(k===3){ let c=1; for(let i=0;i<3;i++) c*=O[i][cur[i]];
+        if(c>bestC){bestC=c; best=cur.slice();} return; }
+      for(let j=0;j<m;j++) if(!used[j]){ used[j]=1; cur.push(j); perm(arr,k+1,used,cur); cur.pop(); used[j]=0; }
+    };
+    perm(null,0,new Array(m).fill(0),[]);
+    return {O,D2,S,best,bestC};
+  }
+
+  function draw(){
+    const R=compute();
+    g.clearRect(0,0,cv.width,cv.height);
+    g.font='12px system-ui';
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(20,20,860,320);
+    // grid
+    g.strokeStyle='rgba(44,54,80,.6)';
+    for(let x=20;x<880;x+=42){ g.beginPath(); g.moveTo(x,20); g.lineTo(x,340); g.stroke(); }
+    for(let y=20;y<340;y+=42){ g.beginPath(); g.moveTo(20,y); g.lineTo(880,y); g.stroke(); }
+
+    // targets + gates
+    T.forEach((t,i)=>{
+      const S=R.S[i].map(v=>v*SCALE*SCALE);
+      if(!kE.checked) ellipse(g,t.x,t.y,S,CHI,'rgba(130,170,255,.85)',[4,3]);
+      g.fillStyle='#82aaff';
+      // star
+      g.save(); g.translate(t.x,t.y); g.beginPath();
+      for(let k=0;k<10;k++){ const a=-Math.PI/2+k*Math.PI/5, r=(k%2?4:10);
+        k?g.lineTo(r*Math.cos(a),r*Math.sin(a)):g.moveTo(r*Math.cos(a),r*Math.sin(a)); }
+      g.closePath(); g.fill(); g.restore();
+      g.fillStyle='#82aaff'; g.fillText('T'+(i+1),t.x-8,t.y-16);
+    });
+    // assignment links
+    if(R.best) R.best.forEach((j,i)=>{ if(R.O[i][j]<=0) return;
+      g.strokeStyle='rgba(127,219,202,.75)'; g.lineWidth=2; g.setLineDash([6,4]);
+      g.beginPath(); g.moveTo(T[i].x,T[i].y); g.lineTo(Z[j].x,Z[j].y); g.stroke(); g.setLineDash([]); });
+    // measurements
+    Z.forEach((z,j)=>{
+      g.fillStyle='#f07178'; g.beginPath(); g.arc(z.x,z.y,7,0,7); g.fill();
+      g.fillStyle='#f07178'; g.fillText('Z'+(j+1),z.x+10,z.y+4);
+    });
+    g.fillStyle='#6b7a99'; g.fillText('drag the red measurements',30,336);
+
+    // ---- matrix table ----
+    let h='<table class="mat"><tr><th></th>';
+    for(let j=0;j<Z.length;j++) h+='<th>Z'+(j+1)+'</th>';
+    h+='</tr>';
+    for(let i=0;i<3;i++){
+      h+='<tr><th>T'+(i+1)+'</th>';
+      for(let j=0;j<Z.length;j++){
+        const on = R.best && R.best[i]===j && R.O[i][j]>0;
+        const gated = kG.checked && !kE.checked && R.D2[i][j]>CHI;
+        h+='<td class="'+(on?'pick':(gated?'gated':''))+'">'+
+           (R.O[i][j]>0?R.O[i][j].toExponential(2):'0')+
+           '<small>d² = '+R.D2[i][j].toFixed(2)+(gated?' ✗gated':'')+'</small></td>';
+      }
+      h+='</tr>';
+    }
+    h+='</table>';
+    tab.innerHTML=h;
+
+    const unmatched=[];
+    for(let j=0;j<Z.length;j++) if(!R.best || R.best.indexOf(j)<0) unmatched.push('Z'+(j+1));
+    ro.innerHTML = (kE.checked
+        ? '<b style="color:#f07178">Euclidean mode:</b> the ellipses are ignored — every target is treated as equally certain. '
+        : 'Ω(i,j) = 𝒩(Z_j ; X̂ᵢ⁻, Sᵢ), Sᵢ = Pᵢ⁻+R. ')
+      + 'Chosen assignment: ' + (R.best? R.best.map((j,i)=>'T'+(i+1)+'→Z'+(j+1)).join(', '):'—')
+      + (unmatched.length? ' &nbsp;·&nbsp; unmatched: <b>'+unmatched.join(', ')+'</b> → clutter or a new track.' : '')
+      + '<br>Joint likelihood ∏Ω = <b>'+(R.bestC>0?R.bestC.toExponential(2):'0')+'</b>'
+      + (kN.checked?'':' &nbsp;·&nbsp; <b style="color:#ffcb6b">normaliser off</b> — watch the vague target T2 start winning.');
+  }
+  function pos(e){ const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height}; }
+  cv.onmousedown=e=>{ const m=pos(e);
+    Z.forEach((z,j)=>{ if(Math.hypot(m.x-z.x,m.y-z.y)<16) drag=j; }); };
+  cv.onmousemove=e=>{ if(drag<0) return; const m=pos(e);
+    Z[drag]={x:Math.max(28,Math.min(872,m.x)), y:Math.max(28,Math.min(332,m.y))}; draw(); };
+  window.addEventListener('mouseup',()=>drag=-1);
+  [s1,s2,s3,kE,kN,kG].forEach(e=>{ e.oninput=draw; e.onchange=draw; });
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — the crossing pair
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvB'), g=cv.getContext('2d'), ro=document.getElementById('Bro');
+  const kA=document.getElementById('kApp'), btn=document.getElementById('Bgo');
+  let t=0, run=false, raf=null, trk=null, swap=false;
+
+  function truth(k){
+    return [{x:120+k*3.0, y:125-14*Math.sin(k*0.05), app:0},
+            {x:780-k*3.0, y:125+14*Math.sin(k*0.05), app:1}];
+  }
+  function reset(){ run=false; if(raf) cancelAnimationFrame(raf); t=0; swap=false;
+    const p=truth(0);
+    trk=[{x:p[0].x,y:p[0].y,vx:3,vy:0,P:120,id:0,app:0},{x:p[1].x,y:p[1].y,vx:-3,vy:0,P:120,id:1,app:1}];
+    draw(); }
+
+  function step(){
+    const gt=truth(t);
+    // noisy detections
+    const Z=gt.map(p=>({x:p.x+(Math.random()-0.5)*16, y:p.y+(Math.random()-0.5)*16, app:p.app}));
+    // predict
+    trk.forEach(k=>{ k.x+=k.vx; k.y+=k.vy; k.P+=60; });
+    // association: score both permutations
+    const S=(i,j)=>{
+      const d2=((Z[j].x-trk[i].x)**2+(Z[j].y-trk[i].y)**2)/(trk[i].P+80);
+      let w=Math.exp(-0.5*d2)/(2*Math.PI*(trk[i].P+80));
+      if(kA.checked) w*=Math.exp(-6*Math.abs(trk[i].app-Z[j].app));
+      return w;
+    };
+    const a=S(0,0)*S(1,1), b=S(0,1)*S(1,0);
+    const map = (a>=b)?[0,1]:[1,0];
+    if(map[0]===1) swap=true;
+    map.forEach((j,i)=>{
+      const K=trk[i].P/(trk[i].P+80);
+      const nx=trk[i].x+K*(Z[j].x-trk[i].x), ny=trk[i].y+K*(Z[j].y-trk[i].y);
+      trk[i].vx=0.75*trk[i].vx+0.25*(nx-trk[i].x); trk[i].vy=0.75*trk[i].vy+0.25*(ny-trk[i].y);
+      trk[i].x=nx; trk[i].y=ny; trk[i].P*=(1-K);
+      trk[i].app=0.9*trk[i].app+0.1*Z[j].app;
+    });
+    t++;
+    return {Z,gt,map};
+  }
+  function draw(st){
+    g.clearRect(0,0,cv.width,cv.height);
+    g.strokeStyle='#2c3650'; g.strokeRect(20,20,860,210);
+    g.font='12px system-ui';
+    const COL=['#82aaff','#ffcb6b'];
+    trk.forEach((k,i)=>{
+      const s=Math.sqrt(k.P+80);
+      g.strokeStyle=COL[i]+'88'; g.setLineDash([4,3]); g.lineWidth=1.4;
+      g.beginPath(); g.arc(k.x,k.y,s*2.45,0,7); g.stroke(); g.setLineDash([]);
+      g.fillStyle=COL[i]; g.beginPath(); g.arc(k.x,k.y,6,0,7); g.fill();
+      g.fillText('track '+(i+1),k.x-22,k.y-s*2.45-6);
+    });
+    if(st) st.Z.forEach(z=>{ g.fillStyle='#f07178'; g.beginPath(); g.arc(z.x,z.y,4,0,7); g.fill(); });
+    g.fillStyle='#6b7a99';
+    g.fillText('frame '+t,30,42);
+    if(t>0) ro.innerHTML = 'frame <b>'+t+'</b> · '+
+      (t<110 ? 'walking towards each other…' :
+        (swap ? '<b style="color:#f07178">identity switch</b> — the two gates overlapped at the crossing and motion alone could not tell them apart. Tick the appearance box and re-run.'
+              : '<b style="color:#7fdbca">identities survived the crossing</b> — the appearance term broke the tie while the motion gates overlapped.'));
+  }
+  function loop(){ if(!run) return; const st=step(); draw(st);
+    if(t>210) run=false; raf=requestAnimationFrame(loop); }
+  btn.onclick=()=>{ reset(); run=true; loop(); };
+  kA.onchange=reset;
+  reset();
+})();
+</script>
+
+</body>
+</html>

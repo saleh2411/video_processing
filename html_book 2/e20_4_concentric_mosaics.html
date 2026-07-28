@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q4 — Camera on a rotating arm</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q4</b> · Light fields, concentric mosaics</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="b4_light_fields_concentric.html">‹ deep dive (B4)</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_5_association_matrix.html">Q5 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to the light-field lecture · Exam 8/7/2020, question 4 · 12 points</div>
+    <h1>Every ray you will ever need was already filmed</h1>
+    <p class="lede">Do not try to reconstruct the 3-D scene. Do not try to estimate depth. The whole answer is a
+    <em>lookup table</em>: for each pixel of the virtual camera, work out which ray it wants, then work out which
+    frame and which column of the video already recorded that exact ray.</p>
+    <p class="lede" style="color:var(--accent-2)"><b>This is the same question as Moed B 2022 Q4.</b> If you want
+    the long derivation, the sampling analysis and the depth-aliasing discussion, go to
+    <a href="b4_light_fields_concentric.html">B4 · Camera on a rotating arm</a>. This page is the short,
+    story-first version.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 4 · 12 points · LIGHT FIELD</span>
+    <p style="margin-bottom:0">Consider Figure 3. On the left you see a camera attached to an arm that is rotating
+    around an axis. The camera is recording a video sequence as it is rotating. On the right, you see a schematic
+    top view of the setup. <strong>Suggest a way to synthesize a novel view from the virtual camera inside the
+    circle, using the images taken by the rotating camera.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    Pixel column $\beta$ of frame $\theta$ records a ray whose distance from the rotation axis is
+    $$ r \;=\; R\sin\beta $$
+    — <b>independent of $\theta$</b>. So the video is really a stack of $360°$ panoramas ("concentric mosaics"),
+    one per column.
+    <br><br>To render: for each virtual pixel find the ray's direction $\psi$ and its distance from the axis $r$,
+    then read it straight out of the video at
+    $$ \beta=\arcsin(r/R),\qquad \theta=\psi-\beta. $$
+    No depth, no 3-D, $O(1)$ per pixel. Works for any virtual camera inside the disc of radius $R\sin\beta_{\max}$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">The kid on the roundabout with a camera</span>
+    <p>You sit on a playground roundabout holding a camera, looking outwards. Somebody spins you. You film the
+    whole spin.</p>
+    <p>Afterwards your friend says: “I want to see what the park looks like from <em>over there</em>” — pointing at
+    a spot inside the circle, somewhere you never sat.</p>
+    <p>The naive thought is: <em>impossible, I was never there.</em> But think about what a photo actually is. A
+    photo is not a place. A photo is a <b>bundle of light rays</b> that happened to arrive at a point. If I can
+    find, for each ray your friend wants, a moment when that <em>very same ray of light</em> passed through my
+    camera, I can just hand them that pixel. It does not matter that my camera was somewhere else — the ray is the
+    same ray.</p>
+    <p>So the job is <strong>a librarian's job, not a sculptor's</strong>. You do not rebuild the park. You look up
+    rays.</p>
+    <p>And here is the lovely fact that makes the lookup easy. As you spin, look at one fixed column of your
+    camera's picture — say 20° to the left of straight ahead. Because the arm and the direction you face rotate
+    together, that column always points “the same amount sideways”, so the line of sight always brushes past the
+    centre pole at the <b>same distance</b>. Over one full spin, that single column sweeps out a complete circle of
+    rays, all touching an invisible ring around the pole.</p>
+    <p>One column ⇒ one ring. All the columns ⇒ a family of rings, one inside the other. <em>Concentric</em>
+    mosaics. Your friend's view is then just: for each of their rays, work out which ring it touches, and read the
+    pixel off that ring.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Which rays do you have?</span>
+    A ray touching the ring of radius $r$ exists in your footage only if $r=R\sin\beta$ for some real pixel column
+    $|\beta|\le\beta_{\max}$. So you own every ray with $|r|\le R\sin\beta_{\max}$ — and any virtual camera whose
+    centre lies inside that disc only ever asks for rays with $|r|\le\|\mathbf P\|$. That is <b>exactly why the
+    exam figure puts the virtual camera inside the circle.</b>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The one formula, in four lines</h2>
+
+  <div class="explain">
+    <span class="explain-label">Set-up (top view, everything in 2-D)</span>
+    <ul>
+      <li>Rotation axis at the origin; arm length $R$; the real camera centre at time $\theta$ is
+      $\mathbf C(\theta)=R(\cos\theta,\sin\theta)$.</li>
+      <li>The camera looks radially <b>outward</b>, so its optical axis direction is $(\cos\theta,\sin\theta)$.</li>
+      <li>A pixel column is labelled by the angle $\beta$ it makes with the optical axis,
+      $|\beta|\le\beta_{\max}$ (for a pinhole, column $u=f\tan\beta$).</li>
+      <li>Any 2-D ray is labelled by two numbers: its direction $\psi$, and its <em>signed distance from the
+      origin</em> $r$. For a ray through point $\mathbf X$ in direction $(\cos\psi,\sin\psi)$:
+      $\,r=X_x\sin\psi-X_y\cos\psi$.</li>
+    </ul>
+    <p>Now compute $r$ for the ray of pixel $(\theta,\beta)$. Its direction is $\psi=\theta+\beta$, and it passes
+    through $\mathbf C(\theta)$:</p>
+  </div>
+
+  <div class="eq">$$ r = R\cos\theta\,\sin(\theta+\beta) - R\sin\theta\,\cos(\theta+\beta)
+        = R\,\sin\big((\theta+\beta)-\theta\big) = \boxed{\,R\sin\beta\,} $$</div>
+
+  <div class="callout key"><span class="lbl">Read what just happened</span>
+    $\theta$ <b>cancelled</b>. The distance of a ray from the axis depends only on which <em>column</em> of the
+    sensor it came from — not on when it was taken. So column $\beta$, gathered over the whole rotation, is a
+    complete $360°$ panorama of rays all tangent to the circle of radius $R\sin\beta$:
+    $$\mathrm{CM}_{R\sin\beta}(\psi) \;=\; \text{frame}(\psi-\beta)\,[\,\text{column }\beta\,]$$
+    That rebinning of the video into rings <em>is</em> the data structure. It is a 3-D light field
+    $(\theta,\beta,v)$, not the full 4-D one — which is why one spin is enough.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — one column ⇒ one ring</h4><span class="tag">drag the arm</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag the camera around the circle. Watch the highlighted ray: its
+      <em>direction</em> spins, but its distance from the centre never changes — it stays tangent to the same
+      dashed ring. Change the column $\beta$ to pick a different ring.</p>
+      <canvas id="cvA" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>arm angle θ <span class="val" id="vAt">40°</span></label><input type="range" id="At" min="0" max="359" step="1" value="40"></div>
+        <div class="control"><label>pixel column β <span class="val" id="vAb">25°</span></label><input type="range" id="Ab" min="-60" max="60" step="1" value="25"></div>
+        <div class="control"><label>half-FOV β<sub>max</sub> <span class="val" id="vAf">40°</span></label><input type="range" id="Af" min="5" max="80" step="1" value="40"></div>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The rendering algorithm</h2>
+
+  <ol class="steps">
+    <li><b>Pre-process (once).</b> Rebin the video: for every column $\beta$, stack that column from all frames
+    into the concentric mosaic $\mathrm{CM}_{R\sin\beta}(\psi)=\text{frame}(\psi-\beta)[\beta]$. This is a pure
+    re-indexing — no pixel value is changed. (You can skip it and index the raw video directly; the mosaics just
+    make the lookup cache-friendly.)</li>
+
+    <li><b>Which ray does this virtual pixel want?</b> Virtual camera at $\mathbf P$ with its own pose; its pixel
+    at column angle $\phi$ shoots a ray of direction $\psi$ (viewing direction $+\,\phi$) through $\mathbf P$.
+    Its distance from the axis is <b>$r = P_x\sin\psi - P_y\cos\psi$</b>.</li>
+
+    <li><b>Do I own that ray?</b> Yes iff $|r| \le R\sin\beta_{\max}$. Since $|r|\le\|\mathbf P\|$ always, every
+    ray of every virtual camera with $\|\mathbf P\|\le R\sin\beta_{\max}$ is available. Otherwise leave it black
+    or extrapolate.</li>
+
+    <li><b>Where is it stored?</b> Invert $r=R\sin\beta$:
+    $\;\boxed{\beta=\arcsin(r/R)}$, then $\;\boxed{\theta=\psi-\beta}$.</li>
+
+    <li><b>Fetch.</b> Output pixel $=$ frame $\theta$, column $\beta$, at the appropriate row $v$. Bilinear
+    interpolation in $(\theta,\beta)$ — i.e. blend the two nearest frames and the two nearest columns — otherwise
+    you see angular aliasing (vertical banding) when the frame count is low.</li>
+  </ol>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — route every ray of a virtual camera</h4><span class="tag">drag the virtual camera</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Drag the <span style="color:#c792ea"><b>purple</b></span> virtual
+      camera anywhere inside the circle. Each of its rays is traced back to the real camera position
+      $\theta=\psi-\beta$ that recorded it (teal dots on the circle). The <span
+      style="color:#7fdbca"><b>teal disc</b></span> is the guaranteed-renderable region $\|\mathbf P\|\le
+      R\sin\beta_{\max}$; step outside it and rays start turning red = never filmed.</p>
+      <canvas id="cvB" width="900" height="400"></canvas>
+      <div class="controls">
+        <div class="control"><label>virtual camera heading <span class="val" id="vBh">200°</span></label><input type="range" id="Bh" min="0" max="359" step="1" value="200"></div>
+        <div class="control"><label>virtual half-FOV <span class="val" id="vBf">30°</span></label><input type="range" id="Bf" min="5" max="70" step="1" value="30"></div>
+        <div class="control"><label>real camera β<sub>max</sub> <span class="val" id="vBm">40°</span></label><input type="range" id="Bm" min="5" max="80" step="1" value="40"></div>
+      </div>
+      <div class="readout" id="Bro"></div>
+    </div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">The honest caveat the examiner wants to hear</span>
+    This is exact only for a scene <b>at infinity</b>, or when the rays are sampled densely enough. In reality the
+    rotation is sampled at a finite number of frames, so a ray you need falls between two captured rays and you
+    interpolate. The error of that interpolation grows for <b>nearby objects</b> (depth-dependent aliasing) and
+    shows up as ghosting/vertical stretching. Standard remedies: film more frames, or apply a <b>depth
+    correction</b> using a constant/estimated depth to reproject before blending.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Idea.</strong> Do not reconstruct geometry. Treat the video as a sampled <b>light field</b> and
+    render the novel view by <b>ray lookup</b>: for every pixel of the virtual camera, identify the ray it needs
+    and find which frame/column of the recorded video contains that same ray (image-based rendering — concentric
+    mosaics, Shum &amp; He).</p>
+
+    <p><strong>Parametrisation.</strong> Top view, axis at the origin. Camera centre
+    $\mathbf C(\theta)=R(\cos\theta,\sin\theta)$, optical axis radially outward, pixel column at angle $\beta$ from
+    the axis with $|\beta|\le\beta_{\max}$. A 2-D ray is labelled by direction $\psi$ and signed distance from the
+    axis $r=X_x\sin\psi-X_y\cos\psi$.</p>
+
+    <p><strong>Key property.</strong> The ray of pixel $(\theta,\beta)$ has $\psi=\theta+\beta$ and</p>
+    <div class="eq">$$ r=R\cos\theta\sin(\theta+\beta)-R\sin\theta\cos(\theta+\beta)=R\sin\beta $$</div>
+    <p>independent of $\theta$. Hence for a fixed column $\beta$, sweeping $\theta$ over $360°$ yields a full
+    panorama of rays tangent to the circle of radius $R\sin\beta$ — a <b>concentric mosaic</b>
+    $\mathrm{CM}_{R\sin\beta}(\psi)=\text{frame}(\psi-\beta)[\beta]$. Rebinning the video by column gives a family
+    of such mosaics, i.e. a 3-D light field $(\theta,\beta,v)$.</p>
+
+    <p><strong>Rendering algorithm.</strong> For a virtual camera at $\mathbf P$ inside the circle, for each of its
+    pixels:</p>
+    <p>1. compute the ray direction $\psi$ and $r=P_x\sin\psi-P_y\cos\psi$;<br>
+       2. if $|r|>R\sin\beta_{\max}$ the ray was never captured → leave black / extrapolate;<br>
+       3. otherwise $\beta=\arcsin(r/R)$ and $\theta=\psi-\beta$;<br>
+       4. output the pixel of frame $\theta$ at column $\beta$ and the corresponding row, bilinearly interpolated
+       in $(\theta,\beta)$.</p>
+
+    <p><strong>Coverage.</strong> $|r|\le\|\mathbf P\|$ for any ray through $\mathbf P$, so <em>all</em> rays are
+    available whenever $\|\mathbf P\|\le R\sin\beta_{\max}$ — this is exactly why the virtual camera in the figure
+    is drawn inside the circle. Cost is $O(1)$ per output pixel (one $\arcsin$ and one subtraction), independent
+    of scene complexity, with no depth estimation and no correspondence.</p>
+
+    <p><strong>Limitations.</strong> Exact for a scene at infinity; with finite frame count nearby objects suffer
+    depth-dependent aliasing (ghosting, vertical distortion), fixed by denser sampling or a constant/estimated
+    depth correction before interpolation. Vertical parallax is not captured (the arm sweeps a horizontal circle
+    only), so vertical motion of the virtual camera is not supported, and the scene must be static during the
+    spin, since $\theta$ is also time.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Prove $r=R\sin\beta$ without trigonometric identities.</summary>
+    <p>Draw the right triangle: origin $O$, camera centre $C$ (with $|OC|=R$), and the foot $F$ of the
+    perpendicular from $O$ onto the ray. The angle at $C$ between $CO$ and the ray is exactly $\beta$, because the
+    optical axis points radially outward along $OC$ extended and the ray makes angle $\beta$ with it. In the right
+    triangle $OFC$, $|OF| = |OC|\sin(\angle OCF) = R\sin\beta$. It is opposite-over-hypotenuse — nothing more.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why can you not put the virtual camera <em>outside</em> the circle?</summary>
+    <p>A ray through a point $\mathbf P$ can have any distance from the axis up to $\|\mathbf P\|$ — in particular
+    a virtual camera at distance $d>R\sin\beta_{\max}$ will look at directions whose rays pass further from the
+    axis than anything the arm ever captured (they simply never entered the real lens). Those pixels have no data.
+    You can extrapolate or fall back to the nearest available ray, but it is no longer exact.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why $\theta=\psi-\beta$ and not $\psi+\beta$?</summary>
+    <p>Because $\psi=\theta+\beta$ by construction: the ray direction is the camera heading plus the pixel's offset
+    from the optical axis. Inverting gives $\theta=\psi-\beta$. Also note $\arcsin$ returns $\beta\in[-\pi/2,\pi/2]$,
+    which selects the intersection of the ray with the circle <em>ahead</em> of the virtual point — the other
+    algebraic solution $\pi-\beta$ would be a camera looking backwards along its own arm, which never occurs.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What is the role of the rows (vertical direction)?</summary>
+    <p>The construction is purely horizontal: the arm sweeps a circle in one plane, so the light field is 3-D,
+    $(\theta,\beta,v)$, where $v$ is the row. A virtual ray at height $v$ is fetched from the same row. That means
+    <b>no vertical parallax</b>: you cannot move the virtual camera up or down, and objects at very different
+    heights are rendered with the horizontal parallax of their row only. This is the price of using a single
+    rotating arm instead of a full 4-D light-field capture.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How many frames do you need?</summary>
+    <p>By the light-field sampling argument, enough that the angular gap between consecutive captured rays keeps
+    the disparity of the <em>nearest</em> scene point below about one pixel. Roughly, with nearest depth
+    $Z_{\min}$, focal $f$, and $N$ frames over $360°$, you need $\;\frac{2\pi R}{N}\cdot\frac{f}{Z_{\min}}\lesssim 1$
+    pixel, i.e. $N \gtrsim 2\pi R f/Z_{\min}$. Fewer frames ⇒ visible vertical banding and ghosting on near
+    objects; that is exactly the aliasing that depth correction buys you back.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>the idea</td><td>look rays up, don't rebuild the scene</td></tr>
+      <tr><td>ray label</td><td>direction $\psi$ + distance from axis $r$</td></tr>
+      <tr><td>the theorem</td><td>$r=R\sin\beta$ — independent of $\theta$</td></tr>
+      <tr><td>consequence</td><td>column $\beta$ over one spin = a $360°$ panorama tangent to radius $R\sin\beta$</td></tr>
+      <tr><td>the mosaic</td><td>$\mathrm{CM}_{R\sin\beta}(\psi)=\text{frame}(\psi-\beta)[\beta]$</td></tr>
+      <tr><td>render</td><td>$r=P_x\sin\psi-P_y\cos\psi$; $\beta=\arcsin(r/R)$; $\theta=\psi-\beta$</td></tr>
+      <tr><td>valid region</td><td>$\|\mathbf P\|\le R\sin\beta_{\max}$</td></tr>
+      <tr><td>cost</td><td>$O(1)$ per pixel, no depth, no correspondence</td></tr>
+      <tr><td>limits</td><td>no vertical parallax; depth aliasing on near objects; static scene</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_3_inpainting_bds.html"><span class="dir">Previous</span><span class="ttl">Q3 · BDS inpainting</span></a>
+    <a class="next" href="e20_5_association_matrix.html"><span class="dir">Next question</span><span class="ttl">Q5 · Association matrix ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO 1 — one column, one ring
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvA'), g=cv.getContext('2d'), ro=document.getElementById('Aro');
+  const eT=document.getElementById('At'), eB=document.getElementById('Ab'), eF=document.getElementById('Af');
+  const vT=document.getElementById('vAt'), vB=document.getElementById('vAb'), vF=document.getElementById('vAf');
+  const CX=300, CY=165, R=115;
+  const D=Math.PI/180;
+  let drag=false;
+
+  function draw(){
+    const th=(+eT.value)*D, be=(+eB.value)*D, bm=(+eF.value)*D;
+    vT.textContent=(+eT.value)+'°'; vB.textContent=(+eB.value)+'°'; vF.textContent=(+eF.value)+'°';
+    g.clearRect(0,0,cv.width,cv.height);
+    g.font='12px system-ui';
+
+    // arm circle
+    g.strokeStyle='#2c3650'; g.lineWidth=2;
+    g.beginPath(); g.arc(CX,CY,R,0,7); g.stroke();
+    // the ring r = R sin beta
+    const r=R*Math.sin(be);
+    g.strokeStyle='#c792ea'; g.setLineDash([4,4]); g.lineWidth=1.6;
+    g.beginPath(); g.arc(CX,CY,Math.abs(r),0,7); g.stroke(); g.setLineDash([]);
+    // available band
+    g.strokeStyle='rgba(127,219,202,.35)'; g.lineWidth=1;
+    g.beginPath(); g.arc(CX,CY,R*Math.sin(bm),0,7); g.stroke();
+    g.fillStyle='rgba(127,219,202,.07)'; g.beginPath(); g.arc(CX,CY,R*Math.sin(bm),0,7); g.fill();
+
+    // ghost rays for other theta, same beta
+    for(let k=0;k<24;k++){
+      const t=k/24*2*Math.PI, cx=CX+R*Math.cos(t), cy=CY-R*Math.sin(t), psi=t+be;
+      g.strokeStyle='rgba(127,219,202,.16)'; g.lineWidth=1;
+      g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+330*Math.cos(psi),cy-330*Math.sin(psi)); g.stroke();
+    }
+    // the arm + camera
+    const cx=CX+R*Math.cos(th), cy=CY-R*Math.sin(th);
+    g.strokeStyle='#9fb0cc'; g.lineWidth=2.5;
+    g.beginPath(); g.moveTo(CX,CY); g.lineTo(cx,cy); g.stroke();
+    g.fillStyle='#9fb0cc'; g.beginPath(); g.arc(CX,CY,4,0,7); g.fill();
+    // FOV wedge
+    g.fillStyle='rgba(159,176,204,.10)';
+    g.beginPath(); g.moveTo(cx,cy);
+    for(let a=-bm;a<=bm;a+=0.05){ const p=th+a; g.lineTo(cx+300*Math.cos(p),cy-300*Math.sin(p)); }
+    g.closePath(); g.fill();
+    // the highlighted ray
+    const psi=th+be;
+    g.strokeStyle='#7fdbca'; g.lineWidth=2.6;
+    g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+340*Math.cos(psi),cy-340*Math.sin(psi)); g.stroke();
+    // foot of perpendicular
+    const fx=CX + r*Math.sin(psi), fy=CY + r*Math.cos(psi);
+    g.strokeStyle='#c792ea'; g.setLineDash([3,3]); g.lineWidth=1.4;
+    g.beginPath(); g.moveTo(CX,CY); g.lineTo(fx,fy); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#c792ea'; g.beginPath(); g.arc(fx,fy,4,0,7); g.fill();
+    g.fillStyle='#7fdbca'; g.beginPath(); g.arc(cx,cy,6,0,7); g.fill();
+
+    g.fillStyle='#9fb0cc';
+    g.fillText('R',CX+R*Math.cos(th)/2-14,CY-R*Math.sin(th)/2-6);
+    g.fillStyle='#c792ea'; g.fillText('r = R sin β',fx+8,fy+4);
+
+    // side text
+    const TX=640;
+    g.fillStyle='#9fb0cc'; g.font='bold 13px system-ui'; g.fillText('what stays fixed',TX,50); g.font='12px system-ui';
+    const rows=[['θ  (arm angle)',(+eT.value)+'°','#f07178'],
+                ['β  (pixel column)',(+eB.value)+'°','#7fdbca'],
+                ['ψ = θ + β  (ray dir.)',((+eT.value + +eB.value)%360+360)%360+'°','#f07178'],
+                ['r = R sin β',(r/R).toFixed(3)+' · R','#c792ea']];
+    rows.forEach(([k,v,c],i)=>{ g.fillStyle='#6b7a99'; g.fillText(k,TX,80+i*24);
+      g.fillStyle=c; g.font='bold 12px system-ui'; g.fillText(v,TX+150,80+i*24); g.font='12px system-ui'; });
+    g.fillStyle='#6b7a99';
+    g.fillText('spin θ → only ψ changes.',TX,200);
+    g.fillText('r never moves. That ring is a',TX,218);
+    g.fillText('complete 360° panorama.',TX,236);
+
+    ro.innerHTML='θ = <b>'+(+eT.value)+'°</b>, β = <b>'+(+eB.value)+'°</b> → ray direction ψ = θ+β = <b>'+
+      (((+eT.value + +eB.value)%360+360)%360)+'°</b>, distance from axis r = R·sin β = <b>'+(r/R).toFixed(3)+
+      '·R</b>. Drag θ across the whole range: the ray swings all the way round but <b>always stays tangent to the '+
+      'same purple ring</b>. That is the entire theorem.';
+  }
+  cv.onmousedown=e=>{drag=true;cv.onmousemove(e);};
+  window.addEventListener('mouseup',()=>drag=false);
+  cv.onmousemove=e=>{ if(!drag) return;
+    const rct=cv.getBoundingClientRect();
+    const mx=(e.clientX-rct.left)*cv.width/rct.width, my=(e.clientY-rct.top)*cv.height/rct.height;
+    let a=Math.atan2(CY-my,mx-CX)/D; if(a<0)a+=360; eT.value=Math.round(a); draw(); };
+  [eT,eB,eF].forEach(e=>e.oninput=draw);
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — route every ray of a virtual camera
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvB'), g=cv.getContext('2d'), ro=document.getElementById('Bro');
+  const eH=document.getElementById('Bh'), eF=document.getElementById('Bf'), eM=document.getElementById('Bm');
+  const vH=document.getElementById('vBh'), vF=document.getElementById('vBf'), vM=document.getElementById('vBm');
+  const CX=330, CY=200, R=155, D=Math.PI/180;
+  let P={x:-40,y:25}, drag=false;
+
+  function draw(){
+    const head=(+eH.value)*D, fov=(+eF.value)*D, bm=(+eM.value)*D;
+    vH.textContent=(+eH.value)+'°'; vF.textContent=(+eF.value)+'°'; vM.textContent=(+eM.value)+'°';
+    g.clearRect(0,0,cv.width,cv.height); g.font='12px system-ui';
+
+    // renderable disc
+    const Rrend=R*Math.sin(bm);
+    g.fillStyle='rgba(127,219,202,.08)'; g.beginPath(); g.arc(CX,CY,Rrend,0,7); g.fill();
+    g.strokeStyle='rgba(127,219,202,.5)'; g.setLineDash([5,4]); g.lineWidth=1.4;
+    g.beginPath(); g.arc(CX,CY,Rrend,0,7); g.stroke(); g.setLineDash([]);
+    // arm circle
+    g.strokeStyle='#2c3650'; g.lineWidth=2; g.beginPath(); g.arc(CX,CY,R,0,7); g.stroke();
+    g.fillStyle='#9fb0cc'; g.beginPath(); g.arc(CX,CY,4,0,7); g.fill();
+
+    const px=CX+P.x, py=CY-P.y;
+    let ok=0,bad=0;
+    const NR=17;
+    for(let i=0;i<NR;i++){
+      const phi=-fov+2*fov*i/(NR-1);
+      const psi=head+phi;
+      const r = P.x*Math.sin(psi) - P.y*Math.cos(psi);
+      const avail = Math.abs(r) <= R*Math.sin(bm)+1e-9;
+      if(avail){ok++;}else{bad++;}
+      g.strokeStyle = avail ? 'rgba(127,219,202,.55)' : 'rgba(240,113,120,.65)';
+      g.lineWidth=1.4;
+      g.beginPath(); g.moveTo(px,py); g.lineTo(px+420*Math.cos(psi),py-420*Math.sin(psi)); g.stroke();
+      if(avail){
+        const be=Math.asin(Math.max(-1,Math.min(1,r/R))), th=psi-be;
+        const sx=CX+R*Math.cos(th), sy=CY-R*Math.sin(th);
+        g.fillStyle='#7fdbca'; g.beginPath(); g.arc(sx,sy,4.2,0,7); g.fill();
+        if(i===((NR-1)>>1)){                 // annotate the centre ray
+          g.strokeStyle='#ffcb6b'; g.lineWidth=2.4;
+          g.beginPath(); g.moveTo(px,py); g.lineTo(sx,sy); g.stroke();
+          g.fillStyle='#ffcb6b'; g.beginPath(); g.arc(sx,sy,6,0,7); g.fill();
+          g.fillText('θ = ψ−β = '+((th/D%360+360)%360).toFixed(0)+'°', sx+9, sy-8);
+          const fx=CX+r*Math.sin(psi), fy=CY+r*Math.cos(psi);
+          g.strokeStyle='#c792ea'; g.setLineDash([3,3]); g.lineWidth=1.3;
+          g.beginPath(); g.moveTo(CX,CY); g.lineTo(fx,fy); g.stroke(); g.setLineDash([]);
+          g.fillStyle='#c792ea'; g.fillText('r',(CX+fx)/2+5,(CY+fy)/2);
+        }
+      }
+    }
+    // the virtual camera
+    g.fillStyle='#c792ea';
+    g.save(); g.translate(px,py); g.rotate(-head);
+    g.beginPath(); g.moveTo(13,0); g.lineTo(-9,-9); g.lineTo(-9,9); g.closePath(); g.fill(); g.restore();
+    g.fillStyle='#c792ea'; g.fillText('virtual camera',px+14,py+18);
+
+    // legend
+    const TX=700;
+    g.fillStyle='#9fb0cc'; g.font='bold 13px system-ui'; g.fillText('per-ray lookup',TX,44); g.font='12px system-ui';
+    const L=[['1. ψ = heading + φ','#6b7a99'],
+             ['2. r = Pₓ sinψ − P_y cosψ','#c792ea'],
+             ['3. |r| ≤ R sin β_max ?','#7fdbca'],
+             ['4. β = arcsin(r/R)','#7fdbca'],
+             ['5. θ = ψ − β','#ffcb6b'],
+             ['6. read frame θ, column β','#9fb0cc']];
+    L.forEach(([s,c],i)=>{ g.fillStyle=c; g.fillText(s,TX,72+i*22); });
+
+    const d=Math.hypot(P.x,P.y);
+    ro.innerHTML='virtual camera at ‖P‖ = <b>'+(d/R).toFixed(3)+'·R</b>, renderable radius = R·sin β_max = <b>'+
+      (Math.sin(bm)).toFixed(3)+'·R</b> &nbsp;·&nbsp; rays available: <b>'+ok+'/'+(ok+bad)+'</b>.<br>'+
+      (bad===0
+        ? '<b style="color:#7fdbca">Every ray exists in the footage.</b> Each teal dot is the frame θ that recorded that ray. Rendering is exact (up to interpolation).'
+        : '<b style="color:#f07178">'+bad+' rays were never captured</b> — they pass further from the axis than R·sin β_max. '+
+          'Move the camera back inside the teal disc, or widen the real camera\'s β_max.');
+  }
+  function pos(e){ const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height}; }
+  cv.onmousedown=e=>{ const m=pos(e); if(Math.hypot(m.x-(CX+P.x),m.y-(CY-P.y))<28) drag=true; };
+  cv.onmousemove=e=>{ if(!drag) return; const m=pos(e);
+    let dx=m.x-CX, dy=CY-m.y; const L=Math.hypot(dx,dy);
+    if(L>R-6){ dx*= (R-6)/L; dy*=(R-6)/L; }
+    P={x:dx,y:dy}; draw(); };
+  window.addEventListener('mouseup',()=>drag=false);
+  [eH,eF,eM].forEach(e=>e.oninput=draw);
+  draw();
+})();
+</script>
+
+</body>
+</html>

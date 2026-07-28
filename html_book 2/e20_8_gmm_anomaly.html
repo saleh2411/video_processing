@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q8 — Listening for a machine about to break</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q8</b> · Anomaly detection with a GMM</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch08_background_subtraction.html">‹ Chapter 8</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_1_cycle_consistency.html">Q1 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapters 8 &amp; 6 · Exam 8/7/2020, question 8 · 12 points</div>
+    <h1>Anomaly = “my model of normal gives this a terrible score”</h1>
+    <p class="lede">You are handed the model for free: a 3-component GMM. So the detector is one line —
+    threshold the log-likelihood. The marks are in what you wrap around it: how you pick the threshold, why you
+    must not alarm on a single second, and the fact that this is <em>literally</em> background subtraction with
+    sound instead of pixels.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 8 · 12 points · ANOMALY DETECTION</span>
+    <p>Machines in a factory make sound. This sound changes if the machine is about to break. It is therefore
+    useful to record the sound of the machine and give a warning in case an abnormal sound is detected.</p>
+    <p style="margin-bottom:0">Your goal is to design such a system. Assume a microphone records the sound of the
+    machine and produces a feature vector $X_t \in \mathbb{R}^d$ every second. You know that the signal $X$ over
+    time fits a Gaussian Mixture Model with $k=3$ Gaussians.
+    <strong>Suggest a method to detect anomalies in the sound of the machine.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    <b>Train</b> a $k=3$ GMM on healthy-machine features by EM (init with k-means, regularise
+    $\Sigma_k+\varepsilon I$).
+    <br><b>Score</b> each new second by the log-likelihood under that model:
+    $$\ell(X_t)=\log\sum_{k=1}^{3}\pi_k\,\mathcal N\!\big(X_t;\mu_k,\Sigma_k\big)$$
+    <br><b>Decide</b>: anomaly if $\ell(X_t)<\tau$, with $\tau$ = the 1st percentile of $\ell$ on the healthy
+    training data (⇒ a 1% false-alarm rate <em>by construction</em>).
+    <br><b>Alarm</b> only when $M$ of the last $L$ seconds are flagged (e.g. 5 of 10) — one bad second is noise.
+    <br><b>Adapt</b> the GMM online exactly like Stauffer–Grimson background subtraction, but slowly, and freeze it
+    while an alarm is active.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">The dad who knows what the car sounds like</span>
+    <p>Your dad drives the same car every day for six years. He is not a mechanic. He cannot tell you what a
+    camshaft is. But one morning he turns the key and says, before pulling out of the driveway:
+    <em>“something's wrong.”</em> And he's right.</p>
+    <p>How did he do that? He was not comparing the sound to a list of broken-car sounds. He has never heard this
+    particular fault before in his life. What he has is <b>six years of what normal sounds like</b>, and this did
+    not fit.</p>
+    <p>That is the whole design. <strong>You never model the fault. You model normal, and complain about
+    everything else.</strong> This matters practically: you have thousands of hours of a healthy machine and zero
+    recordings of the failure you are trying to catch, because if you had them, the machine would already be
+    broken.</p>
+    <p>Now, why <b>three</b> Gaussians and not one? Because “normal” is not one thing. The machine idles, it runs
+    under load, it spins up. Three different normal noises. One Gaussian would have to stretch over all three and
+    would then also happily cover the empty space between them — where the interesting broken sounds live. Three
+    blobs describe three normals and leave the gaps <em>correctly empty</em>.</p>
+    <p>And why not alarm the instant one second sounds odd? Because someone drops a spanner. A truck goes past.
+    One weird second is life; ten weird seconds out of the last twenty is a machine.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">You have seen this exact algorithm before</span>
+    Chapter 8, background subtraction: each pixel's colour over time is modelled as a mixture of Gaussians; a new
+    colour that matches a high-weight component is <b>background</b>, one that matches nothing is
+    <b>foreground</b>. Swap “pixel colour” for “sound feature” and “foreground” for “anomaly” and it is the same
+    system, including the online update rules. Saying this in the exam is worth marks.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · The model and the score</h2>
+
+  <div class="explain">
+    <span class="explain-label">Step 1 — fit the model of “normal”</span>
+    <p>Collect $T$ feature vectors from a period of certified-healthy operation and fit</p>
+  </div>
+
+  <div class="eq">$$ p(X)=\sum_{k=1}^{3}\pi_k\,\mathcal N(X;\mu_k,\Sigma_k),\qquad
+     \mathcal N(X;\mu,\Sigma)=\frac{1}{(2\pi)^{d/2}|\Sigma|^{1/2}}
+     e^{-\frac12 (X-\mu)^{\!\top}\Sigma^{-1}(X-\mu)},\qquad \sum_k\pi_k=1 $$</div>
+
+  <div class="explain">
+    <p>by <b>EM</b>, alternating until the log-likelihood converges:</p>
+  </div>
+
+  <div class="eq">$$
+  \text{E: } \gamma_{tk}=\frac{\pi_k\mathcal N(X_t;\mu_k,\Sigma_k)}{\sum_{j}\pi_j\mathcal N(X_t;\mu_j,\Sigma_j)}
+  \qquad
+  \text{M: } \pi_k=\frac{1}{T}\sum_t\gamma_{tk},\quad
+  \mu_k=\frac{\sum_t\gamma_{tk}X_t}{\sum_t\gamma_{tk}},\quad
+  \Sigma_k=\frac{\sum_t\gamma_{tk}(X_t-\mu_k)(X_t-\mu_k)^{\!\top}}{\sum_t\gamma_{tk}}
+  $$</div>
+
+  <div class="explain">
+    <p>Initialise with k-means (EM is non-convex — same story as everywhere else in this course), and regularise
+    $\Sigma_k \leftarrow \Sigma_k+\varepsilon I$ so a component cannot collapse onto a single point and send the
+    likelihood to infinity. If $d$ is large relative to $T$, use diagonal covariances.</p>
+
+    <h4 class="mini">Step 2 — score a new second</h4>
+    <p>The anomaly score is just the model's own opinion of the sample. Use logs — the raw density underflows:</p>
+  </div>
+
+  <div class="eq">$$ \ell(X_t)\;=\;\log\sum_{k=1}^{3}\pi_k\,\mathcal N(X_t;\mu_k,\Sigma_k)
+     \;=\;\operatorname*{logsumexp}_k\Big[\log\pi_k-\tfrac{d}{2}\log 2\pi-\tfrac12\log|\Sigma_k|
+     -\tfrac12 d^2_k(X_t)\Big] $$</div>
+
+  <div class="eq">$$ d^2_k(X)=(X-\mu_k)^{\!\top}\Sigma_k^{-1}(X-\mu_k) \quad\text{(squared Mahalanobis distance to component $k$)} $$</div>
+
+  <div class="explain">
+    <p>Two equivalent ways to declare an anomaly, both acceptable:</p>
+    <ul>
+      <li><b>Likelihood test (preferred):</b> anomaly $\iff \ell(X_t)<\tau$.</li>
+      <li><b>Gate test:</b> anomaly $\iff \min_k d^2_k(X_t) > \chi^2_{d,\,1-\alpha}$ — “it is far from
+      <em>every</em> component, in units of that component's own spread”. Simpler to explain, and it is the same
+      $\chi^2$ gate as the tracking question, but it ignores the mixture weights $\pi_k$.</li>
+    </ul>
+  </div>
+
+  <div class="callout key"><span class="lbl">Why Mahalanobis and not Euclidean — again</span>
+    A component describing a loud, variable operating mode is a big fat ellipsoid; one describing a steady idle is
+    a tight one. A deviation of “2 units” is normal for the first and alarming for the second. $\Sigma_k^{-1}$ is
+    what converts physical units into <em>surprise</em>. And the $|\Sigma_k|^{-1/2}$ factor makes the components
+    comparable to each other, exactly as in Q5.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the model of normal, and the decision boundary</h4><span class="tag">drag the test point</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A 2-D slice of feature space (real $d$ is bigger; the picture is the
+      same). Grey dots = healthy training seconds. The GMM is fitted <b>live by EM</b>. Background shading = the
+      log-likelihood $\ell$; the teal contour is the threshold $\tau$. Drag the <span
+      style="color:#f07178"><b>red</b></span> test point around.</p>
+      <canvas id="cvA" width="900" height="380"></canvas>
+      <div class="controls">
+        <div class="control"><label>false-alarm rate used to set τ <span class="val" id="vAa">1.0</span>%</label><input type="range" id="Aa" min="1" max="200" step="1" value="10"></div>
+        <div class="control"><label>number of components k <span class="val" id="vAk">3</span></label><input type="range" id="Ak" min="1" max="5" step="1" value="3"></div>
+      </div>
+      <div class="readout" id="Aro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Set k to 1 and look at what breaks</span>
+    With a single Gaussian the model stretches across all three operating modes, and the <b>empty middle</b> gets a
+    high likelihood — a sound that no healthy machine ever made is declared normal. That is a
+    <em>false negative</em>, the expensive kind. Three components leave the gaps empty, which is precisely why the
+    question tells you $k=3$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The three things that turn a score into a system</h2>
+
+  <div class="explain">
+    <h4 class="mini">a. Choosing $\tau$ — do not guess it</h4>
+    <p>You have no anomalous data, so you cannot optimise a detection rate. But you <em>can</em> control the false
+    alarm rate directly: compute $\ell$ on a held-out slice of healthy data, and set</p>
+  </div>
+
+  <div class="eq">$$ \tau \;=\; \text{the }\alpha\text{-quantile of }\{\ell(X_t)\}_{\text{healthy}}
+     \qquad(\alpha = 1\%\ \Rightarrow\ \text{1 false flag per 100 seconds by construction}) $$</div>
+
+  <div class="explain">
+    <p>Use a held-out slice, not the training data — the model was fitted to maximise the likelihood of the
+    training set, so its $\ell$ values are optimistically high and $\tau$ would come out too low. If you ever do
+    obtain labelled faults, tune $\tau$ on a ROC curve at the operating point you care about (in a factory, a
+    missed failure costs far more than a false alarm, so you sit high on the curve).</p>
+
+    <h4 class="mini">b. Temporal integration — never alarm on one second</h4>
+    <p>At $\alpha=1\%$ you get a spurious flag every ~100 s, which is unusable. Require persistence:</p>
+    <ul>
+      <li><b>$M$-of-$L$ rule:</b> alarm iff at least $M$ of the last $L$ seconds are flagged. If flags were
+      independent, the false-alarm probability drops from $\alpha$ to
+      $\sum_{i\ge M}\binom{L}{i}\alpha^i(1-\alpha)^{L-i}$ — e.g. $\alpha=1\%$, $M=5$, $L=10$ gives about
+      $2\times10^{-7}$ per window, while a genuine fault (which persists) still trips it in 5 seconds.</li>
+      <li><b>Sliding-window score:</b> alarm on $\bar\ell_W=\frac1W\sum_{s=t-W+1}^{t}\ell(X_s)<\tau_W$ — smoother,
+      and it aggregates many <em>slightly</em> odd seconds that no single-second test would catch.</li>
+      <li><b>CUSUM:</b> $g_t=\max(0,\,g_{t-1}+(\tau-\ell(X_t)))$, alarm when $g_t>h$. This is the optimal
+      sequential change detector, and it is the right tool for a <em>slow drift</em> — a bearing degrading over
+      hours — which the other two will miss.</li>
+    </ul>
+
+    <h4 class="mini">c. Online adaptation — the Stauffer–Grimson update</h4>
+    <p>Machines drift: temperature, lubrication, load schedule. A frozen model will slowly produce more and more
+    false alarms. Update the mixture online, one second at a time, exactly as in background subtraction:</p>
+  </div>
+
+  <div class="eq">$$
+  \begin{aligned}
+  &\text{match: } k^\star=\arg\min_k d^2_k(X_t)\ \text{ if } d_{k^\star}\le 2.5\sigma \text{ (else: no match)}\\[4pt]
+  &\omega_k \leftarrow (1-\alpha_{\text{lr}})\,\omega_k + \alpha_{\text{lr}}\,\mathbb 1[k=k^\star]\qquad\text{(all }k)\\
+  &\mu_{k^\star} \leftarrow (1-\rho)\mu_{k^\star}+\rho X_t,\qquad
+   \Sigma_{k^\star}\leftarrow(1-\rho)\Sigma_{k^\star}+\rho\,(X_t-\mu_{k^\star})(X_t-\mu_{k^\star})^{\!\top},\\
+  &\rho=\alpha_{\text{lr}}\,\mathcal N(X_t;\mu_{k^\star},\Sigma_{k^\star})\\[4pt]
+  &\text{no match} \Rightarrow \text{replace the lowest-}\omega\text{ component by } (\omega_{\min},\,\mu=X_t,\,\Sigma=\sigma_0^2I)
+  \end{aligned}
+  $$</div>
+
+  <div class="callout warn"><span class="lbl">The trap in adaptation — say this and you get the mark</span>
+    If the model adapts freely, a <b>slowly worsening fault is absorbed into “normal”</b> and you never alarm. The
+    fix is the same as in background subtraction, where a car that parks eventually becomes background: use a
+    <em>slow</em> learning rate $\alpha_{\text{lr}}$ (a time constant of hours, not seconds), <b>freeze the update
+    while an alarm is active</b>, and keep a frozen reference model from commissioning to compare against. A
+    component whose weight $\omega_k$ is growing but which did not exist at commissioning is itself an alarm.
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — a shift running, with a fault injected</h4><span class="tag">press Run</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Top: the anomaly score $-\ell(X_t)$ second by second, with the
+      threshold. Bottom: raw flags, and the $M$-of-$L$ alarm. The machine develops a fault at the marked second.
+      Tune $M$, $L$ and $\alpha$ and watch the trade-off between false alarms and detection delay.</p>
+      <canvas id="cvB" width="900" height="330"></canvas>
+      <div class="controls">
+        <div class="control"><label>false-alarm rate α <span class="val" id="vBa">1.0</span>%</label><input type="range" id="Ba" min="1" max="150" step="1" value="10"></div>
+        <div class="control"><label>M (flags required) <span class="val" id="vBm">5</span></label><input type="range" id="Bm" min="1" max="15" step="1" value="5"></div>
+        <div class="control"><label>L (window) <span class="val" id="vBl">10</span></label><input type="range" id="Bl" min="1" max="30" step="1" value="10"></div>
+      </div>
+      <div class="controls"><button class="chk" id="Bgo">▶ Run / reset</button></div>
+      <div class="readout" id="Bro">Press <b>Run</b>.</div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Principle.</strong> One-class / novelty detection: faults are unseen and unlabelled, so model only
+    the <em>normal</em> sound and flag whatever the model finds improbable. The given GMM is exactly that model of
+    normal; $k=3$ because the machine has several normal operating regimes (idle, load, spin-up), and a single
+    Gaussian would smear over them and assign high likelihood to the empty space between them.</p>
+
+    <p><strong>Training.</strong> Record features $X_t\in\mathbb R^d$ during certified-healthy operation and fit
+    $p(X)=\sum_{k=1}^3\pi_k\mathcal N(X;\mu_k,\Sigma_k)$ by <b>EM</b>:
+    E-step $\gamma_{tk}=\pi_k\mathcal N(X_t;\mu_k,\Sigma_k)/\sum_j\pi_j\mathcal N(X_t;\mu_j,\Sigma_j)$;
+    M-step $\pi_k=\frac1T\sum_t\gamma_{tk}$, $\mu_k=\sum_t\gamma_{tk}X_t/\sum_t\gamma_{tk}$,
+    $\Sigma_k=\sum_t\gamma_{tk}(X_t-\mu_k)(X_t-\mu_k)^{\!\top}/\sum_t\gamma_{tk}$. Initialise with k-means, and
+    regularise $\Sigma_k+\varepsilon I$ (diagonal covariances if $d$ is large) to prevent a component collapsing
+    onto one point.</p>
+
+    <p><strong>Detection.</strong> For each new second compute the log-likelihood</p>
+    <div class="eq">$$ \ell(X_t)=\log\sum_{k=1}^{3}\pi_k\,\mathcal N(X_t;\mu_k,\Sigma_k) $$</div>
+    <p>(evaluated with log-sum-exp) and declare the second <em>abnormal</em> if $\ell(X_t)<\tau$. An equivalent
+    formulation is the $\chi^2$ gate on the Mahalanobis distance to the closest component:
+    $\min_k (X_t-\mu_k)^{\!\top}\Sigma_k^{-1}(X_t-\mu_k) > \chi^2_{d,1-\alpha}$ — “far from every mode, measured
+    in units of that mode's own spread”.</p>
+
+    <p><strong>Choosing the threshold.</strong> No anomalous data are available, but the false-alarm rate can be
+    fixed directly: evaluate $\ell$ on a <em>held-out</em> healthy segment and set $\tau$ to its $\alpha$-quantile
+    (e.g. $\alpha=1\%$). If labelled faults ever become available, place $\tau$ on the ROC curve at the desired
+    operating point; in a factory the cost of a miss $\gg$ cost of a false alarm.</p>
+
+    <p><strong>Temporal integration (essential).</strong> Do not alarm on one second. Raise a warning when $M$ of
+    the last $L$ seconds are flagged (e.g. 5 of 10), which reduces the per-window false alarm probability to
+    $\sum_{i\ge M}\binom{L}{i}\alpha^i(1-\alpha)^{L-i}$ while a persistent fault still trips it in seconds.
+    Alternatively threshold the windowed mean $\bar\ell_W$, or run CUSUM
+    $g_t=\max(0,g_{t-1}+\tau-\ell(X_t))$, which is the right detector for a slow degradation.</p>
+
+    <p><strong>On-line adaptation.</strong> To follow slow drift (temperature, wear), update the mixture per
+    sample as in Stauffer–Grimson background subtraction: find the component within $2.5\sigma$; update
+    $\omega_k\leftarrow(1-\alpha_{lr})\omega_k+\alpha_{lr}\mathbb 1[k=k^\star]$,
+    $\mu_{k^\star}\leftarrow(1-\rho)\mu_{k^\star}+\rho X_t$,
+    $\Sigma_{k^\star}\leftarrow(1-\rho)\Sigma_{k^\star}+\rho(X_t-\mu_{k^\star})(X_t-\mu_{k^\star})^{\!\top}$ with
+    $\rho=\alpha_{lr}\mathcal N(X_t;\mu_{k^\star},\Sigma_{k^\star})$; if nothing matches, replace the
+    lowest-weight component with $(\mu=X_t,\ \Sigma=\sigma_0^2I,\ \omega=\omega_{\min})$ — and that "no match"
+    event is itself the anomaly signal. <b>Caveat:</b> a slowly worsening fault would be learned as normal, so use
+    a very slow $\alpha_{lr}$, freeze adaptation while an alarm is active, and keep the commissioning-time model
+    as a frozen reference.</p>
+
+    <p><strong>Practical notes.</strong> Features: log-mel band energies or MFCCs plus their deltas, standardised
+    (whitened) so one loud band does not dominate the Mahalanobis distance. Validate with ROC/AUC on any labelled
+    events; if $k$ were not given, choose it by BIC. Localise the fault by reporting <em>which</em> feature
+    dimensions contribute most to $d^2_{k^\star}$, which turns the alarm into a diagnosis.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why not train a classifier: “normal” vs “broken”?</summary>
+    <p>Because you have no examples of the second class — and by construction you cannot get them without breaking
+    machines. Even if you broke ten, the next failure mode will be one you never sampled, and a discriminative
+    classifier is only ever reliable inside the region it was trained on. Density estimation of the normal class
+    generalises to <em>every</em> deviation, including ones nobody anticipated. This is the defining reason
+    anomaly detection is one-class.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. What exactly goes wrong with $k=1$? And with $k=20$?</summary>
+    <p>$k=1$: the single Gaussian must cover all three operating modes, so it becomes wide and centred on the
+    empty region between them — abnormal sounds that live in that gap receive a <em>high</em> likelihood and are
+    missed. $k=20$: the mixture starts fitting individual training seconds, the covariances shrink, and the model
+    memorises noise; then normal-but-unseen variation falls off the model and you drown in false alarms. This is
+    the bias–variance trade-off in density estimation, and the usual instrument is BIC:
+    $\text{BIC}=-2\ell_{\max}+p\log T$.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Why is the log-likelihood the right score, rather than the distance to the nearest mean?</summary>
+    <p>Three reasons, all visible in Demo 1. (i) It uses $\Sigma_k$, so it measures deviation relative to each
+    mode's own spread instead of in raw units. (ii) It uses $\pi_k$, so being near a rare mode is less reassuring
+    than being near a common one. (iii) It is a genuine probability, so the threshold has a meaning — a quantile
+    of $\ell$ is a calibrated false-alarm rate, whereas a distance threshold is an arbitrary number you would have
+    to tune blindly.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Give the false-alarm arithmetic for the $M$-of-$L$ rule.</summary>
+    <p>If a single second is flagged with probability $\alpha$ and flags are independent, a window of $L$ seconds
+    contains $\ge M$ flags with probability $\sum_{i=M}^{L}\binom{L}{i}\alpha^i(1-\alpha)^{L-i}$. For
+    $\alpha=0.01$, $M=5$, $L=10$: $\approx\binom{10}{5}10^{-10}\approx2.5\times10^{-8}$ — one spurious alarm per
+    ~500 days instead of one per 100 seconds. Independence is optimistic (real background noise is correlated), so
+    measure the empirical rate on healthy data rather than trusting the formula; but the order-of-magnitude
+    argument is what justifies the design.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How do you detect a fault that is <em>slow</em>?</summary>
+    <p>A gradual degradation may never push any single second past $\tau$, yet shifts the whole distribution.
+    Options: (i) CUSUM on $(\tau-\ell)$, which accumulates small consistent evidence and is the optimal sequential
+    change detector; (ii) compare the distribution of the last hour against the commissioning distribution with a
+    two-sample statistic (KL divergence between fitted GMMs, or a KS test per feature); (iii) monitor the model
+    parameters themselves — if the online update is drifting $\mu_k$ steadily in one direction, that trend is the
+    signal, even while every individual second still looks normal.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Spell out the mapping to background subtraction.</summary>
+    <p>Background subtraction: per pixel, model the history of colours as a GMM; sort components by $\omega/\sigma$
+    (frequent and stable first); take the top components summing to $T$ of the weight as "background"; a new pixel
+    matching one of them within $2.5\sigma$ is background, otherwise foreground; update online with the
+    $\omega,\mu,\sigma$ rules. Here: per machine, model the history of sound features as a GMM; components are the
+    normal operating modes; a new second matching one of them is normal, otherwise an anomaly; same online update.
+    Even the failure modes map across — a parked car absorbed into the background is a slow fault absorbed into
+    "normal".</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>the principle</td><td>model normal only; flag the improbable (one-class)</td></tr>
+      <tr><td>why $k=3$</td><td>three normal operating regimes; one Gaussian fills the gaps</td></tr>
+      <tr><td>fit</td><td>EM, k-means init, $\Sigma+\varepsilon I$</td></tr>
+      <tr><td>score</td><td>$\ell(X_t)=\log\sum_k\pi_k\mathcal N(X_t;\mu_k,\Sigma_k)$, via log-sum-exp</td></tr>
+      <tr><td>alt. score</td><td>$\min_k d^2_k>\chi^2_{d,1-\alpha}$ (ignores $\pi_k$)</td></tr>
+      <tr><td>threshold</td><td>$\alpha$-quantile of $\ell$ on <em>held-out</em> healthy data</td></tr>
+      <tr><td>alarm</td><td>$M$-of-$L$, or windowed mean, or CUSUM for slow drift</td></tr>
+      <tr><td>adapt</td><td>Stauffer–Grimson update; slow $\alpha_{lr}$; freeze during alarms</td></tr>
+      <tr><td>the trap</td><td>adaptation swallows a gradual fault</td></tr>
+      <tr><td>same as</td><td>Chapter 8 background subtraction, with sound instead of pixels</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="e20_7_geodesic_superpixels.html"><span class="dir">Previous</span><span class="ttl">Q7 · Superpixels</span></a>
+    <a class="next" href="index.html"><span class="dir">Back to</span><span class="ttl">All chapters ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   shared: data, EM for a 2-D GMM
+   ========================================================= */
+function mkRnd(s){ return ()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+function gauss(rnd){ const u=Math.max(1e-9,rnd()), v=rnd();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+const MODES=[{m:[-2.1,-1.0],s:[[0.30,0.10],[0.10,0.22]],w:0.45},   // idle
+             {m:[ 1.6, 0.9],s:[[0.55,-0.28],[-0.28,0.40]],w:0.35}, // load
+             {m:[ 0.2, 2.4],s:[[0.22,0.03],[0.03,0.16]],w:0.20}];  // spin-up
+function chol(S){ const a=Math.sqrt(S[0][0]), b=S[0][1]/a, c=Math.sqrt(Math.max(1e-9,S[1][1]-b*b));
+  return [[a,0],[b,c]]; }
+function sampleNormal(rnd){
+  let u=rnd(), acc=0, k=0;
+  for(;k<MODES.length;k++){ acc+=MODES[k].w; if(u<=acc) break; }
+  k=Math.min(k,MODES.length-1);
+  const L=chol(MODES[k].s), z=[gauss(rnd),gauss(rnd)];
+  return [MODES[k].m[0]+L[0][0]*z[0], MODES[k].m[1]+L[1][0]*z[0]+L[1][1]*z[1]];
+}
+function inv2s(S){ const d=S[0][0]*S[1][1]-S[0][1]*S[1][0];
+  return {inv:[[S[1][1]/d,-S[0][1]/d],[-S[1][0]/d,S[0][0]/d]], det:d}; }
+function logN(x,mu,S){ const {inv,det}=inv2s(S);
+  const dx=[x[0]-mu[0],x[1]-mu[1]];
+  const q=dx[0]*(inv[0][0]*dx[0]+inv[0][1]*dx[1])+dx[1]*(inv[1][0]*dx[0]+inv[1][1]*dx[1]);
+  return -Math.log(2*Math.PI)-0.5*Math.log(Math.max(1e-12,det))-0.5*q; }
+function logsumexp(a){ const m=Math.max(...a); return m+Math.log(a.reduce((s,v)=>s+Math.exp(v-m),0)); }
+
+function fitGMM(X,K,iters){
+  const rnd=mkRnd(31337);
+  // k-means++ish init
+  let mu=[]; for(let k=0;k<K;k++) mu.push(X[(rnd()*X.length)|0].slice());
+  let Sg=[], pi=[];
+  for(let k=0;k<K;k++){ Sg.push([[1,0],[0,1]]); pi.push(1/K); }
+  for(let it=0;it<iters;it++){
+    const G=X.map(x=>{
+      const l=[]; for(let k=0;k<K;k++) l.push(Math.log(Math.max(1e-12,pi[k]))+logN(x,mu[k],Sg[k]));
+      const Z=logsumexp(l); return l.map(v=>Math.exp(v-Z));
+    });
+    for(let k=0;k<K;k++){
+      let nk=0, m=[0,0];
+      G.forEach((g,t)=>{ nk+=g[k]; m[0]+=g[k]*X[t][0]; m[1]+=g[k]*X[t][1]; });
+      nk=Math.max(1e-6,nk); m=[m[0]/nk,m[1]/nk];
+      let s00=0,s01=0,s11=0;
+      G.forEach((g,t)=>{ const a=X[t][0]-m[0], b=X[t][1]-m[1];
+        s00+=g[k]*a*a; s01+=g[k]*a*b; s11+=g[k]*b*b; });
+      mu[k]=m; pi[k]=nk/X.length;
+      Sg[k]=[[s00/nk+0.02, s01/nk],[s01/nk, s11/nk+0.02]];
+    }
+  }
+  return {mu,Sg,pi,K};
+}
+function ll(M,x){ const l=[];
+  for(let k=0;k<M.K;k++) l.push(Math.log(Math.max(1e-12,M.pi[k]))+logN(x,M.mu[k],M.Sg[k]));
+  return logsumexp(l); }
+
+/* =========================================================
+   DEMO 1 — feature space, EM fit, decision boundary
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvA'), g=cv.getContext('2d'), ro=document.getElementById('Aro');
+  const eA=document.getElementById('Aa'), eK=document.getElementById('Ak');
+  const vA=document.getElementById('vAa'), vK=document.getElementById('vAk');
+  const rnd=mkRnd(555);
+  const TRAIN=[]; for(let i=0;i<520;i++) TRAIN.push(sampleNormal(rnd));
+  const HOLD =[]; for(let i=0;i<520;i++) HOLD.push(sampleNormal(rnd));
+  let test=[3.4,-2.2], drag=false;
+  const models={};
+  const X0=40,X1=560,Y0=30,Y1=350;
+  const fx=u=>X0+(X1-X0)*(u+5)/10, fy=v=>Y1-(Y1-Y0)*(v+5)/10;
+  const ux=X=>((X-X0)/(X1-X0))*10-5, uy=Y=>((Y1-Y)/(Y1-Y0))*10-5;
+
+  function model(K){ if(!models[K]) models[K]=fitGMM(TRAIN,K,60); return models[K]; }
+
+  function draw(){
+    const K=+eK.value, alpha=(+eA.value)/10;
+    vK.textContent=K; vA.textContent=alpha.toFixed(1);
+    const M=model(K);
+    const hs=HOLD.map(x=>ll(M,x)).sort((a,b)=>a-b);
+    const tau=hs[Math.max(0,Math.floor(alpha/100*hs.length))];
+
+    g.clearRect(0,0,cv.width,cv.height); g.font='12px system-ui';
+    // heatmap
+    const CS=5;
+    for(let Y=Y0;Y<Y1;Y+=CS) for(let X=X0;X<X1;X+=CS){
+      const L=ll(M,[ux(X+CS/2),uy(Y+CS/2)]);
+      const t=Math.max(0,Math.min(1,(L-tau)/4));
+      if(L<tau){ const v=Math.max(0,Math.min(1,(tau-L)/6));
+        g.fillStyle='rgba(240,113,120,'+(0.06+0.30*v)+')'; }
+      else g.fillStyle='rgba(127,219,202,'+(0.05+0.30*t)+')';
+      g.fillRect(X,Y,CS+.5,CS+.5);
+    }
+    // threshold contour (marching over the grid, cheap version: mark sign changes)
+    g.fillStyle='#7fdbca';
+    for(let Y=Y0;Y<Y1;Y+=2) for(let X=X0;X<X1;X+=2){
+      const a=ll(M,[ux(X),uy(Y)])-tau, b=ll(M,[ux(X+2),uy(Y)])-tau, c=ll(M,[ux(X),uy(Y+2)])-tau;
+      if(a*b<0||a*c<0) g.fillRect(X,Y,2,2);
+    }
+    // training points
+    g.fillStyle='rgba(159,176,204,.5)';
+    TRAIN.forEach(p=>{ g.beginPath(); g.arc(fx(p[0]),fy(p[1]),1.6,0,7); g.fill(); });
+    // component means
+    for(let k=0;k<M.K;k++){
+      g.fillStyle='#82aaff'; g.beginPath(); g.arc(fx(M.mu[k][0]),fy(M.mu[k][1]),4,0,7); g.fill();
+      g.fillStyle='#82aaff'; g.fillText('π='+M.pi[k].toFixed(2),fx(M.mu[k][0])+7,fy(M.mu[k][1])-5);
+    }
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(X0-.5,Y0-.5,X1-X0+1,Y1-Y0+1);
+    // test point
+    const L=ll(M,test), bad=L<tau;
+    g.strokeStyle=bad?'#f07178':'#7fdbca'; g.lineWidth=2;
+    g.beginPath(); g.arc(fx(test[0]),fy(test[1]),9,0,7); g.stroke();
+    g.fillStyle='#f07178'; g.beginPath(); g.arc(fx(test[0]),fy(test[1]),4,0,7); g.fill();
+
+    // side panel
+    const TX=600;
+    g.fillStyle='#9fb0cc'; g.font='bold 13px system-ui'; g.fillText('the decision',TX,44); g.font='12px system-ui';
+    const dsq=[]; for(let k=0;k<M.K;k++){ const {inv}=inv2s(M.Sg[k]);
+      const dx=[test[0]-M.mu[k][0],test[1]-M.mu[k][1]];
+      dsq.push(dx[0]*(inv[0][0]*dx[0]+inv[0][1]*dx[1])+dx[1]*(inv[1][0]*dx[0]+inv[1][1]*dx[1])); }
+    const rows=[['ℓ(X) = log Σ πₖ𝒩',L.toFixed(2),'#9fb0cc'],
+                ['threshold τ',tau.toFixed(2),'#7fdbca'],
+                ['min Mahalanobis d²',Math.min(...dsq).toFixed(2),'#c792ea'],
+                ['χ²(2, 99%) gate','9.21','#c792ea'],
+                ['verdict',bad?'ANOMALY':'normal',bad?'#f07178':'#7fdbca']];
+    rows.forEach(([k,v,c],i)=>{ g.fillStyle='#6b7a99'; g.fillText(k,TX,74+i*26);
+      g.fillStyle=c; g.font='bold 12px system-ui'; g.fillText(v,TX+185,74+i*26); g.font='12px system-ui'; });
+    g.fillStyle='#6b7a99';
+    g.fillText('teal = model says "normal"',TX,232);
+    g.fillText('red  = below the threshold',TX,250);
+    g.fillText('the teal line is the contour ℓ = τ',TX,268);
+    g.fillText('drag the red circle around',TX,296);
+
+    ro.innerHTML='k = <b>'+K+'</b> components, τ set at the <b>'+alpha.toFixed(1)+
+      '%</b> quantile of ℓ on held-out healthy data → ℓ(X) = <b>'+L.toFixed(2)+'</b> vs τ = <b>'+tau.toFixed(2)+
+      '</b> → <b style="color:'+(bad?'#f07178':'#7fdbca')+'">'+(bad?'ANOMALY':'normal')+'</b>.<br>'+
+      (K===1 ? '<b style="color:#ffcb6b">k = 1:</b> look at the middle of the plot — the empty region between the '+
+               'operating modes is shaded <b>teal</b>. A sound no healthy machine ever made is being called normal. That is the false negative you cannot afford.'
+             : 'Move the point into the gaps between the clusters: the model correctly calls them abnormal, because with k = '+K+' the components leave the gaps empty.');
+  }
+  function pos(e){ const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height}; }
+  cv.onmousedown=e=>{ const m=pos(e); if(Math.hypot(m.x-fx(test[0]),m.y-fy(test[1]))<24) drag=true; };
+  cv.onmousemove=e=>{ if(!drag)return; const m=pos(e);
+    test=[Math.max(-5,Math.min(5,ux(m.x))), Math.max(-5,Math.min(5,uy(m.y)))]; draw(); };
+  window.addEventListener('mouseup',()=>drag=false);
+  [eA,eK].forEach(e=>e.oninput=draw);
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — the streaming detector
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvB'), g=cv.getContext('2d'), ro=document.getElementById('Bro');
+  const eA=document.getElementById('Ba'), eM=document.getElementById('Bm'), eL=document.getElementById('Bl');
+  const vA=document.getElementById('vBa'), vM=document.getElementById('vBm'), vL=document.getElementById('vBl');
+  const rnd=mkRnd(909);
+  const TRAIN=[]; for(let i=0;i<500;i++) TRAIN.push(sampleNormal(rnd));
+  const HOLD=[];  for(let i=0;i<500;i++) HOLD.push(sampleNormal(rnd));
+  const M=fitGMM(TRAIN,3,60);
+  const hs=HOLD.map(x=>ll(M,x)).sort((a,b)=>a-b);
+
+  const T=320, FAULT=200;
+  const stream=[];
+  (function(){ const r=mkRnd(4711);
+    for(let t=0;t<T;t++){
+      let x=sampleNormal(r);
+      if(t>=FAULT){ const sev=Math.min(1,(t-FAULT)/40);      // fault ramps in
+        x=[x[0]+2.6*sev+0.35*gauss(r), x[1]-1.9*sev+0.35*gauss(r)]; }
+      stream.push(x);
+    } })();
+  const SCORE=stream.map(x=>ll(M,x));
+
+  let t=0, run=false, raf=null;
+  function draw(){
+    const alpha=(+eA.value)/10, Mv=+eM.value, Lv=+eL.value;
+    vA.textContent=alpha.toFixed(1); vM.textContent=Mv; vL.textContent=Lv;
+    const tau=hs[Math.max(0,Math.floor(alpha/100*hs.length))];
+    g.clearRect(0,0,cv.width,cv.height); g.font='12px system-ui';
+    const X0=50,X1=870,A0=40,A1=205, B0=235,B1=300;
+    const px=i=>X0+(X1-X0)*i/T;
+    const lo=Math.min(...SCORE)-0.5, hi=Math.max(...SCORE)+0.5;
+    const yv=v=>A1-(A1-A0)*((-v)-(-hi))/((-lo)-(-hi));
+
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui';
+    g.fillText('anomaly score  −ℓ(Xt)   (higher = more surprising)',X0,28); g.font='12px system-ui';
+    // fault marker
+    g.strokeStyle='rgba(240,113,120,.45)'; g.setLineDash([4,4]);
+    g.beginPath(); g.moveTo(px(FAULT),A0); g.lineTo(px(FAULT),B1); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#f07178'; g.fillText('fault begins',px(FAULT)+5,A0+12);
+    // threshold
+    g.strokeStyle='#7fdbca'; g.lineWidth=1.6;
+    g.beginPath(); g.moveTo(X0,yv(tau)); g.lineTo(X1,yv(tau)); g.stroke();
+    g.fillStyle='#7fdbca'; g.fillText('τ',X1+4,yv(tau)+4);
+    // score curve
+    g.strokeStyle='#9fb0cc'; g.lineWidth=1.6; g.beginPath();
+    for(let i=0;i<t;i++){ const X=px(i), Y=yv(SCORE[i]); i?g.lineTo(X,Y):g.moveTo(X,Y); } g.stroke();
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(X0-.5,A0-.5,X1-X0+1,A1-A0+1);
+
+    // flags + M-of-L alarm
+    g.fillStyle='#9fb0cc'; g.font='bold 12px style'; g.font='bold 12px system-ui';
+    g.fillText('raw flags (top row)  ·  M-of-L alarm (bottom row)',X0,228); g.font='12px system-ui';
+    let fa=0, det=-1, alarms=0;
+    const flags=[];
+    for(let i=0;i<t;i++){
+      const f=SCORE[i]<tau; flags.push(f);
+      if(f){ g.fillStyle= i<FAULT ? 'rgba(255,203,107,.9)':'rgba(240,113,120,.9)';
+        g.fillRect(px(i),B0,Math.max(1.5,(X1-X0)/T),16); if(i<FAULT) fa++; }
+      let c=0; for(let j=Math.max(0,i-Lv+1);j<=i;j++) if(flags[j]) c++;
+      if(c>=Mv){ g.fillStyle= i<FAULT ? 'rgba(255,203,107,.95)':'rgba(240,113,120,.95)';
+        g.fillRect(px(i),B0+22,Math.max(1.5,(X1-X0)/T),16);
+        alarms++; if(det<0 && i>=FAULT) det=i-FAULT; }
+    }
+    g.strokeStyle='#2c3650'; g.strokeRect(X0-.5,B0-.5,X1-X0+1,16); g.strokeRect(X0-.5,B0+21.5,X1-X0+1,16);
+    g.fillStyle='#6b7a99'; g.fillText('flags',X0-42,B0+12); g.fillText('alarm',X0-44,B0+34);
+
+    // false alarms of the M-of-L rule, before the fault
+    let faAlarm=0;
+    for(let i=0;i<Math.min(t,FAULT);i++){
+      let c=0; for(let j=Math.max(0,i-Lv+1);j<=i;j++) if(flags[j]) c++;
+      if(c>=Mv) faAlarm++;
+    }
+    ro.innerHTML='second <b>'+t+'</b> / '+T+' &nbsp;·&nbsp; τ = <b>'+tau.toFixed(2)+'</b> (α = '+alpha.toFixed(1)+'%)'+
+      ' &nbsp;·&nbsp; single-second false flags before the fault: <b style="color:#ffcb6b">'+fa+'</b>'+
+      ' &nbsp;·&nbsp; <b>M-of-L</b> false alarms: <b style="color:'+(faAlarm?'#ffcb6b':'#7fdbca')+'">'+faAlarm+'</b>'+
+      (det>=0 ? ' &nbsp;·&nbsp; <b style="color:#7fdbca">fault detected '+det+' s after onset.</b>' :
+        (t>FAULT+60?' &nbsp;·&nbsp; <b style="color:#f07178">fault NOT detected</b> — M is too strict or τ too low.':''))+
+      '<br>Raise M or L: the yellow false alarms vanish, and the detection delay grows. That trade-off is the design decision.';
+  }
+  function loop(){ if(!run) return; t=Math.min(T,t+2); draw(); if(t>=T) run=false; raf=requestAnimationFrame(loop); }
+  document.getElementById('Bgo').onclick=()=>{ run=false; if(raf)cancelAnimationFrame(raf); t=0; run=true; loop(); };
+  [eA,eM,eL].forEach(e=>e.oninput=()=>{ if(t===0) t=T; draw(); });
+  t=T; draw(); t=0; draw();
+})();
+</script>
+
+</body>
+</html>

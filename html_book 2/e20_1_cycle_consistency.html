@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2020 · Q1 — Horn–Schunck with cycle consistency</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="companion.css">
+<script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="eq-copy.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="crumb"><b>Exam 2020 · Q1</b> · Optic flow, cycle consistency</span>
+  <span class="spacer"></span>
+  <a class="navbtn" href="ch02_optical_flow.html">‹ Chapter 2</a>
+  <a class="navbtn" href="index.html">☰ All</a>
+  <a class="navbtn" href="e20_2_corridor_flow.html">Q2 ›</a>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Companion page to Chapter 2 · Exam 8/7/2020, question 1 · 13 points</div>
+    <h1>“If I point at you, you must point back at me”</h1>
+    <p class="lede">Horn–Schunck, but run in both directions at once, with a third term that punishes the two
+    answers when they disagree. The whole question is: write that third term, and push it through
+    Euler–Lagrange. It turns out the final update equation barely changes.</p>
+  </header>
+
+  <div class="qbox">
+    <span class="q-label">Exam 8/7/2020 · Question 1 · 13 points · OPTIC FLOW</span>
+    <p style="margin-bottom:0">Cycle-consistency states that the flow from pixel $p$ to pixel $q$ should equal the
+    (negative) flow from $q$ to $p$, where $p$ is a pixel in the first image and $q$ is a pixel in the second
+    image. <strong>Modify the Horn–Schunck equations to encode the cycle-consistency prior.</strong></p>
+  </div>
+
+  <div class="callout key"><span class="lbl">The 30-second version — read this first</span>
+    Solve for <b>two</b> flow fields at once, $w$ (image 1 → 2) and $w'$ (image 2 → 1), and add one extra
+    quadratic penalty
+    $\;\lambda\int \big\| w(\mathbf{x}) + w'(\mathbf{x}+w(\mathbf{x}))\big\|^2 d\mathbf{x}$.
+    <br><br>After Euler–Lagrange the classic HS iteration is <em>unchanged in shape</em>: you only
+    (a) replace the neighbourhood average $\bar u$ by a blend of $\bar u$ and the negated backward flow, and
+    (b) replace $\alpha$ by $\alpha+\lambda$.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>1 · The story (no math at all)</h2>
+
+  <div class="story">
+    <span class="story-label">Two kids and a photograph</span>
+    <p>Dana stands in the school yard on Monday. Yoni stands in the same yard on Tuesday. You give each of them
+    one job:</p>
+    <ul>
+      <li><b>Dana's job:</b> “point at where the red ball ended up tomorrow.”</li>
+      <li><b>Yoni's job:</b> “point at where the red ball came from yesterday.”</li>
+    </ul>
+    <p>If both kids are telling the truth, their two arrows are the <strong>same arrow</strong>, just drawn
+    backwards. Dana points 3 steps right; Yoni, standing where Dana pointed, must point 3 steps left.</p>
+    <p>Now suppose the ball is sitting on a big, plain, white wall — nothing around it to recognise. Dana guesses
+    “3 steps right.” Yoni guesses “5 steps left.” Nobody can prove either of them wrong from the picture alone,
+    because the wall looks the same everywhere.</p>
+    <p><strong>Cycle consistency is a referee.</strong> It does not know the right answer either. But it can shout
+    at the two kids: “you two disagree by 2 steps — one of you is wrong, fix it between you.” The referee's
+    shouting is a <em>cost</em> you add to the equation, and the optimiser has to pay it unless the two arrows
+    cancel.</p>
+    <p>Two liars who must agree with each other are much harder to fool than one liar on their own. That's the
+    entire prior.</p>
+  </div>
+
+  <div class="callout note"><span class="lbl">Why this is genuinely useful, not just cute</span>
+    In the flat/textureless regions where the aperture problem bites, plain Horn–Schunck has <em>nothing</em>
+    pinning the answer down except the smoothness term dragging values in from far away — and it drags them in
+    differently for the forward pass and the backward pass. Forcing the two passes to cancel gives the flat region
+    a second, independent constraint <b>for free</b>, with no new images.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>2 · Write the referee's shout as a formula</h2>
+
+  <div class="explain">
+    <span class="explain-label">Where does the backward flow have to be sampled?</span>
+    <p>Careful — this is the one place people lose marks. $w(\mathbf{x})$ lives at pixel $\mathbf{x}$ in image 1.
+    The matching pixel in image 2 is</p>
+  </div>
+
+  <div class="eq">$$ q \;=\; \mathbf{x} + w(\mathbf{x}) \qquad\text{(this is $p\to q$)} $$</div>
+
+  <div class="explain">
+    <p>So the backward flow you must compare against is <strong>not</strong> $w'(\mathbf{x})$, it is
+    $w'$ evaluated <em>at $q$</em>. The condition “flow $p\to q$ equals minus flow $q\to p$” is</p>
+  </div>
+
+  <div class="eq">$$ w'\big(\mathbf{x}+w(\mathbf{x})\big) \;=\; -\,w(\mathbf{x})
+      \qquad\Longleftrightarrow\qquad
+      \underbrace{w(\mathbf{x}) + w'\big(\mathbf{x}+w(\mathbf{x})\big)}_{\textstyle c(\mathbf{x})\;=\;\text{cycle residual}} \;=\; 0 $$</div>
+
+  <div class="explain">
+    <p>Start at $p$, walk forward, walk backward — you must land back on $p$. That round trip is what the word
+    <em>cycle</em> means. Penalise the residual quadratically, exactly like every other Horn–Schunck term:</p>
+  </div>
+
+  <div class="eq">$$ E_{\text{cyc}} \;=\; \lambda \int_\Psi \Big\| w(\mathbf{x}) + w'\big(\mathbf{x}+w(\mathbf{x})\big) \Big\|^2 \, d\mathbf{x} $$</div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 1 — the round trip</h4><span class="tag">drag the arrows</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">Left panel = image 1, right panel = image 2. Drag the <b>green</b>
+      arrow head to set the forward flow $w(p)$; drag the <b>orange</b> arrow head to set the backward flow
+      $w'(q)$. The dashed red arrow is the residual $c = w + w'$ — the referee's complaint. Get it to zero.</p>
+      <canvas id="cvR" width="900" height="300"></canvas>
+      <div class="readout" id="Rro"></div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>3 · The full energy</h2>
+
+  <div class="explain">
+    <span class="explain-label">Three ingredients, written once</span>
+    <p>Let $I_1, I_2$ be the two frames. Write the brightness-constancy residuals for each direction:</p>
+    <ul>
+      <li>forward: $\rho(\mathbf{x}) = I_{1x}u + I_{1y}v + I_t$, with $I_t = I_2 - I_1$;</li>
+      <li>backward: $\rho'(\mathbf{x}) = I_{2x}u' + I_{2y}v' + I'_t$, with $I'_t = I_1 - I_2$
+        (same construction, roles swapped).</li>
+    </ul>
+  </div>
+
+  <div class="eq">$$
+  \begin{aligned}
+  E(w,w') \;=\; &\int_\Psi \Big[\big(I_{1x}u+I_{1y}v+I_t\big)^2 + \alpha\big(\|\nabla u\|^2+\|\nabla v\|^2\big)\Big]d\mathbf{x} \\[4pt]
+  +\;&\int_\Psi \Big[\big(I_{2x}u'+I_{2y}v'+I'_t\big)^2 + \alpha\big(\|\nabla u'\|^2+\|\nabla v'\|^2\big)\Big]d\mathbf{x} \\[4pt]
+  +\;&\lambda \int_\Psi \Big\|\,w(\mathbf{x}) + w'\big(\mathbf{x}+w(\mathbf{x})\big)\Big\|^2 d\mathbf{x}
+  \end{aligned}
+  $$</div>
+
+  <div class="callout note"><span class="lbl">What changed vs. the Horn–Schunck you learned</span>
+    Lines 1 and 2 are just <b>plain HS, run twice</b> — once in each direction. Only line 3 is new. The two
+    unknown fields were completely independent before; line 3 is the <em>only</em> thing that couples them.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>4 · Euler–Lagrange, done slowly</h2>
+
+  <div class="explain">
+    <span class="explain-label">Step 0 — kill the nonlinearity</span>
+    <p>$w'(\mathbf{x}+w(\mathbf{x}))$ has the unknown $w$ <em>inside the argument</em> of $w'$. That is not
+    quadratic, and Euler–Lagrange on it is ugly. Standard fix, the same lagged-warp trick used in coarse-to-fine
+    HS: <strong>freeze the warp at the current iterate.</strong> During iteration $k$ define the constant field</p>
+  </div>
+
+  <div class="eq">$$ \hat w'(\mathbf{x}) \;:=\; w'^{(k)}\big(\mathbf{x} + w^{(k)}(\mathbf{x})\big)
+      \qquad\text{(bilinear interpolation — a known number at each pixel)} $$</div>
+
+  <div class="explain">
+    <p>Now the cycle term is simply $\lambda\|w(\mathbf{x}) + \hat w'(\mathbf{x})\|^2$ — a plain quadratic in the
+    unknown. You re-warp once per outer iteration, and you alternate: update $w$ with $w'$ frozen, then update
+    $w'$ with $w$ frozen.</p>
+    <h4 class="mini">Step 1 — differentiate</h4>
+    <p>Using $\nabla^2 u$ for the Laplacian, $\partial E/\partial u = 0$ gives</p>
+  </div>
+
+  <div class="eq">$$ I_{1x}\big(I_{1x}u+I_{1y}v+I_t\big) \;-\; \alpha\,\nabla^2 u \;+\; \lambda\big(u+\hat u'\big) \;=\; 0 $$</div>
+  <div class="eq">$$ I_{1y}\big(I_{1x}u+I_{1y}v+I_t\big) \;-\; \alpha\,\nabla^2 v \;+\; \lambda\big(v+\hat v'\big) \;=\; 0 $$</div>
+
+  <div class="explain">
+    <p>Compare with the classic pair — the <em>only</em> new piece is $\lambda(u+\hat u')$. Now substitute the
+    usual discrete Laplacian $\nabla^2 u \approx \bar u - u$ ($\bar u$ = weighted average of the 4/8 neighbours):</p>
+  </div>
+
+  <div class="eq">$$ \big(\alpha+\lambda+I_{1x}^2\big)u \;+\; I_{1x}I_{1y}\,v \;=\; \alpha\bar u \;-\; \lambda\hat u' \;-\; I_{1x}I_t $$</div>
+  <div class="eq">$$ I_{1x}I_{1y}\,u \;+\; \big(\alpha+\lambda+I_{1y}^2\big)v \;=\; \alpha\bar v \;-\; \lambda\hat v' \;-\; I_{1y}I_t $$</div>
+
+  <div class="explain">
+    <h4 class="mini">Step 2 — the trick that makes it look like ordinary HS</h4>
+    <p>Two quadratic springs pulling on the same variable are <b>one</b> spring. Complete the square:</p>
+  </div>
+
+  <div class="eq">$$ \alpha\,(u-\bar u)^2 + \lambda\,\big(u-(-\hat u')\big)^2
+      \;=\; \underbrace{(\alpha+\lambda)}_{\textstyle \beta}\big(u-m_u\big)^2 + \text{const},
+      \qquad m_u=\frac{\alpha\bar u-\lambda\hat u'}{\alpha+\lambda} $$</div>
+
+  <div class="explain">
+    <p>So the cycle prior is <em>literally a second smoothness term whose target is $-\hat w'$ instead of the
+    neighbourhood average</em>. Plug $\beta = \alpha+\lambda$ and $m=(m_u,m_v)$ into the standard HS solution of
+    the $2\times2$ system and you are done:</p>
+  </div>
+
+  <div class="eq">$$ \boxed{\;
+  \begin{aligned}
+  m_u^{(k)} &= \frac{\alpha\,\bar u^{(k)}-\lambda\,\hat u'^{(k)}}{\alpha+\lambda}, \qquad
+  m_v^{(k)}  = \frac{\alpha\,\bar v^{(k)}-\lambda\,\hat v'^{(k)}}{\alpha+\lambda} \\[6pt]
+  u^{(k+1)} &= m_u^{(k)} - I_{1x}\,\frac{I_{1x}m_u^{(k)}+I_{1y}m_v^{(k)}+I_t}{(\alpha+\lambda)+I_{1x}^2+I_{1y}^2} \\[6pt]
+  v^{(k+1)} &= m_v^{(k)} - I_{1y}\,\frac{I_{1x}m_u^{(k)}+I_{1y}m_v^{(k)}+I_t}{(\alpha+\lambda)+I_{1x}^2+I_{1y}^2}
+  \end{aligned}\;} $$</div>
+
+  <div class="explain">
+    <p>and the mirror image of this for $w'$, with $I_2$'s derivatives, with $\hat w(\mathbf{x}') =
+    w(\mathbf{x}'+w'(\mathbf{x}'))$ in place of $\hat w'$.</p>
+  </div>
+
+  <div class="summary">
+    <span class="summary-label">Sanity checks the examiner will look for</span>
+    <table>
+      <tr><th>Set</th><th>What must happen</th></tr>
+      <tr><td>$\lambda = 0$</td><td>$m_u=\bar u$, $\beta=\alpha$ → <b>exactly the classic Horn–Schunck update</b>,
+        two independent runs. ✔</td></tr>
+      <tr><td>$\lambda \to \infty$</td><td>$m_u \to -\hat u'$ and the denominator blows up →
+        $u \to -\hat u'$: the flow is <em>forced</em> to be the exact negative of the backward flow, brightness
+        constancy ignored. ✔</td></tr>
+      <tr><td>flat region, $\nabla I = 0$</td><td>data term vanishes, $u = m_u$: the pixel is now decided by
+        neighbours <em>and</em> by the other direction — the extra constraint the prior was bought for. ✔</td></tr>
+    </table>
+  </div>
+
+  <div class="demo">
+    <div class="demo-head"><span class="dot"></span><h4>Demo 2 — 1-D Horn–Schunck, both directions, live</h4><span class="tag">slide λ</span></div>
+    <div class="demo-body">
+      <p class="muted" style="margin-top:0">A 1-D “image”: two textured bumps with a <b>flat, featureless plateau
+      between them</b> (grey band). True motion is a uniform shift of <b>+1.5 px</b> everywhere. Top plot: the
+      signals. Bottom plot: the forward flow $u$ (green) and the <em>negated</em> backward flow $-\hat u'$
+      (orange) — cycle consistency says these two curves must lie on top of each other. Dashed line = truth.</p>
+      <canvas id="cvH" width="900" height="380"></canvas>
+      <div class="controls">
+        <div class="control"><label>λ — cycle weight <span class="val" id="vHl">0.00</span></label><input type="range" id="Hl" min="0" max="200" step="1" value="0"></div>
+        <div class="control"><label>α — smoothness <span class="val" id="vHa">0.50</span></label><input type="range" id="Ha" min="5" max="200" step="5" value="50"></div>
+        <div class="control"><label>iterations <span class="val" id="vHi">150</span></label><input type="range" id="Hi" min="10" max="400" step="10" value="150"></div>
+      </div>
+      <div class="readout" id="Hro"></div>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">What to actually look at in Demo 2</span>
+    At $\lambda=0$ the two curves <b>drift apart across the flat plateau</b> — each direction is pulled by its own
+    neighbours and there is no evidence to correct either. Raise $\lambda$: they zip together, and the fused
+    answer sits much closer to the true $+1.5$. That is the prior earning its keep.
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>5 · The one honest caveat: occlusions</h2>
+
+  <div class="explain">
+    <p>At a pixel that is <strong>occluded</strong> in the second image, there <em>is</em> no $q$. The round trip
+    is genuinely impossible, and forcing $c(\mathbf{x})=0$ there will corrupt an otherwise good flow field. Two
+    standard fixes, either one earns the mark:</p>
+    <ul>
+      <li><b>Robust penalty:</b> replace $\|c\|^2$ by $\rho(\|c\|)$ with $\rho$ e.g. Charbonnier
+        $\sqrt{\|c\|^2+\varepsilon^2}$ or the Lorentzian — large residuals stop dominating.</li>
+      <li><b>Spatially varying weight:</b> use $\lambda(\mathbf{x}) = \lambda_0\,\exp\!\big(-\|c(\mathbf{x})\|^2/\sigma^2\big)$,
+        or an explicit occlusion mask $o(\mathbf{x})\in\{0,1\}$ (from the forward–backward check itself, or from
+        the flow divergence) and use $\lambda\,o(\mathbf{x})$. Then the cycle residual doubles as your
+        <em>occlusion detector</em> — which is exactly how it is used in practice.</li>
+    </ul>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>6 · The answer, as you would write it in the box</h2>
+
+  <div class="answerbox">
+    <span class="a-label">Full-marks version — one page</span>
+    <p><strong>Set-up.</strong> Estimate both flow fields simultaneously: $w=(u,v)$ from $I_1$ to $I_2$, and
+    $w'=(u',v')$ from $I_2$ to $I_1$. For $p=\mathbf{x}$ in $I_1$ the corresponding pixel is
+    $q=\mathbf{x}+w(\mathbf{x})$, so cycle consistency reads
+    $w'(\mathbf{x}+w(\mathbf{x})) = -w(\mathbf{x})$.</p>
+
+    <p><strong>Energy.</strong> Horn–Schunck in both directions, plus a quadratic penalty on the cycle residual:</p>
+    <div class="eq">$$
+    \begin{aligned}
+    E=\int\Big[(I_{1x}u+I_{1y}v+I_t)^2+\alpha(\|\nabla u\|^2+\|\nabla v\|^2)\Big]
+     +\int\Big[(I_{2x}u'+I_{2y}v'+I'_t)^2+\alpha(\|\nabla u'\|^2+\|\nabla v'\|^2)\Big]\\
+     +\;\lambda\int\big\|w(\mathbf{x})+w'(\mathbf{x}+w(\mathbf{x}))\big\|^2
+    \end{aligned}$$</div>
+    <p>with $I_t=I_2-I_1$, $I'_t=I_1-I_2$.</p>
+
+    <p><strong>Linearisation.</strong> The warp inside $w'$ makes the last term non-quadratic, so freeze it at the
+    previous iterate: $\hat w'(\mathbf{x}) = w'^{(k)}(\mathbf{x}+w^{(k)}(\mathbf{x}))$ (bilinear interpolation),
+    and alternate between updating $w$ and $w'$.</p>
+
+    <p><strong>Euler–Lagrange.</strong> $\partial E/\partial u=0$ gives
+    $I_{1x}(I_{1x}u+I_{1y}v+I_t)-\alpha\nabla^2u+\lambda(u+\hat u')=0$, and similarly for $v$. With
+    $\nabla^2u\approx\bar u-u$:</p>
+    <div class="eq">$$(\alpha+\lambda+I_{1x}^2)u+I_{1x}I_{1y}v=\alpha\bar u-\lambda\hat u'-I_{1x}I_t,\qquad
+    I_{1x}I_{1y}u+(\alpha+\lambda+I_{1y}^2)v=\alpha\bar v-\lambda\hat v'-I_{1y}I_t.$$</div>
+
+    <p><strong>Update rule.</strong> Writing $\beta=\alpha+\lambda$ and
+    $m_u=\dfrac{\alpha\bar u-\lambda\hat u'}{\beta}$, $m_v=\dfrac{\alpha\bar v-\lambda\hat v'}{\beta}$, the solution
+    of that $2\times2$ system is the ordinary HS iteration with $\bar w$ replaced by $m$ and $\alpha$ by $\beta$:</p>
+    <div class="eq">$$u^{(k+1)}=m_u-I_{1x}\frac{I_{1x}m_u+I_{1y}m_v+I_t}{\beta+I_{1x}^2+I_{1y}^2},\qquad
+    v^{(k+1)}=m_v-I_{1y}\frac{I_{1x}m_u+I_{1y}m_v+I_t}{\beta+I_{1x}^2+I_{1y}^2}$$</div>
+    <p>and symmetrically for $(u',v')$ using $I_2$'s derivatives and $\hat w(\mathbf{x}')=w(\mathbf{x}'+w'(\mathbf{x}'))$.
+    Iterate: warp → update $w$ → update $w'$ → re-warp, inside the usual coarse-to-fine pyramid.</p>
+
+    <p><strong>Interpretation and limits.</strong> The prior acts as a second smoothness term whose target is the
+    negated backward flow instead of the spatial average. $\lambda=0$ recovers plain Horn–Schunck run twice;
+    $\lambda\to\infty$ forces $w=-\hat w'$ exactly. Its value is largest in textureless regions, where the data
+    term is degenerate (aperture problem) and the two directions would otherwise drift independently. At occluded
+    pixels the constraint is invalid, so use a robust penalty $\rho(\|c\|)$ or a weight
+    $\lambda(\mathbf{x})=\lambda_0e^{-\|c\|^2/\sigma^2}$ — the residual $c$ then doubles as an occlusion detector.</p>
+  </div>
+
+  <!-- ==================================================================== -->
+  <h2>7 · Exam drill</h2>
+
+  <details class="qa">
+    <summary>Q. Why is it wrong to write the penalty as $\|w(\mathbf{x})+w'(\mathbf{x})\|^2$?</summary>
+    <p>Because $w'$ is a field defined on <em>image 2</em>, indexed by pixels of image 2. $w'(\mathbf{x})$ is the
+    backward flow of whatever object happens to sit at the <em>same coordinates</em> in the second frame — a
+    completely different object once anything moves. The correct sample point is $q=\mathbf{x}+w(\mathbf{x})$.
+    Writing $w'(\mathbf{x})$ silently assumes zero motion, i.e. it only holds when the answer is already trivial.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. The term is non-quadratic. Could you keep it exact instead of freezing the warp?</summary>
+    <p>You can — differentiate through the argument, which brings in the Jacobian $\nabla w'$ evaluated at $q$:
+    $\partial_u \|c\|^2 = 2\,c^{\!\top}\!\big(e_1 + \partial_x w'(q)\big)$. That is legitimate but gives a
+    non-linear, non-symmetric system, and $\nabla w'$ is a noisy quantity early in the optimisation. The frozen
+    warp (lagged fixed-point / “warping” scheme) is the standard course-level answer, and it is the same device
+    used to handle large displacements in coarse-to-fine HS.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Does the cycle term help where the image is well-textured?</summary>
+    <p>Barely. Where $\nabla I$ is strong and well-conditioned, the data term already pins both directions to
+    nearly correct values, so the residual is small and the term contributes almost nothing. The gain is
+    concentrated exactly where HS is weakest: flat regions, single-orientation edges (aperture problem), and
+    repeated texture where the data term has several equally good minima and the two directions can pick
+    <em>different</em> ones.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How would you initialise, and does the order of updates matter?</summary>
+    <p>Initialise $w=w'=0$ at the coarsest pyramid level with $\lambda=0$ for a few iterations (otherwise you are
+    enforcing consistency between two fields that are both meaningless), then switch the prior on and increase it
+    over the outer iterations. The alternation is a block-coordinate descent: each block-update decreases $E$, so
+    the order does not affect convergence to a stationary point, only the path taken. Warp once per outer
+    iteration, not per inner Jacobi sweep.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. How is this the same idea as the forward–backward check you already know?</summary>
+    <p>The classical forward–backward consistency check computes both flows <em>independently</em> and then throws
+    away pixels where $\|c\|$ is large. That is the same quantity used as a post-hoc filter. Here it is promoted
+    from a filter to a <b>prior</b>: instead of discarding bad pixels after the fact, you pay for inconsistency
+    during the optimisation, so the estimate is pushed towards consistency rather than merely audited for it.</p>
+  </details>
+
+  <details class="qa">
+    <summary>Q. Is the resulting energy convex? What are you actually guaranteed?</summary>
+    <p>With the warp frozen, each block sub-problem is a positive-definite quadratic, so each update has a unique
+    minimiser and $E$ decreases monotonically. The full problem, with the warp live, is <b>not</b> convex — the
+    composition $w'(\mathbf{x}+w(\mathbf{x}))$ sees to that, just as brightness constancy is non-convex before
+    linearisation. So you are guaranteed a local minimum reachable from your initialisation, which is why the
+    coarse-to-fine pyramid matters.</p>
+  </details>
+
+  <div class="summary">
+    <span class="summary-label">One-minute revision card</span>
+    <table>
+      <tr><th>Piece</th><th>Plain version</th></tr>
+      <tr><td>unknowns</td><td>two fields, $w$ and $w'$, solved together</td></tr>
+      <tr><td>$q$</td><td>$\mathbf{x}+w(\mathbf{x})$ — sample $w'$ <em>there</em>, not at $\mathbf{x}$</td></tr>
+      <tr><td>residual $c$</td><td>$w(\mathbf{x})+w'(\mathbf{x}+w(\mathbf{x}))$, should be $0$</td></tr>
+      <tr><td>new term</td><td>$\lambda\int\|c\|^2$ — one extra quadratic</td></tr>
+      <tr><td>the trick</td><td>freeze the warp → term becomes quadratic in $w$</td></tr>
+      <tr><td>net effect</td><td>$\alpha\to\alpha+\lambda$, and $\bar w \to \dfrac{\alpha\bar w-\lambda\hat w'}{\alpha+\lambda}$</td></tr>
+      <tr><td>$\lambda=0$ / $\lambda\to\infty$</td><td>plain HS twice / $w=-\hat w'$ enforced</td></tr>
+      <tr><td>where it pays</td><td>textureless + aperture-problem regions</td></tr>
+      <tr><td>where it lies</td><td>occlusions → robust $\rho$ or weight $\lambda(\mathbf{x})$</td></tr>
+    </table>
+  </div>
+
+  <div class="pager">
+    <a href="index.html"><span class="dir">Back to</span><span class="ttl">All chapters</span></a>
+    <a class="next" href="e20_2_corridor_flow.html"><span class="dir">Next question</span><span class="ttl">Q2 · The corridor ›</span></a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DEMO 1 — the round trip, draggable
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvR'), g=cv.getContext('2d'), ro=document.getElementById('Rro');
+  const P={x:150,y:170};              // pixel p in image 1 (panel coords)
+  const OFF=470;                       // x offset of panel 2
+  let w ={x: 90,y:-45};                // forward flow
+  let wb={x:-70,y: 30};                // backward flow
+  let drag=null;
+
+  function panelBox(ox,title){
+    g.strokeStyle='#2c3650'; g.lineWidth=1; g.strokeRect(ox,60,380,210);
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText(title,ox,48);
+  }
+  function arrow(x0,y0,x1,y1,col,wd,dash){
+    g.save(); g.strokeStyle=col; g.fillStyle=col; g.lineWidth=wd; g.setLineDash(dash||[]);
+    g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); g.stroke(); g.setLineDash([]);
+    const a=Math.atan2(y1-y0,x1-x0);
+    g.beginPath(); g.moveTo(x1,y1);
+    g.lineTo(x1-11*Math.cos(a-0.4),y1-11*Math.sin(a-0.4));
+    g.lineTo(x1-11*Math.cos(a+0.4),y1-11*Math.sin(a+0.4));
+    g.closePath(); g.fill(); g.restore();
+  }
+  function dot(x,y,col,r){ g.fillStyle=col; g.beginPath(); g.arc(x,y,r||5,0,7); g.fill(); }
+
+  function draw(){
+    g.clearRect(0,0,cv.width,cv.height);
+    panelBox(20,'IMAGE 1  (pixel p)');
+    panelBox(OFF,'IMAGE 2  (pixel q = p + w(p))');
+
+    // p and q
+    const q={x:P.x+w.x, y:P.y+w.y};
+    const qp={x:OFF+ (q.x-20), y:q.y};          // q drawn in panel 2
+    dot(P.x,P.y,'#7fdbca',6);
+    g.fillStyle='#7fdbca'; g.font='12px system-ui'; g.fillText('p',P.x-14,P.y+4);
+
+    // forward arrow in panel 1
+    arrow(P.x,P.y,q.x,q.y,'#7fdbca',2.5);
+    g.fillStyle='#7fdbca'; g.fillText('w(p)',(P.x+q.x)/2-10,(P.y+q.y)/2-10);
+    dot(q.x,q.y,'#7fdbca',7);
+
+    // q in panel 2 + backward arrow
+    dot(qp.x,qp.y,'#ffcb6b',6);
+    g.fillStyle='#ffcb6b'; g.fillText('q',qp.x+9,qp.y-8);
+    const b={x:qp.x+wb.x, y:qp.y+wb.y};
+    arrow(qp.x,qp.y,b.x,b.y,'#ffcb6b',2.5);
+    g.fillText("w'(q)",(qp.x+b.x)/2-14,(qp.y+b.y)/2+18);
+    dot(b.x,b.y,'#ffcb6b',7);
+
+    // where the round trip lands, drawn back in panel 1
+    const land={x:P.x+w.x+wb.x, y:P.y+w.y+wb.y};
+    g.setLineDash([3,3]); g.strokeStyle='#4b5670';
+    g.beginPath(); g.moveTo(q.x,q.y); g.lineTo(land.x,land.y); g.stroke(); g.setLineDash([]);
+    dot(land.x,land.y,'#f07178',5);
+
+    const res=Math.hypot(w.x+wb.x, w.y+wb.y);
+    if(res>1.5){ arrow(P.x,P.y,land.x,land.y,'#f07178',2,[5,4]);
+      g.fillStyle='#f07178'; g.fillText('c = w + w′',land.x+8,land.y+4); }
+
+    ro.innerHTML = 'w(p) = ('+w.x.toFixed(0)+', '+w.y.toFixed(0)+') &nbsp;·&nbsp; '+
+      "w′(q) = ("+wb.x.toFixed(0)+', '+wb.y.toFixed(0)+') &nbsp;·&nbsp; residual |c| = <b>'+res.toFixed(1)+
+      '</b> px &nbsp;—&nbsp; '+ (res<2
+        ? '<b style="color:#7fdbca">cycle-consistent.</b> The round trip lands back on p, the prior costs nothing.'
+        : 'the round trip misses p by '+res.toFixed(1)+' px, so the prior charges λ·'+(res*res).toFixed(0)+
+          '. Drag either arrow head until the red arrow disappears.');
+  }
+  function pos(e){ const r=cv.getBoundingClientRect();
+    return {x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height}; }
+  cv.onmousedown=e=>{ const m=pos(e);
+    const q={x:P.x+w.x,y:P.y+w.y};
+    const qp={x:OFF+(q.x-20),y:q.y};
+    const b={x:qp.x+wb.x,y:qp.y+wb.y};
+    if(Math.hypot(m.x-q.x,m.y-q.y)<18) drag='f';
+    else if(Math.hypot(m.x-b.x,m.y-b.y)<18) drag='b';
+  };
+  cv.onmousemove=e=>{ if(!drag) return; const m=pos(e);
+    if(drag==='f'){ w.x=Math.max(-120,Math.min(340,m.x-P.x)); w.y=Math.max(-100,Math.min(90,m.y-P.y)); }
+    else { const q={x:P.x+w.x,y:P.y+w.y}, qp={x:OFF+(q.x-20),y:q.y};
+      wb.x=Math.max(-340,Math.min(120,m.x-qp.x)); wb.y=Math.max(-90,Math.min(100,m.y-qp.y)); }
+    draw(); };
+  window.addEventListener('mouseup',()=>drag=null);
+  draw();
+})();
+
+/* =========================================================
+   DEMO 2 — 1-D Horn-Schunck, forward + backward + cycle term
+   ========================================================= */
+(function(){
+  const cv=document.getElementById('cvH'), g=cv.getContext('2d'), ro=document.getElementById('Hro');
+  const eL=document.getElementById('Hl'), eA=document.getElementById('Ha'), eI=document.getElementById('Hi');
+  const vL=document.getElementById('vHl'), vA=document.getElementById('vHa'), vI=document.getElementById('vHi');
+
+  const N=140, SHIFT=1.5;
+  const FLAT_A=52, FLAT_B=88;                  // the featureless plateau
+
+  function signal(shift){
+    const s=new Float64Array(N);
+    for(let i=0;i<N;i++){
+      const x=i-shift;
+      let v=0.5;
+      if(x<FLAT_A)      v=0.5+0.30*Math.sin(x*0.42)+0.12*Math.sin(x*0.93);
+      else if(x>FLAT_B) v=0.5+0.30*Math.sin((x-6)*0.38)+0.12*Math.sin(x*1.10);
+      else              v=0.5;                 // dead flat: no texture at all
+      s[i]=v;
+    }
+    return s;
+  }
+  const I1=signal(0), I2=signal(SHIFT);
+
+  function deriv(S){ const d=new Float64Array(N);
+    for(let i=0;i<N;i++){ const a=Math.max(0,i-1), b=Math.min(N-1,i+1); d[i]=(S[b]-S[a])/2; } return d; }
+  const I1x=deriv(I1), I2x=deriv(I2);
+
+  function interp(F,x){ if(x<=0) return F[0]; if(x>=N-1) return F[N-1];
+    const i=Math.floor(x), f=x-i; return F[i]*(1-f)+F[i+1]*f; }
+
+  function solve(alpha,lam,iters){
+    let u=new Float64Array(N), ub=new Float64Array(N);   // forward, backward
+    const beta=alpha+lam;
+    for(let k=0;k<iters;k++){
+      // warped backward flow sampled at q = x + u(x), and vice versa
+      const uhat=new Float64Array(N), ubhat=new Float64Array(N);
+      for(let i=0;i<N;i++){ ubhat[i]=interp(ub,i+u[i]); uhat[i]=interp(u,i+ub[i]); }
+      const un=new Float64Array(N), ubn=new Float64Array(N);
+      for(let i=0;i<N;i++){
+        const a=Math.max(0,i-1), b=Math.min(N-1,i+1);
+        // ---- forward field
+        let bar=(u[a]+u[b])/2;
+        let m=(alpha*bar - lam*ubhat[i])/beta;
+        let It=I2[i]-I1[i];
+        un[i]= m - I1x[i]*(I1x[i]*m+It)/(beta+I1x[i]*I1x[i]);
+        // ---- backward field (roles swapped)
+        bar=(ub[a]+ub[b])/2;
+        m=(alpha*bar - lam*uhat[i])/beta;
+        It=I1[i]-I2[i];
+        ubn[i]= m - I2x[i]*(I2x[i]*m+It)/(beta+I2x[i]*I2x[i]);
+      }
+      u=un; ub=ubn;
+    }
+    const negb=new Float64Array(N);
+    for(let i=0;i<N;i++) negb[i]=-interp(ub,i+u[i]);
+    return {u,ub,negb};
+  }
+
+  const X0=40, X1=870;
+  const px=i=>X0+(X1-X0)*i/(N-1);
+
+  function draw(){
+    const alpha=(+eA.value)/100, lam=(+eL.value)/100, iters=+eI.value;
+    vA.textContent=alpha.toFixed(2); vL.textContent=lam.toFixed(2); vI.textContent=iters;
+    const R=solve(alpha,lam,iters);
+
+    g.clearRect(0,0,cv.width,cv.height);
+
+    // ---------- flat band marker (both plots) ----------
+    g.fillStyle='rgba(120,135,175,.13)';
+    g.fillRect(px(FLAT_A),20,px(FLAT_B)-px(FLAT_A),340);
+    g.fillStyle='#6b7a99'; g.font='11px system-ui';
+    g.fillText('flat / no texture',px(FLAT_A)+6,32);
+
+    // ---------- top: the signals ----------
+    const yT=v=>150-90*v;
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui'; g.fillText('the two 1-D frames',X0,26);
+    [[I1,'#82aaff','I₁'],[I2,'#c792ea','I₂ (shifted +1.5)']].forEach(([S,c],k)=>{
+      g.strokeStyle=c; g.lineWidth=2; g.beginPath();
+      for(let i=0;i<N;i++){ const X=px(i), Y=yT(S[i]); i?g.lineTo(X,Y):g.moveTo(X,Y); } g.stroke();
+      g.fillStyle=c; g.fillText(k?'I₂ (shifted by +1.5)':'I₁', X1-140, 46+k*16);
+    });
+
+    // ---------- bottom: the flows ----------
+    const Y0=200, Y1=360, lo=-1.0, hi=3.2;
+    const yF=v=>Y1-(Y1-Y0)*(v-lo)/(hi-lo);
+    g.strokeStyle='#2c3650'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(X0,yF(0)); g.lineTo(X1,yF(0)); g.stroke();
+    g.setLineDash([5,4]); g.strokeStyle='#4b5670';
+    g.beginPath(); g.moveTo(X0,yF(SHIFT)); g.lineTo(X1,yF(SHIFT)); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#6b7a99'; g.font='11px system-ui'; g.fillText('true flow = +1.5',X1-110,yF(SHIFT)-6);
+    g.fillText('0',X0-16,yF(0)+4);
+
+    g.fillStyle='#9fb0cc'; g.font='bold 12px system-ui';
+    g.fillText('estimated flow: u (green) vs −w′ warped back (orange)',X0,190);
+
+    function curve(F,col,wd){ g.strokeStyle=col; g.lineWidth=wd; g.beginPath();
+      for(let i=0;i<N;i++){ const X=px(i), Y=yF(Math.max(lo,Math.min(hi,F[i]))); i?g.lineTo(X,Y):g.moveTo(X,Y); }
+      g.stroke(); }
+    curve(R.negb,'#ffcb6b',2.4);
+    curve(R.u,'#7fdbca',2.4);
+
+    // residual stats
+    let mr=0, err=0;
+    for(let i=0;i<N;i++){ mr+=Math.abs(R.u[i]-R.negb[i]); err+=Math.abs(R.u[i]-SHIFT); }
+    mr/=N; err/=N;
+    let mrF=0, errF=0, n=0;
+    for(let i=FLAT_A;i<FLAT_B;i++){ mrF+=Math.abs(R.u[i]-R.negb[i]); errF+=Math.abs(R.u[i]-SHIFT); n++; }
+    mrF/=n; errF/=n;
+
+    ro.innerHTML='mean cycle residual |c| = <b>'+mr.toFixed(3)+'</b> px (inside the flat band: <b>'+mrF.toFixed(3)+
+      '</b>) &nbsp;·&nbsp; mean error vs truth = <b>'+err.toFixed(3)+'</b> px (flat band: <b>'+errF.toFixed(3)+'</b>)'+
+      '<br>'+ (lam===0
+        ? 'λ = 0 → two independent Horn–Schunck runs. Across the flat plateau nothing constrains either curve, so green and orange separate.'
+        : 'λ = '+lam.toFixed(2)+' → the two curves are being pulled onto each other. Watch the flat-band numbers drop as you raise λ.');
+  }
+  [eL,eA,eI].forEach(e=>e.oninput=draw);
+  draw();
+})();
+</script>
+
+</body>
+</html>

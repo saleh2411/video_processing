@@ -6,6 +6,8 @@
 <title>Video Processing — Interactive HTML Book</title>
 <link rel="stylesheet" href="styles.css">
 <script src="zoom.js"></script>
+<script>window.MathJax = { tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] }, chtml:{displayOverflow:'scale'}, svg:{fontCache:'global'} };</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 
@@ -113,6 +115,13 @@
       <p>The ant, the wall and the door. Every symbol of $L(p)=\int|\langle\dot p,\nabla Y\rangle|dl$ clicked one
       at a time, a live distance map you flood by clicking, γ and b sliders driving real colorization and a real
       trimap, and Dijkstra stepped one pop at a time. Seven interactive demos + 10 drill cards.</p>
+    </a>
+    <a class="scard" href="video_magnification_for_kids.html">
+      <div class="num">★</div><h3>Eulerian Magnification, from zero</h3>
+      <p>The whole algorithm, piece by piece. The leaf vs the bridge, why a <em>slope</em> is what turns motion
+      into brightness, the Taylor derivation symbol by symbol, α pushed until the halo appears, the pixel's diary
+      and a live DFT band you slide onto the pulse, and the three real implementations of $B$ scored side by
+      side. Six interactive demos + 10 drill cards. <span class="muted">Ch.7</span></p>
     </a>
   </div>
 
@@ -231,6 +240,66 @@
       <p>Yes — and "the cost goes down" is only half the proof. The finiteness argument, a checkbox that
       breaks it on purpose, and 100 restarts showing termination ≠ optimality.
       <span class="muted">Ch.3/6 · 12 pts</span></p>
+    </a>
+  </div>
+
+  <h3>Exam 2020 — all 8 questions, worked from zero</h3>
+  <section class="block">
+    <p class="muted">The 8/7/2020 paper (0512-4263, Prof. Shai Avidan). Same recipe as the Moed A and Moed B sets:
+    the question quoted verbatim, a <strong>30-second answer box first</strong>, then a story with no math at all,
+    then live demos you can drive, then the derivation at student level, then the answer written out exactly as
+    you would put it in the box, then drill Q&amp;A and a one-minute revision card.
+    <em>Every question is covered.</em></p>
+  </section>
+  <div class="grid">
+    <a class="scard" href="e20_1_cycle_consistency.html">
+      <div class="num">20·1</div><h3>Horn–Schunck + cycle consistency</h3>
+      <p>Solve both flow directions at once and pay for the round trip:
+      $\lambda\|w(x)+w'(x+w(x))\|^2$. Freeze the warp, and the update rule barely changes — α becomes α+λ and the
+      neighbour average becomes a blend with the negated backward flow. Two demos, including a 1-D solver whose
+      two curves zip together as you raise λ. <span class="muted">Ch.2 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="e20_2_corridor_flow.html">
+      <div class="num">20·2</div><h3>Am I in the middle of the corridor?</h3>
+      <p>On a side wall $|u| = x^2T_z/(fA)$, so mirror-image pixels give $|u(-x_0)|/|u(+x_0)| = B/A$ — speed and
+      focal length cancel. Live corridor with FOE and radial flow, plus a robot that centres itself using nothing
+      but two numbers. <span class="muted">Ch.2/3 · 12 pts</span></p>
+    </a>
+    <a class="scard" href="e20_3_inpainting_bds.html">
+      <div class="num">20·3</div><h3>Why the hole filled with grass</h3>
+      <p>Two causes: the completeness term does not belong in inpainting (it dumps the whole photo into the hole),
+      and coherence alone is degenerate — a hole full of lawn scores the same as the correct building. A real
+      patch-based inpainter you can sabotage with three switches. <span class="muted">Ch.11 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="e20_4_concentric_mosaics.html">
+      <div class="num">20·4</div><h3>Camera on a rotating arm</h3>
+      <p>$r = R\sin\beta$ — the ray's distance from the axis depends only on the pixel column. Drag a virtual
+      camera inside the circle and watch every ray get routed to the frame that filmed it.
+      <span class="muted">Light fields · 12 pts · same as B4</span></p>
+    </a>
+    <a class="scard" href="e20_5_association_matrix.html">
+      <div class="num">20·5</div><h3>Which dot belongs to which person?</h3>
+      <p>$\Omega(i,j)=\mathcal N(Z_j; H\hat X_i^-, HP_i^-H^\top+R)$ — Mahalanobis, not Euclidean, plus the
+      $1/\sqrt{|S|}$ that makes rows comparable. χ² gate, Hungarian on $-\log\Omega$, JPDA. Drag the measurements
+      and watch the matrix. <span class="muted">Ch.4 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="e20_6_covid_kalman.html">
+      <div class="num">20·6</div><h3>Predicting next week's cases</h3>
+      <p>Take the log and the impossible-looking model becomes constant velocity: $x=(r,\Delta r)$,
+      $F=\begin{smallmatrix}1&amp;1\\0&amp;1\end{smallmatrix}$, and $F^7$ gives $\hat r+7\widehat{\Delta r}$.
+      Includes the log-normal subtlety nobody remembers. <span class="muted">Ch.4 · 12 pts</span></p>
+    </a>
+    <a class="scard" href="e20_7_geodesic_superpixels.html">
+      <div class="num">20·7</div><h3>Superpixels from geodesic distance</h3>
+      <p>k-means with the metric swapped: $S=\sqrt{N/K}$ seeds, one multi-source Dijkstra with weight
+      $\sqrt{\|q-p\|^2+\gamma^2\|I(q)-I(p)\|^2}$, Lloyd update, connectivity repair. Full pseudo-code and a live
+      superpixel engine with a γ slider. <span class="muted">Ch.9/6 · 13 pts</span></p>
+    </a>
+    <a class="scard" href="e20_8_gmm_anomaly.html">
+      <div class="num">20·8</div><h3>Listening for a machine about to break</h3>
+      <p>Model normal, flag the improbable: EM-fit the k=3 GMM, threshold $\log\sum_k\pi_k\mathcal N$ at a quantile
+      of held-out healthy data, alarm on M-of-L. It is background subtraction with sound instead of pixels —
+      including the trap where adaptation swallows the fault. <span class="muted">Ch.8/6 · 12 pts</span></p>
     </a>
   </div>
 
